@@ -1,0 +1,80 @@
+/* Role-based overrides are opt-in. Reset leaves the existing screen styles untouched. */
+.ar-typeScope:not([data-type-preset="current"]) { font-family:var(--type-body-font); }
+.ar-typeScope:not([data-type-preset="current"]) :is(.ar-refinedShell,.font-ui,.font-mono,.font-sans,.font-editorial) { font-family:var(--type-body-font); font-style:normal; letter-spacing:var(--type-body-tracking); }
+.ar-typeScope:not([data-type-preset="current"]) :is(p,input,textarea,select,label) { font-family:var(--type-body-font); font-weight:var(--type-body-weight); letter-spacing:var(--type-body-tracking); text-transform:none; font-style:normal; }
+.ar-typeScope:not([data-type-preset="current"]) :is(.ar-reviewBody p,.ar-episodeQuote,.ar-supportQuote,.ar-profileContent p) { font-size:var(--type-body-size); line-height:var(--type-body-leading); }
+.ar-typeScope:not([data-type-preset="current"]) :is(h1,h2,h3,h4,.font-display) { font-family:var(--type-title-font); font-weight:var(--type-title-weight); letter-spacing:var(--type-title-tracking); line-height:var(--type-title-leading); text-transform:none; font-style:normal; overflow-wrap:break-word; padding-bottom:var(--type-title-ink); }
+.ar-typeScope:not([data-type-preset="current"]) :is(.ar-communityHeading h1,.ar-story h1,.ar-feedCover h2,.ar-postImageText h3,.ar-episodeImageTitle h2,.ar-profileContent h1) { font-family:var(--type-display-font); font-weight:var(--type-display-weight); letter-spacing:var(--type-display-tracking); line-height:var(--type-display-leading); text-transform:var(--type-display-case); padding-bottom:var(--type-display-ink); }
+.ar-typeScope:not([data-type-preset="current"]) .ar-communityHeading h1 { font-size:calc(38px * var(--type-display-scale)); }
+.ar-typeScope:not([data-type-preset="current"]) .ar-feedCover h2 { font-size:calc(44px * var(--type-display-scale)); }
+.ar-typeScope:not([data-type-preset="current"]) .ar-story h1 { font-size:calc(64px * var(--type-display-scale)); }
+.ar-typeScope:not([data-type-preset="current"]) .ar-compactCover .ar-story h1 { font-size:calc(44px * var(--type-display-scale)); }
+.ar-typeScope:not([data-type-preset="current"]) :is(.ar-sectionHeading h2,.ar-defaultRanking .ar-sectionHeading h2,.ar-discoverAside > h3,.ar-discoveryLists h3,.ar-remainingEpisodes > h3,.ar-communityDialog h2,.ar-profileContent section > div > div h2) { font-family:var(--type-section-font); font-weight:var(--type-section-weight); letter-spacing:var(--type-title-tracking); text-transform:var(--type-section-case); line-height:1.2; }
+.ar-typeScope:not([data-type-preset="current"]) :is(nav,button,.ar-brand,.ar-personAvatar,.ar-avatar,.ar-smallAvatar,.ar-postAuthor,.ar-postAuthor strong,.ar-personSuggestion strong) { font-family:var(--type-nav-font); font-weight:var(--type-nav-weight); letter-spacing:var(--type-body-tracking); text-transform:none; font-style:normal; }
+.ar-typeScope:not([data-type-preset="current"]) :is(.ar-sectionLabel,.ar-previewCount,.ar-kicker,.ar-eyebrow,.ar-byline,.ar-postAuthor > div > span,.ar-rowTitle p,.ar-smallRanking div > span,.ar-discoverItem p,.ar-supportTitle p,.ar-personSuggestion p,.ar-personSuggestion div > span,.ar-localNote,.ar-commentPreview > span,.ar-featureFoot > span,[data-type-role="metadata"]) { font-family:var(--type-meta-font); font-weight:400; letter-spacing:var(--type-meta-tracking); line-height:1.55; text-transform:none; }
+.ar-typeScope:not([data-type-preset="current"]) :is(.ar-rowScore,.ar-leadingScore strong,.ar-supportTitle > span,.ar-reviewScore,.ar-postScore,.ar-rankingPeek small,.ar-categoryScores dd,[data-type-role="score"]) { font-family:var(--type-score-font); font-weight:var(--type-score-weight); font-variant-numeric:tabular-nums lining-nums; letter-spacing:-.025em; text-transform:none; line-height:1.25; }
+.ar-typeScope:not([data-type-preset="current"]) :is(.ar-defaultRanking .ar-rowTitle h3,.ar-firstEpisode .ar-rowTitle h3) { font-size:19px; line-height:1.25; }
+.ar-typeScope:not([data-type-preset="current"]) .ar-smallRanking h2 { line-height:1.3; }
+.ar-typeScope:not([data-type-preset="current"]) .ar-rankingPeek strong { font-family:var(--type-body-font); font-weight:var(--type-nav-weight); line-height:1.35; }
+.ar-typeScope:not([data-type-preset="current"]) .ar-rowReview { font-family:var(--type-body-font); font-weight:400; line-height:1.6; letter-spacing:var(--type-body-tracking); }
+/* Legacy profile text is allowed to wrap as family proportions change, without restyling its artwork. */
+.ar-profileIdentity { flex-wrap:wrap; }
+.ar-profileSummary { min-width:0; }
+.ar-profileMetadata { flex-wrap:wrap; line-height:1.6; }
+.ar-profileFooter { gap:16px; flex-wrap:wrap; }
+.ar-typeScope:not([data-type-preset="current"]) .ar-profileContent .italic { font-style:normal; }
+
+/* Lab controls keep a stable UI font so the comparison tool doesn't change with the specimen. */
+.ar-typeDock,.ar-typePanel { font-family:var(--font-geist-sans),Arial,sans-serif; color:#e4ede5; font-size:12px; font-weight:400; letter-spacing:normal; line-height:1.5; }
+.ar-typeDock { position:fixed; right:20px; bottom:20px; z-index:220; display:flex; align-items:center; border:1px solid #59695e; border-radius:7px; background:#1b2720f5; box-shadow:0 4px 22px #0005; }
+.ar-typeDock button { display:flex; gap:8px; align-items:center; justify-content:center; min-height:38px; padding:0 12px; cursor:pointer; font-size:11px; }
+.ar-typeDock button + button { border-left:1px solid #435548; padding:0 8px; min-width:35px; }
+.ar-typeDock i { width:5px; height:5px; background:#a9d4c4; border-radius:50%; }
+.ar-typeDock button:hover,.ar-typePanel button:hover { background:#ffffff08; }
+.ar-typeDock button:focus-visible,.ar-typePanel button:focus-visible { outline:2px solid #b9dfce; outline-offset:3px; }
+.ar-typePanel { position:fixed; right:20px; top:65px; bottom:75px; width:370px; z-index:210; padding:20px; background:#17211cf7; border:1px solid #516357; border-radius:9px; box-shadow:0 16px 70px #0008; backdrop-filter:blur(18px); overflow-y:auto; overscroll-behavior:contain; scrollbar-width:thin; }
+.ar-typePanel header { display:flex; align-items:center; justify-content:space-between; gap:15px; margin-bottom:17px; }
+.ar-typePanel header > div > span { font-size:10px; color:#94ab9b; }
+.ar-typePanel h2 { font-size:18px; font-weight:500; margin-top:4px; letter-spacing:-.025em; }
+.ar-typePanel header > button { min-height:36px; min-width:36px; display:grid; place-items:center; cursor:pointer; }
+.ar-typeActive { padding:14px; background:#22342a; border-radius:5px; margin-bottom:16px; }
+.ar-typeActive > span { color:#a2bda9; font-size:10px; display:block; }
+.ar-typeActive strong { display:block; font-size:16px; font-weight:500; margin:4px 0; }
+.ar-typeActive p { font-size:12px; color:#d0e0d2; }
+.ar-typeActive small { display:block; min-height:28px; margin-top:8px; font-size:10px; color:#9bb8a4; line-height:1.5; }
+.ar-typeChoices { display:grid; gap:9px; }
+.ar-typeChoices > button { border:1px solid #3b5143; border-radius:5px; padding:11px 12px; text-align:left; cursor:pointer; width:100%; }
+.ar-typeChoices > button[aria-pressed=true] { background:#2a4033; border-color:#b3d5bf; }
+.ar-typeChoices > button[aria-busy=true] { border-color:#90b3a0; }
+.ar-typeChoices > button > div { display:flex; justify-content:space-between; gap:12px; font-size:10px; color:#b3c9b9; }
+.ar-typeChoices > button > div > span:last-child { color:#d0e7d7; }
+.ar-typeChoices strong { display:block; font-size:24px; font-weight:500; line-height:1.2; margin:7px 0 6px; overflow-wrap:break-word; }
+.ar-typeChoices p { font-size:10px; color:#c2d4c6; }
+.ar-typeChoices small { display:block; font-size:10px; line-height:1.6; color:#8fae99; margin-top:4px; }
+.ar-typePanel footer { display:flex; align-items:center; justify-content:space-between; gap:12px; position:sticky; bottom:-20px; padding:15px 0; margin-top:14px; background:#17211c; border-top:1px solid #405a48; }
+.ar-typePanel footer button { min-height:38px; display:flex; align-items:center; gap:8px; cursor:pointer; padding:0 7px; font-size:11px; }
+.ar-typePanel footer button:last-child { background:#bad8c4; border-radius:4px; color:#14271b; padding:0 12px; }
+.ar-typeStorageNote { font-size:10px; line-height:1.6; color:#8eaa99; margin:5px 0; }
+.ar-typeError { font-size:11px; color:#f0cda8; padding:12px 0; }
+@media(max-width:800px) {
+ .ar-typeScope:not([data-type-preset="current"]) .ar-communityHeading h1 { font-size:calc(32px * var(--type-display-scale)); }
+ .ar-typeScope:not([data-type-preset="current"]) .ar-feedCover h2 { font-size:calc(36px * var(--type-display-scale)); }
+ .ar-typeScope:not([data-type-preset="current"]) .ar-story h1 { font-size:calc(49px * var(--type-display-scale)); }
+ .ar-typeScope:not([data-type-preset="current"]) .ar-compactCover .ar-story h1 { font-size:calc(34px * var(--type-display-scale)); }
+ .ar-typeScope:not([data-type-preset="current"]) :is(.ar-defaultRanking .ar-rowTitle h3,.ar-firstEpisode .ar-rowTitle h3) { font-size:16px; line-height:1.2; }
+ .ar-typeScope:not([data-type-preset="current"]) .ar-profileContent .ar-profileSummary h1 { font-size:38px; }
+ .ar-typePanel { top:55px; bottom:70px; right:12px; width:min(370px,calc(100vw - 24px)); padding:16px; }
+ .ar-typePanel footer { bottom:-16px; }
+ .ar-typeDock { right:12px; bottom:15px; }
+}
+@media(max-width:360px) {
+ .ar-typeScope:not([data-type-preset="current"]) .ar-feedCover h2 { font-size:calc(32px * var(--type-display-scale)); }
+ .ar-typeScope:not([data-type-preset="current"]) :is(.ar-defaultRanking .ar-rowTitle h3,.ar-firstEpisode .ar-rowTitle h3) { font-size:14px; }
+ .ar-typeScope:not([data-type-preset="current"]) .ar-profileContent .ar-profileSummary h1 { font-size:32px; }
+}
+
+/* Keep the active pairing and comparison controls visible while browsing all six systems. */
+.ar-typePanel { display:flex; flex-direction:column; overflow:hidden; }
+.ar-typePanel > header,.ar-typeActive,.ar-typePanel > footer,.ar-typeStorageNote,.ar-typeError { flex-shrink:0; }
+.ar-typeChoices { min-height:0; overflow-y:auto; overscroll-behavior:contain; padding:2px; margin:0 -2px; scrollbar-width:thin; }
+.ar-typePanel footer { position:static; margin-top:12px; padding:12px 0; }

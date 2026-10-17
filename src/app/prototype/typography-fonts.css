@@ -1,0 +1,12 @@
+/* Self-hosted Latin subsets. Font sources are recorded in public/prototype-fonts/sources.json. */
+@font-face { font-family:"AR Barlow Condensed"; font-style:normal; font-weight:600; font-display:swap; src:url("/prototype-fonts/barlow-condensed-0.woff2") format("woff2"); }
+@font-face { font-family:"AR Barlow Condensed"; font-style:normal; font-weight:700; font-display:swap; src:url("/prototype-fonts/barlow-condensed-1.woff2") format("woff2"); }
+@font-face { font-family:"AR Inter"; font-style:normal; font-weight:400 700; font-display:swap; src:url("/prototype-fonts/inter-0.woff2") format("woff2"); }
+@font-face { font-family:"AR Newsreader"; font-style:normal; font-weight:400 500; font-display:swap; src:url("/prototype-fonts/newsreader-0.woff2") format("woff2"); }
+@font-face { font-family:"AR Manrope"; font-style:normal; font-weight:400 600; font-display:swap; src:url("/prototype-fonts/manrope-0.woff2") format("woff2"); }
+@font-face { font-family:"AR DM Serif Display"; font-style:normal; font-weight:400; font-display:swap; src:url("/prototype-fonts/dm-serif-0.woff2") format("woff2"); }
+@font-face { font-family:"AR Work Sans"; font-style:normal; font-weight:400 600; font-display:swap; src:url("/prototype-fonts/work-sans-0.woff2") format("woff2"); }
+@font-face { font-family:"AR Syne"; font-style:normal; font-weight:600 800; font-display:swap; src:url("/prototype-fonts/syne-0.woff2") format("woff2"); }
+@font-face { font-family:"AR DM Sans"; font-style:normal; font-weight:400 600; font-display:swap; src:url("/prototype-fonts/dm-sans-0.woff2") format("woff2"); }
+@font-face { font-family:"AR Oswald"; font-style:normal; font-weight:400 600; font-display:swap; src:url("/prototype-fonts/oswald-0.woff2") format("woff2"); }
+@font-face { font-family:"AR IBM Plex Sans"; font-style:normal; font-weight:400 600; font-display:swap; src:url("/prototype-fonts/plex-sans-0.woff2") format("woff2"); }

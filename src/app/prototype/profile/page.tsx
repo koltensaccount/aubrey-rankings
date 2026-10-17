@@ -2,341 +2,409 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import {
-  Sparkles,
-  Award,
-  Globe,
-  Sliders,
-  Film,
-  Tv,
-  ListPlus,
-  Star,
-  Pin,
-  Calendar,
-  Share2,
-  Heart,
-  MessageSquare,
-  Check,
-  UserPlus,
-  ArrowRight,
-} from "lucide-react";
+import { ArrowRight, Check, Share2, UserPlus } from "lucide-react";
+import { PostActions } from "../community-controls";
+
+const curatedRankings = [
+  {
+    id: "bm",
+    title: "Black Mirror, ranked",
+    type: "Anthology Series",
+    items: "8 key episodes",
+    avg: "9.2",
+    image: "/prototype-art/black-mirror-wall.jpg",
+    logo: "/prototype-art/black-mirror-logo.png",
+    description:
+      "The complete mathematical ranking of Charlie Brooker's dystopian anthology, graded on writing, acting, cinematography, sound, and resonant dread.",
+    topThree: [
+      { rank: "01", title: "San Junipero", score: "9.6", image: "/prototype-art/san-junipero.jpg" },
+      { rank: "02", title: "White Christmas", score: "9.5", image: "/prototype-art/white-christmas.jpg" },
+      { rank: "03", title: "USS Callister", score: "9.4", image: "/prototype-art/uss-callister.jpg" },
+    ],
+    href: "/prototype/ranking",
+  },
+  {
+    id: "fincher",
+    title: "David Fincher: Filmography Ranked",
+    type: "Director Canon",
+    items: "11 films",
+    avg: "9.2",
+    image: "/prototype-art/fincher.jpg",
+    description:
+      "From Se7en and Fight Club to Zodiac and The Social Network. Evaluated for surgical editing, sound design, and controlled paranoia.",
+    topThree: [
+      { rank: "01", title: "Zodiac", score: "9.8" },
+      { rank: "02", title: "The Social Network", score: "9.7" },
+      { rank: "03", title: "Se7en", score: "9.5" },
+    ],
+    href: "/prototype/ranking",
+  },
+  {
+    id: "scifi",
+    title: "Modern Dystopian Sci-Fi",
+    type: "Curated Index",
+    items: "24 titles",
+    avg: "9.0",
+    image: "/prototype-art/interstellar.jpg",
+    description:
+      "Blending television milestones with feature monoliths: Blade Runner 2049, Children of Men, Severance, and Ex Machina.",
+    topThree: [
+      { rank: "01", title: "Children of Men", score: "9.7" },
+      { rank: "02", title: "Blade Runner 2049", score: "9.6" },
+      { rank: "03", title: "Severance", score: "9.5" },
+    ],
+    href: "/prototype/ranking",
+  },
+  {
+    id: "nolan",
+    title: "Christopher Nolan: Sagas in 70mm",
+    type: "Director Canon",
+    items: "12 films",
+    avg: "8.9",
+    image: "/prototype-art/nolan.jpg",
+    description:
+      "Examined for narrative puzzle architecture, practical mechanical scale, and relentless propulsive momentum.",
+    topThree: [
+      { rank: "01", title: "Interstellar", score: "9.6" },
+      { rank: "02", title: "The Prestige", score: "9.5" },
+      { rank: "03", title: "Oppenheimer", score: "9.4" },
+    ],
+    href: "/prototype/ranking",
+  },
+];
+
+const recentReviews = [
+  {
+    id: "rev-1",
+    title: "San Junipero",
+    seasonEpisode: "S3, Ep 4",
+    year: "2016",
+    score: "9.6",
+    still: "/prototype-art/san-junipero.jpg",
+    date: "2 days ago",
+    body: "A rare transcendent romance in an otherwise bleak anthology. Clint Mansell's synth score and Gugu Mbatha-Raw's performance elevate it to sublime art.",
+  },
+  {
+    id: "rev-2",
+    title: "White Christmas",
+    seasonEpisode: "S2, Ep 4",
+    year: "2014",
+    score: "9.5",
+    still: "/prototype-art/white-christmas.jpg",
+    date: "5 days ago",
+    body: "Three interwoven horrors culminating in the most terrifying existential punishment ever conceived on television. Jon Hamm at his absolute best.",
+  },
+  {
+    id: "rev-3",
+    title: "USS Callister",
+    seasonEpisode: "S4, Ep 1",
+    year: "2017",
+    score: "9.4",
+    still: "/prototype-art/uss-callister.jpg",
+    date: "1 week ago",
+    body: "Toby Haynes balances high-camp technicolor pastiche with genuinely chilling psychological workplace tyranny.",
+  },
+];
+
+const topAuteurs = [
+  {
+    name: "Charlie Brooker",
+    works: "Black Mirror (33 episodes)",
+    avg: "8.7",
+    image: "/prototype-art/black-mirror-wall.jpg",
+  },
+  {
+    name: "David Fincher",
+    works: "11 films ranked",
+    avg: "9.2",
+    image: "/prototype-art/fincher.jpg",
+  },
+  {
+    name: "Christopher Nolan",
+    works: "12 films ranked",
+    avg: "8.9",
+    image: "/prototype-art/nolan.jpg",
+  },
+  {
+    name: "Denis Villeneuve",
+    works: "6 films ranked",
+    avg: "9.4",
+    image: "/prototype-art/interstellar.jpg",
+  },
+];
 
 export default function PrototypeProfilePage() {
-  const [isFollowing, setIsFollowing] = useState(false);
+  const [following, setFollowing] = useState(true);
   const [followerCount, setFollowerCount] = useState(842);
-  const [activeTab, setActiveTab] = useState<"rankings" | "favorites" | "journal">("rankings");
+  const [activeTab, setActiveTab] = useState<"rankings" | "reviews" | "auteurs">(
+    "rankings",
+  );
 
-  const handleFollowToggle = () => {
-    setIsFollowing((prev) => !prev);
-    setFollowerCount((c) => (isFollowing ? c - 1 : c + 1));
+  const toggleFollow = () => {
+    if (following) {
+      setFollowing(false);
+      setFollowerCount((c) => c - 1);
+    } else {
+      setFollowing(true);
+      setFollowerCount((c) => c + 1);
+    }
   };
 
-  const topAuteurs = [
-    { name: "Charlie Brooker", works: "Black Mirror (33 Ep)", avg: "8.7", image: "https://image.tmdb.org/t/p/original/9w27Lgeq8KVxhz4ysygT6ranxf1.jpg" },
-    { name: "David Fincher", works: "11 Films Ranked", avg: "9.2", image: "https://image.tmdb.org/t/p/original/bptfVGEQuv6vDTIMVCHjJ9Dz8PX.jpg" },
-    { name: "Denis Villeneuve", works: "Dune & Sci-Fi (6 Films)", avg: "9.4", image: "https://image.tmdb.org/t/p/original/8Gxv8gSFCU0XGDykEGv7zR1n2ua.jpg" },
-    { name: "Bong Joon-ho", works: "Memories to Parasite (7 Films)", avg: "9.3", image: "https://image.tmdb.org/t/p/original/5mzr6AnAnUkfdo2Ut5Yr8CcBEas.jpg" },
-  ];
-
-  const publishedRankings = [
-    {
-      id: "bm",
-      title: "Aubrey's Awesome and Correct Black Mirror Ratings",
-      type: "TV Anthology",
-      episodes: 33,
-      avg: "8.7",
-      isPinned: true,
-      image: "https://image.tmdb.org/t/p/original/9w27Lgeq8KVxhz4ysygT6ranxf1.jpg",
-      description: "The complete, mathematical ranking of every episode from The National Anthem to Demon 79. Graded on writing, acting, cinematography, sound, and unyielding vibes.",
-      href: "/prototype/ranking",
-    },
-    {
-      id: "fincher",
-      title: "David Fincher: Controlled Paranoia & Methodical Horror",
-      type: "Movie Franchise / Canon",
-      episodes: 11,
-      avg: "9.2",
-      isPinned: true,
-      image: "https://image.tmdb.org/t/p/original/bptfVGEQuv6vDTIMVCHjJ9Dz8PX.jpg",
-      description: "From Se7en and Fight Club to Zodiac and The Social Network. Every shot examined for precision editing and sound design.",
-      href: "/prototype/ranking",
-    },
-    {
-      id: "scifi",
-      title: "Modern Dystopian Sci-Fi: The Master Index",
-      type: "Custom Collection",
-      episodes: 24,
-      avg: "9.0",
-      isPinned: false,
-      image: "https://image.tmdb.org/t/p/original/4PWu1S4RME6RnGSJUJuuSz19R2G.jpg",
-      description: "Blending single episodes of Severance, Black Mirror, and feature monoliths like Children of Men, Blade Runner 2049, and Ex Machina.",
-      href: "/prototype/ranking",
-    },
-  ];
+  const pinned = curatedRankings[0];
 
   return (
-    <div className="space-y-14 pb-28">
-      {/* =========================================================================
-          PROFILE HEADER / DOSSIER MASTHEAD
-          Curated film journal aesthetic (Not generic social dashboard cards!)
-          ========================================================================= */}
-      <section className="relative overflow-hidden bg-[#10100E] border-b border-[#2A2926]">
-        {/* Subtle Backdrop Glow */}
-        <div className="absolute inset-0 z-0">
-          <img
-            src="https://image.tmdb.org/t/p/original/dg3OindVAGZBjlT3xYKqIAdukPL.jpg"
-            alt="Backdrop Atmosphere"
-            className="w-full h-full object-cover opacity-15 filter blur-md"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#10100E] via-[#10100E]/90 to-transparent" />
-        </div>
-
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-12 pb-12 space-y-8">
-          <div className="flex flex-col md:flex-row items-start md:items-end justify-between gap-6 pb-6 border-b border-[#242321]">
-            <div className="flex items-start gap-5">
-              {/* Profile Avatar / Initial */}
-              <div className="h-24 w-24 rounded-2xl bg-[#D93829] text-white flex items-center justify-center font-display text-5xl shadow-2xl border-2 border-[#383632] shrink-0">
-                A
+    <div className="ar-homeContent ar-profilePage">
+      <div className="ar-contentSection">
+        {/* =========================================================================
+            1. COMPACT PROFILE HEADER (Letterboxd + Apple Simplicity)
+            ========================================================================= */}
+        <header className="ar-profileHeader">
+          <div className="ar-profileBioRow">
+            <div className="ar-profileAvatar">a</div>
+            <div className="ar-profileIdentity">
+              <div className="ar-profileNameLine">
+                <h1>Aubrey</h1>
+                <span className="ar-profileHandle">@aubrey</span>
+                <span className="ar-profileBadge">Curator</span>
               </div>
-
-              <div className="space-y-1.5">
-                <div className="flex items-center gap-3">
-                  <h1 className="font-display text-4xl sm:text-5xl text-[#F2EFE9] tracking-tight uppercase leading-none">
-                    AUBREY
-                  </h1>
-                  <span className="px-2.5 py-0.5 rounded-full bg-[#1B1B19] border border-[#383632] text-xs font-mono text-[#D89B38]">
-                    Founding Critic
-                  </span>
-                </div>
-                <span className="font-mono text-sm text-[#D93829] block">@aubrey</span>
-                <p className="font-editorial italic text-base text-[#9C9993] max-w-xl leading-relaxed pt-1">
-                  &ldquo;Evaluating media by narrative rigor, visual texture, and mathematical sensory weights.
-                  Creator of Aubrey Rankings.&rdquo;
-                </p>
-              </div>
-            </div>
-
-            {/* Follow & Action Buttons */}
-            <div className="flex items-center gap-3 w-full md:w-auto">
-              <button
-                onClick={handleFollowToggle}
-                className={`flex-1 md:flex-none px-6 py-2.5 rounded-xl font-semibold text-xs tracking-wider uppercase transition-all flex items-center justify-center gap-2 ${
-                  isFollowing
-                    ? "bg-[#242321] text-[#F2EFE9] border border-[#383632]"
-                    : "bg-[#D93829] hover:bg-[#C83225] text-white shadow-lg shadow-[#D93829]/20"
-                }`}
-              >
-                {isFollowing ? (
-                  <>
-                    <Check className="h-3.5 w-3.5 text-[#D89B38]" />
-                    <span>Following</span>
-                  </>
-                ) : (
-                  <>
-                    <UserPlus className="h-3.5 w-3.5" />
-                    <span>Follow Critic</span>
-                  </>
-                )}
-              </button>
-
-              <button className="p-2.5 rounded-xl bg-[#1B1B19] text-[#9C9993] hover:text-[#F2EFE9] border border-[#2A2926] transition-colors">
-                <Share2 className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
-
-          {/* Taste & Curation Stats Bar (Editorial Style) */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs font-mono">
-            <div className="p-4 rounded-xl bg-[#141412] border border-[#242321]">
-              <span className="text-[#6B6862] text-[10px] uppercase tracking-wider block">
-                Ranked Curations
-              </span>
-              <span className="font-display text-2xl text-[#F2EFE9] mt-0.5 block">3 Published</span>
-            </div>
-            <div className="p-4 rounded-xl bg-[#141412] border border-[#242321]">
-              <span className="text-[#6B6862] text-[10px] uppercase tracking-wider block">
-                Rated Media Items
-              </span>
-              <span className="font-display text-2xl text-[#D89B38] mt-0.5 block">142 Entries</span>
-            </div>
-            <div className="p-4 rounded-xl bg-[#141412] border border-[#242321]">
-              <span className="text-[#6B6862] text-[10px] uppercase tracking-wider block">
-                Subscribers / Followers
-              </span>
-              <span className="font-display text-2xl text-[#F2EFE9] mt-0.5 block">{followerCount}</span>
-            </div>
-            <div className="p-4 rounded-xl bg-[#141412] border border-[#242321]">
-              <span className="text-[#6B6862] text-[10px] uppercase tracking-wider block">
-                Scale Philosophy
-              </span>
-              <span className="font-display text-2xl text-[#D93829] mt-0.5 block">5-Part Weighted</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      {/* =========================================================================
-          SECTION 2: AUTEUR OBSESSIONS (TASTE SHOWCASE)
-          The user's media taste is the centerpiece
-          ========================================================================= */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
-        <div className="flex items-center justify-between pb-3 border-b border-[#262523]">
-          <div>
-            <span className="font-editorial italic text-xs text-[#D93829]">
-              Curatorial Cornerstones
-            </span>
-            <h2 className="font-display text-2xl sm:text-3xl tracking-wide text-[#F2EFE9] uppercase mt-0.5">
-              AUTEUR OBSESSIONS
-            </h2>
-          </div>
-          <span className="text-xs font-mono text-[#6B6862]">
-            Highest Weighted Auteurs
-          </span>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-          {topAuteurs.map((auteur) => (
-            <div
-              key={auteur.name}
-              className="rounded-2xl overflow-hidden bg-[#161614] border border-[#2A2926] hover:border-[#383632] transition-colors group flex flex-col justify-between"
-            >
-              <div className="aspect-[16/10] relative overflow-hidden bg-black">
-                <img
-                  src={auteur.image}
-                  alt={auteur.name}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#161614] via-transparent to-transparent" />
-                <div className="absolute top-3 right-3 px-2 py-0.5 rounded bg-black/80 backdrop-blur-md border border-[#D89B38]/40 text-[#D89B38] font-mono font-bold text-xs">
-                  ★ {auteur.avg}
-                </div>
-              </div>
-
-              <div className="p-4 space-y-1">
-                <h3 className="font-bold text-[#F2EFE9] text-base group-hover:text-[#D93829] transition-colors">
-                  {auteur.name}
-                </h3>
-                <span className="text-xs font-mono text-[#9C9993] block">
-                  {auteur.works}
+              <p className="ar-profileBio">
+                Evaluating media by narrative rigor, visual texture, and weighted rubrics.
+              </p>
+              <div className="ar-profileFollowStats">
+                <span>
+                  <strong>{followerCount}</strong> followers
+                </span>
+                <span>·</span>
+                <span>
+                  <strong>120</strong> following
                 </span>
               </div>
             </div>
-          ))}
-        </div>
-      </section>
-
-      {/* =========================================================================
-          SECTION 3: PUBLISHED COLLECTIONS & RANKING DOSSIERS
-          ========================================================================= */}
-      <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-3 border-b border-[#262523]">
-          <div>
-            <span className="font-editorial italic text-xs text-[#D93829]">
-              Published Dossiers
-            </span>
-            <h2 className="font-display text-2xl sm:text-3xl tracking-wide text-[#F2EFE9] uppercase mt-0.5">
-              AUBREY&apos;S CURATED RANKINGS
-            </h2>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs font-mono">
-            <button
-              onClick={() => setActiveTab("rankings")}
-              className={`px-3 py-1.5 rounded-lg transition-colors ${
-                activeTab === "rankings"
-                  ? "bg-[#282826] text-[#F2EFE9] font-bold"
-                  : "text-[#9C9993] hover:text-[#F2EFE9]"
-              }`}
-            >
-              Rankings (3)
-            </button>
-            <button
-              onClick={() => setActiveTab("journal")}
-              className={`px-3 py-1.5 rounded-lg transition-colors ${
-                activeTab === "journal"
-                  ? "bg-[#282826] text-[#F2EFE9] font-bold"
-                  : "text-[#9C9993] hover:text-[#F2EFE9]"
-              }`}
-            >
-              Critical Journal
-            </button>
-          </div>
-        </div>
-
-        {/* Published Dossiers List */}
-        <div className="space-y-6">
-          {publishedRankings.map((ranking) => (
-            <div
-              key={ranking.id}
-              className="rounded-2xl bg-[#181816] border border-[#2A2926] hover:border-[#383632] p-6 sm:p-8 space-y-5 transition-colors group"
-            >
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-6 items-center">
-                {/* Visual Thumbnail with Kodi-style ClearLOGO for Black Mirror */}
-                <div className="md:col-span-4 aspect-[16/10] rounded-xl overflow-hidden bg-black relative border border-[#2A2926]">
-                  <img
-                    src={ranking.image}
-                    alt={ranking.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500 opacity-90"
-                  />
-                  {ranking.id === "bm" && (
-                    <div className="absolute inset-0 flex items-center justify-center p-6 bg-gradient-to-t from-black/80 via-transparent to-black/30">
-                      <img
-                        src="https://image.tmdb.org/t/p/original/bQGVstVOI79nDmswbo3umB0lmrp.png"
-                        alt="Black Mirror ClearLOGO"
-                        className="w-3/4 max-h-12 object-contain drop-shadow-[0_8px_16px_rgba(0,0,0,0.9)]"
-                      />
-                    </div>
-                  )}
-                  <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded bg-black/80 backdrop-blur-md text-[10px] font-mono text-[#D89B38] border border-[#D89B38]/30">
-                    ★ {ranking.avg} Avg
-                  </div>
-                  {ranking.isPinned && (
-                    <div className="absolute top-2.5 right-2.5 h-6 w-6 rounded-full bg-[#D93829]/90 text-white flex items-center justify-center">
-                      <Pin className="h-3 w-3" />
-                    </div>
-                  )}
-                </div>
-
-                {/* Details */}
-                <div className="md:col-span-8 space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-mono text-[#6B6862]">
-                    <span className="text-[#D93829] font-semibold">{ranking.type}</span>
-                    <span>&bull;</span>
-                    <span>{ranking.episodes} Items Ranked</span>
-                    {ranking.isPinned && (
-                      <>
-                        <span>&bull;</span>
-                        <span className="text-[#D89B38]">Pinned by Aubrey</span>
-                      </>
-                    )}
-                  </div>
-
-                  <h3 className="font-display text-2xl sm:text-3xl text-[#F2EFE9] tracking-tight uppercase group-hover:text-[#D93829] transition-colors">
-                    <Link href={ranking.href}>{ranking.title}</Link>
-                  </h3>
-
-                  <p className="font-editorial italic text-sm text-[#9C9993] leading-relaxed">
-                    {ranking.description}
-                  </p>
-
-                  <div className="pt-2 flex items-center justify-between border-t border-[#242321]">
-                    <span className="text-xs font-mono text-[#6B6862]">
-                      Weighted formula: Writing 8x, Acting 8x, Cinema 7x, Music 3x, Vibes 8x
-                    </span>
-                    <Link
-                      href={ranking.href}
-                      className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#D93829] hover:underline"
-                    >
-                      <span>Explore Dossier</span>
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
-                  </div>
-                </div>
-              </div>
+            <div className="ar-profileActions">
+              <button
+                className="ar-profileFollowBtn"
+                aria-pressed={following}
+                onClick={toggleFollow}
+              >
+                {following ? "Following" : "Follow"}
+              </button>
             </div>
-          ))}
+          </div>
+
+          {/* =========================================================================
+              2. SUBTLE HORIZONTAL METADATA BAR (Replacing large dashboard boxes)
+              ========================================================================= */}
+          <div className="ar-profileMetaBar">
+            <span>
+              <strong>482</strong> rated
+            </span>
+            <span className="ar-dot">·</span>
+            <span>
+              <strong>14</strong> rankings
+            </span>
+            <span className="ar-dot">·</span>
+            <span>
+              <strong>8.7</strong> mean score
+            </span>
+            <span className="ar-dot">·</span>
+            <span className="ar-profileRubricSummary">5-part weighted rubric</span>
+          </div>
+        </header>
+
+        {/* =========================================================================
+            PROFILE TAB NAVIGATION
+            ========================================================================= */}
+        <div className="ar-feedNavigation">
+          <nav aria-label="Profile views">
+            <button
+              aria-pressed={activeTab === "rankings"}
+              onClick={() => setActiveTab("rankings")}
+            >
+              Rankings (4)
+            </button>
+            <button
+              aria-pressed={activeTab === "reviews"}
+              onClick={() => setActiveTab("reviews")}
+            >
+              Recent reviews (3)
+            </button>
+            <button
+              aria-pressed={activeTab === "auteurs"}
+              onClick={() => setActiveTab("auteurs")}
+            >
+              Auteurs (4)
+            </button>
+          </nav>
         </div>
-      </section>
+
+        {/* =========================================================================
+            TAB 1: RANKINGS (Default View)
+            ========================================================================= */}
+        {activeTab === "rankings" && (
+          <div className="ar-profileSection">
+            {/* PINNED RANKING FEATURE CARD (Same artwork presentation as Feed Screen A) */}
+            <div className="ar-profileSectionHeading">
+              <h2>Pinned ranking</h2>
+              <span>Updated recently</span>
+            </div>
+
+            <article className="ar-profilePinnedCard">
+              <Link href={pinned.href} className="ar-feedCover">
+                <img
+                  src={pinned.image}
+                  alt="Black Mirror wall of screens"
+                />
+                <div className="ar-feedCoverShade" />
+                <div>
+                  <span>{pinned.items} · Seasons 1–6</span>
+                  <h2>{pinned.title}</h2>
+                </div>
+                <img
+                  className="ar-feedCoverLogo"
+                  src={pinned.logo}
+                  alt="Black Mirror transparent title logo"
+                />
+              </Link>
+              <Link
+                className="ar-rankingPeek"
+                href={pinned.href}
+                aria-label="Preview Aubrey’s Black Mirror ranking"
+              >
+                {pinned.topThree?.map((ep) => (
+                  <div key={ep.title}>
+                    <span>{ep.rank}</span>
+                    <img src={ep.image} alt={ep.title} />
+                    <strong>{ep.title}</strong>
+                    <small>{ep.score}</small>
+                  </div>
+                ))}
+              </Link>
+              <p className="ar-pinnedDesc">{pinned.description}</p>
+              <div className="ar-socialActions">
+                <Link
+                  href={pinned.href}
+                  className="ar-textButton"
+                  style={{ textDecoration: "none" }}
+                >
+                  View complete ranking <ArrowRight size={14} />
+                </Link>
+                <button aria-pressed={false} className="ar-savePost">
+                  Bookmark
+                </button>
+              </div>
+            </article>
+
+            {/* CURATED RANKINGS LIST */}
+            <div className="ar-profileSectionHeading">
+              <h2>Aubrey&apos;s rankings</h2>
+              <span>3 published lists</span>
+            </div>
+
+            <div className="ar-feedStream">
+              {curatedRankings.slice(1).map((list) => (
+                <article key={list.id} className="ar-ordinaryPost" style={{ paddingTop: 20 }}>
+                  <Link
+                    href={list.href}
+                    className="ar-smallRanking"
+                    style={{ textDecoration: "none" }}
+                  >
+                    <img src={list.image} alt={list.title} />
+                    <div>
+                      <span>
+                        {list.type} · {list.items} · ★ {list.avg}
+                      </span>
+                      <h2>{list.title}</h2>
+                      <p style={{ fontSize: 13, color: "#9caea2", lineHeight: 1.6, margin: "6px 0 10px" }}>
+                        {list.description}
+                      </p>
+                      <ol>
+                        {list.topThree?.map((t) => (
+                          <li key={t.title}>
+                            {t.title} ({t.score})
+                          </li>
+                        ))}
+                      </ol>
+                    </div>
+                    <ArrowRight size={18} style={{ color: "#8fa597", flexShrink: 0 }} />
+                  </Link>
+                  <PostActions name={list.title} count={28} comments={7} />
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================================
+            TAB 2: RECENT REVIEWS
+            ========================================================================= */}
+        {activeTab === "reviews" && (
+          <div className="ar-profileSection">
+            <div className="ar-profileSectionHeading">
+              <h2>Recent reviews</h2>
+              <span>From Aubrey&apos;s critical journal</span>
+            </div>
+
+            <div className="ar-feedStream">
+              {recentReviews.map((rev) => (
+                <article key={rev.id} className="ar-ordinaryPost">
+                  <header className="ar-postAuthor">
+                    <span className="ar-personAvatar">a</span>
+                    <div>
+                      <strong>Aubrey</strong>
+                      <span>
+                        reviewed {rev.title} ({rev.seasonEpisode}) · {rev.date}
+                      </span>
+                    </div>
+                  </header>
+                  <div className="ar-reviewBody">
+                    <div>
+                      <h3>
+                        {rev.title}
+                        <span>{rev.seasonEpisode} · {rev.year}</span>
+                      </h3>
+                      <p>{rev.body}</p>
+                      <div className="ar-postScore">
+                        <span>★ {rev.score}</span>
+                        <i />
+                        <small>5-part weighted score</small>
+                      </div>
+                    </div>
+                    <img src={rev.still} alt={rev.title} />
+                  </div>
+                  <PostActions name={rev.title} count={19} comments={4} />
+                </article>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* =========================================================================
+            TAB 3: AUTEURS OBSESSIONS
+            ========================================================================= */}
+        {activeTab === "auteurs" && (
+          <div className="ar-profileSection">
+            <div className="ar-profileSectionHeading">
+              <h2>Auteur obsessions</h2>
+              <span>Highest weighted averages</span>
+            </div>
+
+            <div className="ar-auteursGrid">
+              {topAuteurs.map((auteur) => (
+                <div key={auteur.name} className="ar-auteurCard">
+                  <div className="ar-auteurImage">
+                    <img src={auteur.image} alt={auteur.name} />
+                    <span className="ar-auteurScore">★ {auteur.avg}</span>
+                  </div>
+                  <div className="ar-auteurDetails">
+                    <h4>{auteur.name}</h4>
+                    <p>{auteur.works}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

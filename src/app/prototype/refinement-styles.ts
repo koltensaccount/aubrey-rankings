@@ -1,0 +1,27 @@
+// Namespaced classes keep this prototype isolated from production styles.
+const styles = {
+  artwork: "ar-artwork",
+  avatar: "ar-avatar",
+  brand: "ar-brand",
+  byline: "ar-byline",
+  composition: "ar-composition",
+  detail: "ar-detail",
+  eyebrow: "ar-eyebrow",
+  feature: "ar-feature",
+  featureFoot: "ar-featureFoot",
+  footer: "ar-footer",
+  imageShade: "ar-imageShade",
+  issue: "ar-issue",
+  kicker: "ar-kicker",
+  masthead: "ar-masthead",
+  method: "ar-method",
+  previewBar: "ar-previewBar",
+  previewNote: "ar-previewNote",
+  primaryLink: "ar-primaryLink",
+  refinedShell: "ar-refinedShell",
+  smallAvatar: "ar-smallAvatar",
+  story: "ar-story",
+  titleArt: "ar-titleArt",
+  wall: "ar-wall",
+};
+export default styles;
