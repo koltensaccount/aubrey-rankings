@@ -397,3 +397,29 @@ export const categoryScoresRelations = relations(categoryScores, ({ one }) => ({
     references: [ratingCategories.id],
   }),
 }));
+
+export const artworkOverridesRelations = relations(artworkOverrides, ({ one }) => ({
+  user: one(user, {
+    fields: [artworkOverrides.userId],
+    references: [user.id],
+  }),
+  mediaItem: one(mediaItems, {
+    fields: [artworkOverrides.mediaItemId],
+    references: [mediaItems.id],
+  }),
+}));
+
+export const sessionRelations = relations(session, ({ one }) => ({
+  user: one(user, {
+    fields: [session.userId],
+    references: [user.id],
+  }),
+}));
+
+export const accountRelations = relations(account, ({ one }) => ({
+  user: one(user, {
+    fields: [account.userId],
+    references: [user.id],
+  }),
+}));
+
