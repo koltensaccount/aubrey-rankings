@@ -15,9 +15,10 @@ services:
       timeout: 5s
       retries: 5
     networks:
-      - aubrey_net
+      - aubrey_internal
 
   aubrey-web:
+    image: ghcr.io/koltensaccount/aubrey-rankings:latest
     build:
       context: .
       dockerfile: Dockerfile
@@ -36,13 +37,16 @@ services:
       TMDB_API_KEY: ${TMDB_API_KEY}
       RESEND_API_KEY: ${RESEND_API_KEY}
       EMAIL_FROM: ${EMAIL_FROM:-Aubrey Rankings <accounts@aubrey.koltensserver.com>}
+      PORT: 3000
     volumes:
       - aubrey_uploads:/app/public/uploads
     ports:
-      # Exposes ONLY to the host loopback; Cloudflare Tunnel ingress reaches this port
+      # Exposes on host loopback and Tailscale IP for secure private verification
       - "127.0.0.1:3200:3000"
+      - "100.73.94.105:3200:3000"
     networks:
-      - aubrey_net
+      - aubrey_internal
+      - docker_default
 
 volumes:
   aubrey_pgdata:
@@ -51,5 +55,7 @@ volumes:
     name: aubrey_uploads
 
 networks:
-  aubrey_net:
-    name: aubrey_net
+  aubrey_internal:
+    name: aubrey_internal
+  docker_default:
+    external: true

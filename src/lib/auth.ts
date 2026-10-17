@@ -100,6 +100,12 @@ export const auth = betterAuth({
       },
     },
   },
+  trustedOrigins: [
+    "https://aubrey.koltensserver.com",
+    "http://100.73.94.105:3200",
+    "http://127.0.0.1:3200",
+    "http://localhost:3000",
+  ],
   secret:
     authSecret || "9c58715c7f3f67ff199150b1a4b2a3b25804c43657b0fd945f997ce752797c2e",
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
