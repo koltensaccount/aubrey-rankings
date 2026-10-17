@@ -1,0 +1,13 @@
+.git
+.gitignore
+.next
+node_modules
+.env*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+docs/
+.codex-session.json
+scripts/*.tar.gz
+scripts/*.sql.gz
+backups/

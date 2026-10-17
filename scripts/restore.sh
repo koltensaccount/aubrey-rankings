@@ -9,24 +9,37 @@ fi
 DB_BACKUP="$1"
 UPLOADS_BACKUP="${2:-}"
 
-if [ ! -f "$DB_BACKUP" ]; then
-  echo "Error: Database backup file '${DB_BACKUP}' not found."
-  exit 1
-fi
-
-echo "=== [Aubrey Rankings] Restoring Database from ${DB_BACKUP} ==="
-gunzip -c "$DB_BACKUP" | docker exec -i aubrey-db psql -U aubrey -d aubrey_rankings
+# Validate gzip integrity of DB backup
+echo "-> Verifying database backup integrity..."
+gzip -t "$DB_BACKUP"
 
 if [ -n "$UPLOADS_BACKUP" ]; then
-  if [ -f "$UPLOADS_BACKUP" ]; then
-    echo "=== Restoring Uploaded Artwork from ${UPLOADS_BACKUP} ==="
-    docker run --rm \
-      -v aubrey_uploads:/volume \
-      -v "$(dirname "$UPLOADS_BACKUP")":/backup \
-      alpine tar -xzf "/backup/$(basename "$UPLOADS_BACKUP")" -C /volume
-  else
-    echo "Warning: Uploads backup '${UPLOADS_BACKUP}' not found, skipping artwork restore."
+  if [ ! -f "$UPLOADS_BACKUP" ]; then
+    echo "Error: Uploads backup file '${UPLOADS_BACKUP}' not found."
+    exit 1
   fi
+  echo "-> Verifying uploads backup integrity..."
+  gzip -t "$UPLOADS_BACKUP"
 fi
 
-echo "=== Database restore completed successfully! ==="
+# Pause web traffic during restore to ensure atomic consistency
+echo "-> Pausing aubrey-web to halt writes during restoration..."
+docker compose stop aubrey-web 2>/dev/null || true
+
+echo "=== [Aubrey Rankings] Restoring Database from ${DB_BACKUP} ==="
+# Execute restoration inside a single transaction and halt on any error
+gunzip -c "$DB_BACKUP" | docker exec -i aubrey-db psql -U aubrey -d aubrey_rankings -X -v ON_ERROR_STOP=1 --single-transaction
+
+if [ -n "$UPLOADS_BACKUP" ]; then
+  echo "=== Restoring Uploaded Artwork from ${UPLOADS_BACKUP} ==="
+  # Clean old contents to avoid orphaned files from outside the snapshot
+  docker run --rm \
+    -v aubrey_uploads:/volume \
+    -v "$(cd "$(dirname "$UPLOADS_BACKUP")" && pwd)":/backup \
+    alpine sh -c "rm -rf /volume/* && tar -xzf \"/backup/$(basename "$UPLOADS_BACKUP")\" -C /volume"
+fi
+
+echo "-> Restarting aubrey-web..."
+docker compose start aubrey-web
+
+echo "=== Database and artwork restore completed successfully! ==="

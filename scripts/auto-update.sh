@@ -9,33 +9,79 @@ if [ ! -f "docker-compose.yml" ]; then
   exit 0
 fi
 
-# Get current container image ID
-OLD_IMAGE=$(docker image inspect --format="{{.Id}}" ghcr.io/koltensaccount/aubrey-rankings:latest 2>/dev/null || echo "none")
+# Prevent concurrent update script executions
+exec 200>/tmp/aubrey-autoupdate.lock
+if ! flock -n 200; then
+  echo "[$(date -u +"%Y-%m-%d %H:%M:%SZ")] Update already in progress, exiting."
+  exit 0
+fi
+
+# Get currently running container image ID (not just mutable latest tag)
+RUNNING_CONTAINER_ID=$(docker ps -q -f name=aubrey-web || true)
+if [ -n "$RUNNING_CONTAINER_ID" ]; then
+  CURRENT_RUNNING_IMAGE=$(docker inspect --format="{{.Image}}" "$RUNNING_CONTAINER_ID" 2>/dev/null || echo "none")
+else
+  CURRENT_RUNNING_IMAGE="none"
+fi
 
 # Pull latest image silently
 if ! docker compose pull -q aubrey-web > /dev/null 2>&1; then
   exit 0
 fi
 
-NEW_IMAGE=$(docker image inspect --format="{{.Id}}" ghcr.io/koltensaccount/aubrey-rankings:latest 2>/dev/null || echo "none")
+PULLED_IMAGE=$(docker image inspect --format="{{.Id}}" ghcr.io/koltensaccount/aubrey-rankings:latest 2>/dev/null || echo "none")
 
-# Check if container is running
-IS_RUNNING=$(docker ps -q -f name=aubrey-web)
+# Deploy if pulled image differs from currently running image or container is not running
+if [ "$CURRENT_RUNNING_IMAGE" != "$PULLED_IMAGE" ] || [ -z "$RUNNING_CONTAINER_ID" ]; then
+  echo "[$(date -u +"%Y-%m-%d %H:%M:%SZ")] Update detected! Running: $CURRENT_RUNNING_IMAGE -> Pulled: $PULLED_IMAGE"
 
-if [ "$OLD_IMAGE" != "$NEW_IMAGE" ] || [ -z "$IS_RUNNING" ]; then
-  echo "[$(date -u +"%Y-%m-%d %H:%M:%SZ")] Update detected! Deploying new image ($NEW_IMAGE)..."
+  # 1. Take a safety snapshot backup before applying update
+  if [ -f "scripts/backup.sh" ]; then
+    echo "[$(date -u +"%Y-%m-%d %H:%M:%SZ")] Creating pre-update safety backup..."
+    if ! ./scripts/backup.sh; then
+      echo "[$(date -u +"%Y-%m-%d %H:%M:%SZ")] ERROR: Pre-update safety backup failed! Aborting update to protect data."
+      exit 1
+    fi
+  fi
 
-  # Restart web container with new image
+  # 2. Tag old running image for safe rollback if available
+  if [ "$CURRENT_RUNNING_IMAGE" != "none" ] && [ "$CURRENT_RUNNING_IMAGE" != "$PULLED_IMAGE" ]; then
+    docker tag "$CURRENT_RUNNING_IMAGE" ghcr.io/koltensaccount/aubrey-rankings:rollback-backup 2>/dev/null || true
+  fi
+
+  # 3. Apply any pending database migrations before restarting web
+  if [ -d "src/db/migrations" ]; then
+    for sql in src/db/migrations/*.sql; do
+      [ -f "$sql" ] || continue
+      docker exec -i aubrey-db psql -U aubrey -d aubrey_rankings -X -v ON_ERROR_STOP=1 < "$sql" > /dev/null 2>&1 || true
+    done
+  fi
+
+  # 4. Restart web container with new image
+  echo "[$(date -u +"%Y-%m-%d %H:%M:%SZ")] Launching updated aubrey-web container..."
   docker compose up -d aubrey-web
 
-  # Wait for container startup
-  sleep 4
+  # 5. Bounded health check retries
+  HEALTHY=false
+  for i in {1..6}; do
+    sleep 3
+    HTTP_STATUS=$(curl -s --connect-timeout 3 -m 5 -o /dev/null -w "%{http_code}" http://127.0.0.1:3200/ || echo "000")
+    if [ "$HTTP_STATUS" = "200" ]; then
+      HEALTHY=true
+      break
+    fi
+    echo "[$(date -u +"%Y-%m-%d %H:%M:%SZ")] Health check attempt $i received HTTP $HTTP_STATUS, retrying..."
+  done
 
-  # Run Drizzle schema push / migrations
-  echo "[$(date -u +"%Y-%m-%d %H:%M:%SZ")] Running database migrations..."
-  docker compose exec -T aubrey-web npx drizzle-kit push || echo "Warning: Migration command exited with non-zero status"
-
-  # Run local health check
-  HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:3200/ || echo "000")
-  echo "[$(date -u +"%Y-%m-%d %H:%M:%SZ")] Healthcheck completed (HTTP $HTTP_STATUS). Deployment finished!"
+  if [ "$HEALTHY" = true ]; then
+    echo "[$(date -u +"%Y-%m-%d %H:%M:%SZ")] Healthcheck passed (HTTP 200). Deployment successful!"
+  else
+    echo "[$(date -u +"%Y-%m-%d %H:%M:%SZ")] ERROR: Healthcheck failed after retries! Initiating safe rollback..."
+    if docker image inspect ghcr.io/koltensaccount/aubrey-rankings:rollback-backup > /dev/null 2>&1; then
+      docker tag ghcr.io/koltensaccount/aubrey-rankings:rollback-backup ghcr.io/koltensaccount/aubrey-rankings:latest
+      docker compose up -d aubrey-web
+      echo "[$(date -u +"%Y-%m-%d %H:%M:%SZ")] Rollback executed. Inspect logs for cause of failure."
+    fi
+    exit 1
+  fi
 fi

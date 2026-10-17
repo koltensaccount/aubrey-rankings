@@ -24,8 +24,10 @@
 - [x] Phase 4: Custom artwork uploads with Sharp image validation, Settings interface, profile and rating system management
 - [x] Phase 5: Aubrey's Black Mirror historical rating importer and episode matcher
 - [x] Phase 6: Production multi-stage Dockerfile, Docker Compose stack, automated backup/restore scripts, deployment runbook
+- [x] Phase 7: Live production deployment to Ubuntu server (`koltensserver`), persistent database initialization, volume configuration, automated backups with off-server sync, and continuous deployment pipeline
 - [x] Codex Checkpoint A: Authentication & database integrity review and resolution
-- [x] Private GitHub repository initialized and synchronized
+- [x] Codex Checkpoint C: Production deployment security, recovery, and resilience review and resolution
+- [x] Private GitHub repository initialized and synchronized (`koltensaccount/aubrey-rankings`)
 
 ## Automated Test Coverage
 - `src/tests/scoring.test.ts`: Weighted scoring calculations, decimal weights, edge cases, zero weights, completeness checks (All pass)
@@ -33,4 +35,7 @@
 - `src/tests/importer.test.ts`: Black Mirror episode matching, fuzzy title handling, historical weighted score conversions (All pass)
 
 ## Current Status
-- Production readiness complete. Pending user approval for deployment to `koltensserver`.
+- **Application Live on Server**: Running on `koltensserver` via Docker Compose (`aubrey-web`, `aubrey-db`).
+- **Internal Routing Ready**: Accessible for Cloudflare Tunnel at `http://aubrey-web:3000` on `docker_default` and `http://172.21.0.1:3200`.
+- **Private Verification**: Accessible on private tailnet at `http://100.73.94.105:3200`.
+- **Automated Operations**: Nightly backups at 3:00 AM (`backup.sh`) with Google Drive sync; automatic update polling (`auto-update.sh`) every 2 minutes with rollback safeguards.

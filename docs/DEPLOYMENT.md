@@ -2,11 +2,13 @@
 
 ## Host Overview
 - **Host**: Ubuntu 24.04.5 LTS (`koltensserver`)
+- **App Path**: `/home/koltensaccount/aubrey-rankings`
 - **Domain**: `aubrey.koltensserver.com` (Cloudflare-managed DNS)
-- **Ingress**: Existing Cloudflare Tunnel container (`cloudflare-tunnel` on server)
+- **Ingress**: Existing Cloudflare Tunnel container (`cloudflare-tunnel` on `docker_default` network)
 - **Database**: Dedicated PostgreSQL 16 Alpine container with isolated Docker volume (`aubrey_pgdata`)
 - **Artwork Storage**: Isolated volume for user-uploaded artwork (`aubrey_uploads`)
-- **Web App Port**: Loopback bind `127.0.0.1:3200` (strictly non-public, host-only)
+- **Internal Routing for Cloudflare Tunnel**: `http://aubrey-web:3000` on `docker_default` network (or host bridge `http://172.21.0.1:3200`)
+- **Private Tailscale Testing**: `http://100.73.94.105:3200`
 
 ---
 
@@ -14,79 +16,43 @@
 
 To connect the application through your existing Cloudflare Tunnel **without exposing ports to the public internet**:
 
-Add the following ingress rule to your Cloudflare Tunnel configuration (either in `/home/koltensaccount/.../config.yml` or the Cloudflare Zero Trust Dashboard):
-
-```yaml
-ingress:
-  - hostname: aubrey.koltensserver.com
-    service: http://127.0.0.1:3200
-  # (preserve existing fallback rules below)
-  - service: http_status:404
-```
+In the Cloudflare Zero Trust Dashboard (or local tunnel config):
+- **Public Hostname**: `aubrey.koltensserver.com`
+- **Service Type**: `HTTP`
+- **Service URL**: `aubrey-web:3000` (or `172.21.0.1:3200`)
 
 > [!NOTE]
-> Since `cloudflare-tunnel` runs on the Docker host network, pointing to `http://127.0.0.1:3200` reaches the Aubrey Rankings Next.js container directly through loopback without modifying any server firewall rules.
+> `cloudflare-tunnel` runs inside Docker on the `docker_default` bridge network. `aubrey-web` is connected to this same network, allowing the tunnel to resolve `http://aubrey-web:3000` directly via internal Docker DNS without needing host network binding or public firewall openings.
 
 ---
 
-## 2. Server Deployment Instructions (When Approved)
+## 2. Automatic CI/CD & Updates
 
-1. Clone or copy project repository to the server:
-   ```bash
-   ssh koltensserver
-   mkdir -p /home/koltensaccount/docker/aubrey-rankings
-   cd /home/koltensaccount/docker/aubrey-rankings
-   git clone https://github.com/koltensaccount/aubrey-rankings.git .
-   ```
-
-2. Create production `.env` file:
-   ```bash
-   cat << 'EOF' > .env
-   DB_PASSWORD=YOUR_STRONG_DATABASE_PASSWORD_HERE
-   BETTER_AUTH_SECRET=YOUR_GENERATED_32_BYTE_HEX_SECRET_HERE
-   BETTER_AUTH_URL=https://aubrey.koltensserver.com
-   NEXT_PUBLIC_APP_URL=https://aubrey.koltensserver.com
-   TMDB_API_READ_ACCESS_TOKEN=YOUR_TMDB_READ_TOKEN_HERE
-   TMDB_API_KEY=YOUR_TMDB_API_KEY_HERE
-   RESEND_API_KEY=YOUR_RESEND_API_KEY_HERE
-   EMAIL_FROM=Aubrey Rankings <accounts@aubrey.koltensserver.com>
-   EOF
-   chmod 600 .env
-   ```
-
-3. Launch the Docker Compose stack:
-   ```bash
-   docker compose up -d --build
-   ```
-
-4. Run the initial database push/migration:
-   ```bash
-   docker compose exec aubrey-web npx drizzle-kit push
-   ```
-
-5. Verify health:
-   ```bash
-   docker compose ps
-   curl -I http://127.0.0.1:3200
-   ```
+- **GitHub Actions**: Every verified push to `main` triggers automated tests (`npm test`) and publishes a multi-stage Docker build to GitHub Container Registry (`ghcr.io/koltensaccount/aubrey-rankings:latest`).
+- **Server Auto-Updater**: A lightweight cron task runs `/home/koltensaccount/aubrey-rankings/scripts/auto-update.sh` every 2 minutes:
+  - Verifies running image digest against GHCR
+  - Takes a pre-update safety backup of database and uploaded artwork
+  - Applies any pending database migrations safely
+  - Launches new container and executes bounded health checks
+  - Automatically rolls back to the previous running image if health check fails
 
 ---
 
 ## 3. Automated Backups & Off-Host Strategy
 
 1. **Nightly Cron Job**:
-   On `koltensserver`, add a nightly backup task via `crontab -e`:
+   On `koltensserver`, runs nightly at 3:00 AM:
    ```cron
-   0 3 * * * /home/koltensaccount/docker/aubrey-rankings/scripts/backup.sh >> /home/koltensaccount/backups/aubrey-rankings/backup.log 2>&1
+   0 3 * * * /home/koltensaccount/aubrey-rankings/scripts/backup.sh >> /home/koltensaccount/backups/aubrey-rankings/backup.log 2>&1
    ```
 
 2. **Restore Procedure**:
    To test or restore a backup:
    ```bash
-   /home/koltensaccount/docker/aubrey-rankings/scripts/restore.sh \
+   /home/koltensaccount/aubrey-rankings/scripts/restore.sh \
      /home/koltensaccount/backups/aubrey-rankings/aubrey_db_YYYYMMDD_HHMMSS.sql.gz \
      /home/koltensaccount/backups/aubrey-rankings/aubrey_uploads_YYYYMMDD_HHMMSS.tar.gz
    ```
 
-3. **Off-Host Copy Recommendation**:
-   Use an external rsync or restic schedule to replicate `/home/koltensaccount/backups/aubrey-rankings` to secondary offsite storage or encrypted object store. Never treat GitHub as a database backup.
+3. **Off-Host Sync**:
+   `backup.sh` automatically coordinates off-host copies via `rclone` to `gdrive:Backups/aubrey-rankings` and retains the last 14 days of local backups.

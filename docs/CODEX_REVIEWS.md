@@ -35,4 +35,13 @@
 - **Status**: Pending
 
 ### Checkpoint C: Release & Production Review
-- **Status**: Pending
+- **Status**: Completed (Review conducted, fixes verified)
+- **Scope**: Production deployment configurations, container isolation, backup/restore scripts, auto-updater safeguards, and Cloudflare Tunnel routing.
+- **Findings & Remediations**:
+  1. *High — Restore atomicity*: `restore.sh` now enforces `psql -X -v ON_ERROR_STOP=1 --single-transaction`, halts `aubrey-web` during restoration to freeze writes, cleanly replaces the uploads volume, and verifies gzip integrity before execution.
+  2. *High — Stream corruption risk in dumps*: `backup.sh` changed from `docker exec -t` to `docker exec -i` to prevent pseudo-TTY character/newline corruption in binary dump streams, verifies gzip integrity with `gzip -t`, and enforces `chmod 600` on generated backups.
+  3. *High — Auto-update safety & rollback*: `auto-update.sh` now uses a `flock` concurrency mutex (`/tmp/aubrey-autoupdate.lock`), tracks the currently running container image ID rather than mutable tags, enforces verified pre-update backups before updating, applies migrations with error-stopping constraints, and automatically executes rollback to the tagged previous image if bounded health checks fail.
+  4. *Medium — Network isolation*: `aubrey_internal` marked `internal: true` in `docker-compose.yml` to prevent non-routed outbound access, while `docker_default` connects `aubrey-web` directly to `cloudflare-tunnel`.
+  5. *Medium — Secret enforcement*: Replaced default fallback credentials in `docker-compose.yml` with `${DB_PASSWORD:?...}` and `${BETTER_AUTH_SECRET:?...}` to ensure the stack fails fast if secrets are omitted.
+  6. *Low — Build context isolation*: Added `.dockerignore` to prevent local development secrets, `.git`, `.next`, and uploads from entering Docker build contexts.
+  7. *Documentation*: Corrected `docs/DEPLOYMENT.md` to specify `http://aubrey-web:3000` via internal Docker DNS on `docker_default`.

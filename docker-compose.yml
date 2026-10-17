@@ -5,7 +5,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: aubrey
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme_secure_db_pass}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
       POSTGRES_DB: aubrey_rankings
     volumes:
       - aubrey_pgdata:/var/lib/postgresql/data
@@ -29,8 +29,8 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: production
-      DATABASE_URL: postgresql://aubrey:${DB_PASSWORD:-changeme_secure_db_pass}@aubrey-db:5432/aubrey_rankings
-      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      DATABASE_URL: postgresql://aubrey:${DB_PASSWORD:?DB_PASSWORD is required}@aubrey-db:5432/aubrey_rankings
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?BETTER_AUTH_SECRET is required}
       BETTER_AUTH_URL: https://aubrey.koltensserver.com
       NEXT_PUBLIC_APP_URL: https://aubrey.koltensserver.com
       TMDB_API_READ_ACCESS_TOKEN: ${TMDB_API_READ_ACCESS_TOKEN}
@@ -57,5 +57,6 @@ volumes:
 networks:
   aubrey_internal:
     name: aubrey_internal
+    internal: true
   docker_default:
     external: true
