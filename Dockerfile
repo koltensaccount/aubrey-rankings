@@ -15,6 +15,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
+ENV BETTER_AUTH_SECRET="build_placeholder_secret_for_compilation_only"
 RUN npm run build
 
 # Stage 4: Production Runner
