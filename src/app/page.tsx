@@ -219,7 +219,7 @@ export default async function HomePage() {
               const totalItems = col.entries.length;
               const coverUrl = getTmdbImageUrl(
                 col.customCoverImage || col.backdropImage,
-                "w500"
+                "w1280"
               );
 
               // Calculate collection average score

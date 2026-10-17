@@ -233,7 +233,7 @@ function CreateRankingContent() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-1">
                 {searchResults.map((item) => {
                   const isSelected = selectedItem?.id === item.id;
-                  const poster = getTmdbImageUrl(item.poster_path, "w185");
+                  const poster = getTmdbImageUrl(item.poster_path, "w342");
                   return (
                     <div
                       key={item.id}
@@ -274,7 +274,7 @@ function CreateRankingContent() {
             <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <img
-                  src={getTmdbImageUrl(selectedItem.poster_path, "w185")}
+                  src={getTmdbImageUrl(selectedItem.poster_path, "w342")}
                   alt={selectedItem.name}
                   className="w-10 h-14 object-cover rounded-lg"
                 />

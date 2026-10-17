@@ -165,7 +165,7 @@ export function RatingDialog({
 
   const artworkUrl = getTmdbImageUrl(
     mediaItem.stillPath || mediaItem.posterPath || mediaItem.backdropPath,
-    "w500"
+    "original"
   );
 
   return (

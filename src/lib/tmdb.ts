@@ -37,9 +37,20 @@ function getUrl(path: string, params: Record<string, string | number> = {}): str
   return url.toString();
 }
 
+export type TmdbImageSize =
+  | "w92"
+  | "w154"
+  | "w185"
+  | "w300"
+  | "w342"
+  | "w500"
+  | "w780"
+  | "w1280"
+  | "original";
+
 export function getTmdbImageUrl(
   path: string | null | undefined,
-  size: "w185" | "w342" | "w500" | "w780" | "w1280" | "original" = "w500"
+  size: TmdbImageSize = "original"
 ): string {
   if (!path) return "/placeholder-poster.png";
   if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("/")) {

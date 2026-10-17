@@ -219,7 +219,7 @@ export default function CollectionDetailPage({
 
   const backdropUrl = getTmdbImageUrl(
     collection.backdropImage || collection.customCoverImage,
-    "w1280"
+    "original"
   );
 
   return (
@@ -409,7 +409,7 @@ export default function CollectionDetailPage({
               const hasScore = entry.score !== null;
               const imgUrl = getTmdbImageUrl(
                 media.stillPath || media.posterPath || media.backdropPath,
-                "w500"
+                "original"
               );
 
               return (
@@ -511,7 +511,7 @@ export default function CollectionDetailPage({
                           <img
                             src={getTmdbImageUrl(
                               media.stillPath || media.posterPath,
-                              "w185"
+                              "w300"
                             )}
                             alt={media.title}
                             className="w-10 h-7 object-cover rounded bg-muted hidden sm:block shrink-0"
