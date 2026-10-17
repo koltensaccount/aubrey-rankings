@@ -1,0 +1,55 @@
+services:
+  aubrey-db:
+    image: postgres:16-alpine
+    container_name: aubrey-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: aubrey
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme_secure_db_pass}
+      POSTGRES_DB: aubrey_rankings
+    volumes:
+      - aubrey_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aubrey -d aubrey_rankings"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aubrey_net
+
+  aubrey-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: aubrey-web
+    restart: unless-stopped
+    depends_on:
+      aubrey-db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://aubrey:${DB_PASSWORD:-changeme_secure_db_pass}@aubrey-db:5432/aubrey_rankings
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET}
+      BETTER_AUTH_URL: https://aubrey.koltensserver.com
+      NEXT_PUBLIC_APP_URL: https://aubrey.koltensserver.com
+      TMDB_API_READ_ACCESS_TOKEN: ${TMDB_API_READ_ACCESS_TOKEN}
+      TMDB_API_KEY: ${TMDB_API_KEY}
+      RESEND_API_KEY: ${RESEND_API_KEY}
+      EMAIL_FROM: ${EMAIL_FROM:-Aubrey Rankings <accounts@aubrey.koltensserver.com>}
+    volumes:
+      - aubrey_uploads:/app/public/uploads
+    ports:
+      # Exposes ONLY to the host loopback; Cloudflare Tunnel ingress reaches this port
+      - "127.0.0.1:3200:3000"
+    networks:
+      - aubrey_net
+
+volumes:
+  aubrey_pgdata:
+    name: aubrey_pgdata
+  aubrey_uploads:
+    name: aubrey_uploads
+
+networks:
+  aubrey_net:
+    name: aubrey_net
