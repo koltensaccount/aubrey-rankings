@@ -270,10 +270,10 @@ export default function PrototypeProfilePage() {
                 href={pinned.href}
                 aria-label="Preview Aubrey’s Black Mirror ranking"
               >
-                {pinned.topThree?.map((ep) => (
+                {pinned.topThree?.map((ep: { rank: string; title: string; score: string; image?: string }) => (
                   <div key={ep.title}>
                     <span>{ep.rank}</span>
-                    <img src={ep.image} alt={ep.title} />
+                    {ep.image && <img src={ep.image} alt={ep.title} />}
                     <strong>{ep.title}</strong>
                     <small>{ep.score}</small>
                   </div>

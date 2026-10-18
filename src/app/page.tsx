@@ -239,28 +239,28 @@ export default async function HomePage() {
                   >
                     <img
                       src={
-                        pinnedCollection.name.toLowerCase().includes("black mirror")
+                        pinnedCollection.title.toLowerCase().includes("black mirror")
                           ? "/prototype-art/black-mirror-wall.jpg"
-                          : pinnedCollection.backdropPath
-                            ? getTmdbImageUrl(pinnedCollection.backdropPath, "original")
+                          : pinnedCollection.backdropImage
+                            ? pinnedCollection.backdropImage
                             : "/prototype-art/black-mirror-wall.jpg"
                       }
-                      alt={pinnedCollection.name}
+                      alt={pinnedCollection.title}
                     />
                     <div className="ar-feedCoverShade" />
                     <div>
                       <span>
-                        {pinnedCollection.type === "tv_show"
+                        {pinnedCollection.collectionType === "tv_show"
                           ? "TV Anthology"
-                          : pinnedCollection.type === "movie_franchise"
+                          : pinnedCollection.collectionType === "movie_franchise"
                             ? "Movie Canon"
                             : "Custom Collection"}{" "}
                         · {pinnedCollection.entries.length} entries
                       </span>
-                      <h2>{pinnedCollection.name}</h2>
+                      <h2>{pinnedCollection.title}</h2>
                     </div>
 
-                    {pinnedCollection.name.toLowerCase().includes("black mirror") && (
+                    {pinnedCollection.title.toLowerCase().includes("black mirror") && (
                       <img
                         className="ar-feedCoverLogo"
                         src="/prototype-art/black-mirror-logo.png"
@@ -350,19 +350,18 @@ export default async function HomePage() {
                         >
                           <img
                             src={
-                              col.posterPath
-                                ? getTmdbImageUrl(col.posterPath, "w300")
-                                : col.backdropPath
-                                  ? getTmdbImageUrl(col.backdropPath, "w300")
-                                  : "/prototype-art/san-junipero.jpg"
+                              col.customCoverImage ||
+                              (col.entries[0]?.mediaItem?.posterPath
+                                ? getTmdbImageUrl(col.entries[0].mediaItem.posterPath, "w300")
+                                : col.backdropImage || "/prototype-art/san-junipero.jpg")
                             }
-                            alt={col.name}
+                            alt={col.title}
                           />
                           <div>
                             <span>
-                              {col.type === "tv_show" ? "TV Series" : "Franchise"} · {col.entries.length} items · ★ {avgScore}
+                              {col.collectionType === "tv_show" ? "TV Series" : "Franchise"} · {col.entries.length} items · ★ {avgScore}
                             </span>
-                            <h2>{col.name}</h2>
+                            <h2>{col.title}</h2>
                             <p className="text-xs text-[#9aa79e] line-clamp-2 my-1">
                               {col.description || "Weighted sensory scores for narrative, direction, and sound."}
                             </p>

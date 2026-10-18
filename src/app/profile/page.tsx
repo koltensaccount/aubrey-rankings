@@ -136,22 +136,22 @@ export default async function ProfilePage() {
               <Link href={`/collection/${pinned.id}`} className="ar-feedCover">
                 <img
                   src={
-                    pinned.name.toLowerCase().includes("black mirror")
+                    pinned.title.toLowerCase().includes("black mirror")
                       ? "/prototype-art/black-mirror-wall.jpg"
-                      : pinned.backdropPath
-                        ? getTmdbImageUrl(pinned.backdropPath, "original")
+                      : pinned.backdropImage
+                        ? pinned.backdropImage
                         : "/prototype-art/black-mirror-wall.jpg"
                   }
-                  alt={pinned.name}
+                  alt={pinned.title}
                 />
                 <div className="ar-feedCoverShade" />
                 <div>
                   <span>
-                    {pinned.type === "tv_show" ? "TV Anthology" : "Franchise Canon"} · {pinned.entries.length} entries
+                    {pinned.collectionType === "tv_show" ? "TV Anthology" : "Franchise Canon"} · {pinned.entries.length} entries
                   </span>
-                  <h2>{pinned.name}</h2>
+                  <h2>{pinned.title}</h2>
                 </div>
-                {pinned.name.toLowerCase().includes("black mirror") && (
+                {pinned.title.toLowerCase().includes("black mirror") && (
                   <img
                     className="ar-feedCoverLogo"
                     src="/prototype-art/black-mirror-logo.png"
@@ -164,7 +164,7 @@ export default async function ProfilePage() {
                 <Link
                   className="ar-rankingPeek"
                   href={`/collection/${pinned.id}`}
-                  aria-label={`Preview ${pinned.name}`}
+                  aria-label={`Preview ${pinned.title}`}
                 >
                   {pinned.entries.slice(0, 3).map((ep, idx) => {
                     const r = pinned.ratings.find(
@@ -235,19 +235,18 @@ export default async function ProfilePage() {
                       <Link href={`/collection/${col.id}`} className="ar-smallRanking">
                         <img
                           src={
-                            col.posterPath
-                              ? getTmdbImageUrl(col.posterPath, "w300")
-                              : col.backdropPath
-                                ? getTmdbImageUrl(col.backdropPath, "w300")
-                                : "/prototype-art/san-junipero.jpg"
+                            col.customCoverImage ||
+                            (col.entries[0]?.mediaItem?.posterPath
+                              ? getTmdbImageUrl(col.entries[0].mediaItem.posterPath, "w300")
+                              : col.backdropImage || "/prototype-art/san-junipero.jpg")
                           }
-                          alt={col.name}
+                          alt={col.title}
                         />
                         <div>
                           <span>
-                            {col.type === "tv_show" ? "TV Series" : "Canon"} · {col.entries.length} items · ★ {avgScore}
+                            {col.collectionType === "tv_show" ? "TV Series" : "Canon"} · {col.entries.length} items · ★ {avgScore}
                           </span>
-                          <h2>{col.name}</h2>
+                          <h2>{col.title}</h2>
                           <p style={{ fontSize: 13, color: "#9caea2", lineHeight: 1.6, margin: "6px 0 10px" }}>
                             {col.description || "Ranked by narrative rigor and weighted categories."}
                           </p>

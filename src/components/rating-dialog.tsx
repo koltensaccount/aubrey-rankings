@@ -105,7 +105,7 @@ export function RatingDialog({
     isRequired: c.isRequired,
   }));
 
-  const calculation = calculateWeightedAverage(numericScores, categoryDefs, scale);
+  const calculation = calculateWeightedAverage(categoryDefs, numericScores);
 
   const handleScoreChange = (catId: string, val: string) => {
     if (val === "") {
