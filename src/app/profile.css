@@ -1,0 +1,438 @@
+/* =========================================================================
+   AUBREY RANKINGS — PRODUCTION CINEMATIC PROFILE & COMMUNITY STYLES
+   Screen C Unified Cinematic Identity (Letterboxd + Apple Elegance)
+   Preserves Barlow Condensed + Inter typography and responsive layouts.
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   Shared Dependencies (Home, Community Feed, Profile, Public Profile)
+   ------------------------------------------------------------------------- */
+.ar-homeContent {
+  padding-bottom: 90px;
+}
+
+.ar-communityHome > .ar-contentSection {
+  margin-top: 10px;
+}
+
+.ar-communityHeading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 14px;
+}
+
+.ar-communityHeading h1 {
+  font-family: var(--type-display-font, "AR Barlow Condensed", Arial, sans-serif);
+  font-size: 38px;
+  line-height: 1.1;
+  letter-spacing: var(--type-display-tracking, .005em);
+  text-transform: uppercase;
+  margin-top: 7px;
+  color: #f1f0e9;
+}
+
+.ar-feedStream {
+  min-width: 0;
+}
+
+.ar-pinnedDesc {
+  padding: 0 20px 14px;
+  font-size: 13px;
+  color: #a6b7ac;
+  line-height: 1.7;
+}
+
+.ar-postScore {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--feature-accent, #89d5d5);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ar-postScore i {
+  width: 20px;
+  height: 1px;
+  background: rgba(165, 223, 223, 0.5);
+}
+
+.ar-postScore small {
+  color: #c3bbc4;
+  font-size: 10px;
+}
+
+.ar-savePost {
+  margin-left: auto;
+}
+
+/* -------------------------------------------------------------------------
+   Profile Page Layout & Compact Header
+   ------------------------------------------------------------------------- */
+.ar-profilePage {
+  padding-bottom: 90px;
+}
+
+.ar-profileHeader {
+  padding: 14px 0 28px;
+  border-bottom: 1px solid #303b34;
+  margin-bottom: 34px;
+}
+
+.ar-profileBioRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 22px;
+}
+
+.ar-profileAvatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: #25322a;
+  border: 1px solid #485a4f;
+  color: #e3ede6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 32px;
+  font-weight: 700;
+  text-transform: uppercase;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.ar-profileIdentity {
+  flex: 1;
+  min-width: 0;
+}
+
+.ar-profileNameLine {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.ar-profileNameLine h1 {
+  font-family: var(--type-display-font, "AR Barlow Condensed", Arial, sans-serif);
+  font-size: 38px;
+  font-weight: 700;
+  letter-spacing: .005em;
+  text-transform: uppercase;
+  line-height: 1;
+  margin: 0;
+  color: #f1f0e9;
+}
+
+.ar-profileHandle {
+  font-size: 12px;
+  color: var(--feature-accent, #89d5d5);
+  letter-spacing: .02em;
+}
+
+.ar-profileBadge {
+  font-size: 10px;
+  color: #95a79c;
+  border: 1px solid #35453b;
+  padding: 2px 8px;
+  border-radius: 12px;
+}
+
+.ar-profileBio {
+  color: #b1bfb7;
+  font-size: 14px;
+  line-height: 1.7;
+  margin: 10px 0 14px;
+  max-width: 620px;
+}
+
+.ar-profileFollowStats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: #8fa095;
+}
+
+.ar-profileFollowStats strong {
+  color: #e5ece5;
+  font-weight: 600;
+}
+
+.ar-profileActions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
+}
+
+.ar-profileFollowBtn {
+  min-height: 36px;
+  padding: 0 18px;
+  border: 1px solid #485b50;
+  border-radius: 4px;
+  background: #1c2721;
+  font-size: 12px;
+  font-weight: 500;
+  color: #d6e4d9;
+  cursor: pointer;
+  transition: all .2s;
+  text-decoration: none;
+}
+
+.ar-profileFollowBtn:hover {
+  background: #24332b;
+  border-color: #617a6c;
+}
+
+.ar-profileFollowBtn[aria-pressed="true"] {
+  background: transparent;
+  border-color: #35443a;
+  color: #8ba093;
+}
+
+/* -------------------------------------------------------------------------
+   Subtle Horizontal Metadata Strip (Screen C)
+   ------------------------------------------------------------------------- */
+.ar-profileMetaBar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid #232c27;
+  font-size: 12px;
+  color: #8fa095;
+}
+
+.ar-profileMetaBar strong {
+  color: #d6e4da;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.ar-profileMetaBar .ar-dot {
+  color: #435248;
+}
+
+.ar-profileRubricSummary {
+  color: var(--feature-accent, #89d5d5);
+  margin-left: auto;
+  font-size: 11px;
+}
+
+/* -------------------------------------------------------------------------
+   Profile Sections & Section Headings
+   ------------------------------------------------------------------------- */
+.ar-profileSection {
+  margin-top: 36px;
+}
+
+.ar-profileSectionHeading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #28342d;
+}
+
+.ar-profileSectionHeading h2 {
+  font-family: var(--type-display-font, "AR Barlow Condensed", Arial, sans-serif);
+  font-size: 24px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .005em;
+  margin: 0;
+  color: #e5ece5;
+}
+
+.ar-profileSectionHeading span {
+  font-size: 11px;
+  color: #889c90;
+}
+
+/* -------------------------------------------------------------------------
+   Pinned Ranking Card on Profile
+   ------------------------------------------------------------------------- */
+.ar-profilePinnedCard {
+  margin-bottom: 40px;
+  border: 1px solid #303b34;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #141a17;
+}
+
+.ar-profilePinnedCard .ar-feedCover {
+  height: 240px;
+}
+
+.ar-profilePinnedCard .ar-feedCover h2 {
+  font-size: 44px;
+}
+
+.ar-profilePinnedCard .ar-rankingPeek {
+  padding: 16px 20px 8px;
+  border-top: 1px solid #25312a;
+}
+
+.ar-profilePinnedCard .ar-pinnedDesc {
+  padding: 0 20px 14px;
+  font-size: 13px;
+  color: #a6b7ac;
+  line-height: 1.7;
+}
+
+.ar-profilePinnedCard .ar-socialActions {
+  padding: 8px 20px 16px;
+  border-top: 1px solid #222d26;
+}
+
+/* -------------------------------------------------------------------------
+   Auteur Obsessions Grid & Cards
+   ------------------------------------------------------------------------- */
+.ar-auteursGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+
+.ar-auteurCard {
+  border: 1px solid #2b3831;
+  background: #141a17;
+  border-radius: 4px;
+  overflow: hidden;
+  text-align: left;
+  transition: border-color .2s;
+}
+
+.ar-auteurCard:hover {
+  border-color: #485e50;
+}
+
+.ar-auteurImage {
+  height: 116px;
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+  background: #0b1311;
+}
+
+.ar-auteurImage img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: saturate(.75);
+  transition: filter .2s;
+}
+
+.ar-auteurCard:hover .ar-auteurImage img {
+  filter: saturate(1);
+}
+
+.ar-auteurScore {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(11, 20, 18, 0.88);
+  border: 1px solid #32463b;
+  color: var(--feature-accent, #89d5d5);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ar-auteurDetails {
+  padding: 13px;
+}
+
+.ar-auteurDetails h4 {
+  font-size: 14px;
+  font-weight: 500;
+  color: #e3ede6;
+  margin: 0 0 4px;
+}
+
+.ar-auteurDetails p {
+  font-size: 11px;
+  color: #869c90;
+  margin: 0;
+  line-height: 1.5;
+}
+
+/* -------------------------------------------------------------------------
+   Responsive Viewports (Mobile & Tablet <= 800px)
+   ------------------------------------------------------------------------- */
+@media (max-width: 800px) {
+  .ar-communityHeading {
+    margin-bottom: 17px;
+  }
+
+  .ar-communityHeading h1 {
+    font-size: 32px;
+  }
+
+  .ar-profileBioRow {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .ar-profileAvatar {
+    width: 52px;
+    height: 52px;
+    font-size: 28px;
+  }
+
+  .ar-profileActions {
+    margin-left: 0;
+    width: 100%;
+  }
+
+  .ar-profileFollowBtn {
+    width: 100%;
+  }
+
+  .ar-profileMetaBar {
+    gap: 10px;
+    font-size: 11px;
+  }
+
+  .ar-profileRubricSummary {
+    width: 100%;
+    margin-left: 0;
+    margin-top: 4px;
+  }
+
+  .ar-auteursGrid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+  }
+
+  .ar-profilePinnedCard .ar-feedCover {
+    height: 190px;
+  }
+
+  .ar-profilePinnedCard .ar-feedCover h2 {
+    font-size: 36px;
+  }
+
+  .ar-profilePinnedCard .ar-rankingPeek {
+    padding: 12px 14px 4px;
+  }
+
+  .ar-profilePinnedCard .ar-pinnedDesc {
+    padding: 0 14px 12px;
+    font-size: 12px;
+  }
+
+  .ar-profilePinnedCard .ar-socialActions {
+    padding: 6px 14px 12px;
+  }
+}

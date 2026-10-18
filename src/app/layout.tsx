@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./profile.css";
 import { Navbar } from "@/components/navbar";
 import { BugReportButton } from "@/components/bug-report-button";
 
