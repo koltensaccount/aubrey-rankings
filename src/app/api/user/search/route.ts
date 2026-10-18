@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { user } from "@/db/schema";
-import { ilike, or, and, isNotNull, ne } from "drizzle-orm";
+import { user, follows } from "@/db/schema";
+import { ilike, or, and, isNotNull, ne, inArray, eq } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
+    const session = await getServerSession();
     const matches = await db.query.user.findMany({
       where: and(
         isNotNull(user.username),
@@ -38,7 +40,26 @@ export async function GET(request: NextRequest) {
       limit: 10,
     });
 
-    return NextResponse.json({ users: matches });
+    let followingSet = new Set<string>();
+    if (session?.user?.id && matches.length > 0) {
+      const matchIds = matches.map((m) => m.id);
+      const followRows = await db.query.follows.findMany({
+        where: and(
+          eq(follows.followerId, session.user.id),
+          inArray(follows.followingId, matchIds)
+        ),
+        columns: { followingId: true },
+      });
+      followingSet = new Set(followRows.map((r) => r.followingId));
+    }
+
+    const usersWithStatus = matches.map((u) => ({
+      ...u,
+      isFollowing: followingSet.has(u.id),
+      isSelf: session?.user?.id === u.id,
+    }));
+
+    return NextResponse.json({ users: usersWithStatus });
   } catch (error: any) {
     console.error("[User Search Error]", error);
     return NextResponse.json(

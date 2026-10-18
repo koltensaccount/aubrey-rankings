@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Search, Film, Tv, Users, Compass, ArrowRight, Loader2 } from "lucide-react";
+import { Search, Film, Tv, Users, Compass, ArrowRight, Loader2, UserPlus, UserCheck } from "lucide-react";
 import { resolvePosterUrl } from "@/lib/artwork";
+import { useSession } from "@/lib/auth-client";
 
 export default function ExplorePage() {
+  const { data: session } = useSession();
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "media" | "people">("all");
   const [loading, setLoading] = useState(false);
@@ -13,6 +15,58 @@ export default function ExplorePage() {
   const [tmdbResults, setTmdbResults] = useState<any[]>([]);
   const [userResults, setUserResults] = useState<any[]>([]);
   const [searchError, setSearchError] = useState<string | null>(null);
+  const [togglingMap, setTogglingMap] = useState<Record<string, boolean>>({});
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  const handleToggleFollow = async (e: React.MouseEvent, targetUser: any) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!session?.user) {
+      window.location.href = `/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+      return;
+    }
+
+    const currentFollowing = !!targetUser.isFollowing;
+    const nextFollowing = !currentFollowing;
+
+    // Optimistic UI update
+    setUserResults((prev) =>
+      prev.map((item) =>
+        item.id === targetUser.id ? { ...item, isFollowing: nextFollowing } : item
+      )
+    );
+    setTogglingMap((prev) => ({ ...prev, [targetUser.id]: true }));
+
+    try {
+      const res = await fetch("/api/social/follow", {
+        method: nextFollowing ? "POST" : "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ targetUserId: targetUser.id }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to update follow status");
+      }
+
+      const data = await res.json();
+      setUserResults((prev) =>
+        prev.map((item) =>
+          item.id === targetUser.id ? { ...item, isFollowing: data.isFollowing } : item
+        )
+      );
+    } catch (err) {
+      console.error("Error toggling follow from explore search:", err);
+      // Rollback on error
+      setUserResults((prev) =>
+        prev.map((item) =>
+          item.id === targetUser.id ? { ...item, isFollowing: currentFollowing } : item
+        )
+      );
+    } finally {
+      setTogglingMap((prev) => ({ ...prev, [targetUser.id]: false }));
+    }
+  };
 
   useEffect(() => {
     if (!query.trim() || query.trim().length < 2) {
@@ -128,28 +182,76 @@ export default function ExplorePage() {
                 {userResults.filter((u) => typeof u.username === "string" && u.username.trim()).map((u) => {
                   const initial = (u.name || u.username || "U").charAt(0).toUpperCase();
                   const handle = u.username;
+                  const isSelf = !!u.isSelf || session?.user?.id === u.id;
+                  const isFollowing = !!u.isFollowing;
+                  const isToggling = !!togglingMap[u.id];
+                  const isHovered = hoveredId === u.id;
+
                   return (
-                    <Link
+                    <div
                       key={u.id}
-                      href={`/u/${handle}`}
-                      className="p-4 rounded-xl border border-border bg-card hover:border-primary/40 transition-colors flex items-center gap-3.5 group shadow-sm"
+                      className="p-4 rounded-xl border border-border bg-card hover:border-primary/40 transition-colors flex items-center justify-between gap-3 group shadow-sm"
                     >
-                      <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-sm text-primary shrink-0 overflow-hidden">
-                        {u.image ? (
-                          <img src={u.image} alt={u.name || handle} className="w-full h-full object-cover" />
-                        ) : (
-                          initial
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h4 className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors truncate">
-                          {u.name || `@${handle}`}
-                        </h4>
-                        <span className="text-[11px] text-muted-foreground block truncate">@{handle}</span>
-                        {u.bio && <p className="text-[11px] text-muted-foreground/80 line-clamp-1 mt-0.5">{u.bio}</p>}
-                      </div>
-                      <ArrowRight size={14} className="text-muted-foreground group-hover:text-primary shrink-0 transition-colors" />
-                    </Link>
+                      <Link
+                        href={`/u/${handle}`}
+                        className="flex items-center gap-3.5 min-w-0 flex-1 overflow-hidden"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-sm text-primary shrink-0 overflow-hidden">
+                          {u.image ? (
+                            <img src={u.image} alt={u.name || handle} className="w-full h-full object-cover" />
+                          ) : (
+                            initial
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <h4 className="font-semibold text-xs text-foreground group-hover:text-primary transition-colors truncate">
+                            {u.name || `@${handle}`}
+                          </h4>
+                          <span className="text-[11px] text-muted-foreground block truncate">@{handle}</span>
+                          {u.bio && <p className="text-[11px] text-muted-foreground/80 line-clamp-1 mt-0.5">{u.bio}</p>}
+                        </div>
+                      </Link>
+
+                      {isSelf ? (
+                        <span className="text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider px-2.5 py-1 rounded-md bg-secondary/60 shrink-0">
+                          You
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={(e) => handleToggleFollow(e, u)}
+                          disabled={isToggling}
+                          onMouseEnter={() => setHoveredId(u.id)}
+                          onMouseLeave={() => setHoveredId(null)}
+                          aria-label={isFollowing ? `Unfollow ${u.name || handle}` : `Follow ${u.name || handle}`}
+                          className={`inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold transition-all shrink-0 cursor-pointer min-w-[92px] ${
+                            isFollowing
+                              ? isHovered
+                                ? "bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20"
+                                : "bg-secondary hover:bg-surface-elevated text-foreground border border-border"
+                              : "bg-primary hover:bg-primary-hover text-primary-foreground border border-transparent shadow-sm"
+                          }`}
+                        >
+                          {isToggling ? (
+                            <Loader2 size={12} className="animate-spin" />
+                          ) : isFollowing ? (
+                            isHovered ? (
+                              <span>Unfollow</span>
+                            ) : (
+                              <>
+                                <UserCheck size={12} className="text-primary" />
+                                <span>Following</span>
+                              </>
+                            )
+                          ) : (
+                            <>
+                              <UserPlus size={12} />
+                              <span>Follow</span>
+                            </>
+                          )}
+                        </button>
+                      )}
+                    </div>
                   );
                 })}
               </div>
