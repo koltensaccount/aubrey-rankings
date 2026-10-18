@@ -20,7 +20,10 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const session = await getServerSession();
+    const session = await getServerSession(request);
+    const { getBlockedUserIds } = await import("@/lib/safety");
+    const blockedUserIds = session ? await getBlockedUserIds(session.user.id) : new Set<string>();
+
     const matches = await db.query.user.findMany({
       where: and(
         isNotNull(user.username),
@@ -37,12 +40,14 @@ export async function GET(request: NextRequest) {
         image: true,
         bio: true,
       },
-      limit: 10,
+      limit: 15,
     });
 
+    const filteredMatches = matches.filter((m) => !blockedUserIds.has(m.id)).slice(0, 10);
+
     let followingSet = new Set<string>();
-    if (session?.user?.id && matches.length > 0) {
-      const matchIds = matches.map((m) => m.id);
+    if (session?.user?.id && filteredMatches.length > 0) {
+      const matchIds = filteredMatches.map((m) => m.id);
       const followRows = await db.query.follows.findMany({
         where: and(
           eq(follows.followerId, session.user.id),
@@ -53,7 +58,7 @@ export async function GET(request: NextRequest) {
       followingSet = new Set(followRows.map((r) => r.followingId));
     }
 
-    const usersWithStatus = matches.map((u) => ({
+    const usersWithStatus = filteredMatches.map((u) => ({
       ...u,
       isFollowing: followingSet.has(u.id),
       isSelf: session?.user?.id === u.id,

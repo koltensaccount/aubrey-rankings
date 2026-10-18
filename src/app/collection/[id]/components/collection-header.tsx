@@ -15,6 +15,7 @@ import {
 import { CinematicArtworkBanner } from "@/components/cinematic-artwork-banner";
 import { LikeButton } from "@/components/social/like-button";
 import { SaveRankingButton } from "@/components/social/save-ranking-button";
+import { FollowButton } from "@/components/social/follow-button";
 import { ReleaseTrackingToggle } from "@/components/collections/release-tracking-toggle";
 
 interface CollectionHeaderProps {
@@ -166,6 +167,76 @@ export function CollectionHeader({
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-end">
           <div className="lg:col-span-8 space-y-4">
+            {/* Curator Identity Badge for Visitors */}
+            {!isOwner && collection.user && (
+              <div className="flex flex-wrap items-center justify-between gap-3 p-3 rounded-card bg-card/80 backdrop-blur-md border border-border/70 max-w-xl">
+                <div className="flex items-center gap-3 min-w-0">
+                  {collection.user.username ? (
+                    <Link
+                      href={`/u/${collection.user.username}`}
+                      className="h-10 w-10 rounded-full bg-surface border border-border flex items-center justify-center text-sm font-semibold text-primary-text hover:border-primary transition-colors shrink-0 overflow-hidden"
+                    >
+                      {collection.user.image ? (
+                        <img
+                          src={collection.user.image}
+                          alt={collection.user.name || "Curator"}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        (collection.user.name || collection.user.username || "U").charAt(0).toUpperCase()
+                      )}
+                    </Link>
+                  ) : (
+                    <div className="h-10 w-10 rounded-full bg-surface border border-border flex items-center justify-center text-sm font-semibold text-primary-text shrink-0 overflow-hidden">
+                      {collection.user.image ? (
+                        <img
+                          src={collection.user.image}
+                          alt={collection.user.name || "Curator"}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        (collection.user.name || "U").charAt(0).toUpperCase()
+                      )}
+                    </div>
+                  )}
+                  <div className="text-xs min-w-0">
+                    <span className="text-[10px] text-muted-foreground uppercase tracking-wider block font-semibold">
+                      Curated By
+                    </span>
+                    <div className="flex items-center gap-1.5 truncate">
+                      {collection.user.username ? (
+                        <Link
+                          href={`/u/${collection.user.username}`}
+                          className="font-semibold text-sm text-foreground hover:text-primary-text transition-colors truncate"
+                        >
+                          {collection.user.name || `@${collection.user.username}`}
+                        </Link>
+                      ) : (
+                        <span className="font-semibold text-sm text-foreground truncate">
+                          {collection.user.name || "Curator"}
+                        </span>
+                      )}
+                      {collection.user.username && (
+                        <span className="text-xs text-muted-foreground shrink-0">
+                          @{collection.user.username}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <FollowButton
+                  targetUserId={collection.userId}
+                  targetUsername={collection.user.username || ""}
+                  initialIsFollowing={collection.isFollowing ?? collection.user.isFollowing ?? false}
+                  initialFollowersCount={collection.user.followersCount || 0}
+                  initialFollowingCount={collection.user.followingCount || 0}
+                  isOwnProfile={false}
+                  showStats={false}
+                />
+              </div>
+            )}
+
             {/* Editorial Eyebrow */}
             <span className="text-[10px] text-primary-text font-semibold tracking-widest uppercase block mb-1">
               {collection.collectionType === "tv_show"

@@ -307,7 +307,7 @@ export default function ExplorePage() {
                       </div>
                       <div className="p-3 space-y-1">
                         <Link
-                          href={`/media/${m.id}`}
+                          href={`/media/${m.id}?type=${isTv ? "tv" : "movie"}`}
                           className="font-semibold text-xs text-foreground hover:text-primary transition-colors line-clamp-1 block"
                         >
                           {title}
@@ -315,7 +315,7 @@ export default function ExplorePage() {
                         <span className="text-[10px] text-muted-foreground block">{year || "—"}</span>
                         <div className="flex items-center gap-1.5 pt-1.5">
                           <Link
-                            href={`/media/${m.id}`}
+                            href={`/media/${m.id}?type=${isTv ? "tv" : "movie"}`}
                             className="flex-1 py-1 rounded-md bg-surface hover:bg-surface-raised text-foreground border border-border text-[10px] font-semibold flex items-center justify-center transition-colors"
                           >
                             Reviews

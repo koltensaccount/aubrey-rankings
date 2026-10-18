@@ -691,7 +691,7 @@ export default function CollectionDetailPage({
           viewMode={viewMode}
           isOwner={isOwner}
           onOpenAddModal={() => setShowAddModal(true)}
-          onSelectItemForRating={setSelectedItemForRating}
+          onSelectItemForRating={isOwner ? setSelectedItemForRating : () => {}}
           onSetEntryToDelete={setEntryToDelete}
         />
 
