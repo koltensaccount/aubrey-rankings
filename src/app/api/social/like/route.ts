@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { likes, collections } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { createNotification } from "@/lib/notifications";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession();
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
 
   const col = await db.query.collections.findFirst({
     where: (c, { eq }) => eq(c.id, collectionId),
-    columns: { id: true, userId: true, visibility: true, isPublic: true },
+    columns: { id: true, userId: true, visibility: true, isPublic: true, title: true },
   });
 
   if (!col) {
@@ -102,6 +103,29 @@ export async function POST(request: NextRequest) {
         collectionId,
       });
       isLiked = true;
+
+      if (col.userId !== session.user.id) {
+        const actor = await db.query.user.findFirst({
+          where: (u, { eq }) => eq(u.id, session.user.id),
+          columns: { name: true, username: true, image: true },
+        });
+
+        await createNotification({
+          recipientUserId: col.userId,
+          actorUserId: session.user.id,
+          notificationType: "like",
+          collectionId: col.id,
+          deduplicationKey: `like:${col.id}:${session.user.id}`,
+          metadata: {
+            actorName: actor?.name || session.user.name || "Someone",
+            actorUsername: actor?.username || null,
+            actorImage: actor?.image || session.user.image || null,
+            collectionTitle: col.title,
+            message: `${actor?.name || session.user.name || "Someone"} liked your ranking "${col.title}".`,
+            targetUrl: `/collection/${col.id}`,
+          },
+        });
+      }
     }
   }
 

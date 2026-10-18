@@ -2,11 +2,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { collections, ratings, user } from "@/db/schema";
+import { collections, ratings, user, follows } from "@/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import { ArrowRight, Settings } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { getTopRankedEntries } from "@/lib/scoring";
+import { ProfileSocialStats } from "@/components/social/profile-social-stats";
 
 export default async function ProfilePage() {
   const session = await getServerSession();
@@ -61,6 +62,18 @@ export default async function ProfilePage() {
     .charAt(0)
     .toLowerCase();
 
+  const followersCountRes = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(follows)
+    .where(eq(follows.followingId, session.user.id));
+  const followersCount = Number(followersCountRes[0]?.count || 0);
+
+  const followingCountRes = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(follows)
+    .where(eq(follows.followerId, session.user.id));
+  const followingCount = Number(followingCountRes[0]?.count || 0);
+
   const publishedCollections = userCollections.filter((c) => c.visibility === "public");
   const pinned = userCollections.find((c) => c.isPinned) || userCollections[0];
   const reviews = allRatings.filter((r) => r.reviewText);
@@ -97,22 +110,32 @@ export default async function ProfilePage() {
               <p className="ar-profileBio">
                 {displayBio}
               </p>
-              <div className="ar-profileFollowStats">
-                <span>
-                  <strong>{totalRatedCount}</strong> items rated
-                </span>
-                <span>·</span>
-                <span>
-                  <strong>{publishedCollections.length}</strong> published rankings
-                </span>
-                {userCollections.length > publishedCollections.length && (
-                  <>
-                    <span>·</span>
-                    <span className="text-[#8fa095]">
-                      ({userCollections.length} total)
-                    </span>
-                  </>
-                )}
+              <div className="flex flex-col gap-1.5 mt-1">
+                <ProfileSocialStats
+                  userId={session.user.id}
+                  username={dbUser?.username}
+                  targetName={displayName}
+                  initialFollowersCount={followersCount}
+                  initialFollowingCount={followingCount}
+                  isOwnProfile={true}
+                />
+                <div className="ar-profileFollowStats text-xs text-muted-foreground">
+                  <span>
+                    <strong>{totalRatedCount}</strong> items rated
+                  </span>
+                  <span>·</span>
+                  <span>
+                    <strong>{publishedCollections.length}</strong> published rankings
+                  </span>
+                  {userCollections.length > publishedCollections.length && (
+                    <>
+                      <span>·</span>
+                      <span className="text-[#8fa095]">
+                        ({userCollections.length} total)
+                      </span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
             <div className="ar-profileActions">

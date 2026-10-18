@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { follows, user, feedActivities } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { createNotification } from "@/lib/notifications";
 
 async function resolveTargetUserId(
   req: NextRequest,
@@ -99,6 +100,26 @@ export async function POST(request: NextRequest) {
       id: randomUUID(),
       followerId: session.user.id,
       followingId: targetUserId,
+    });
+
+    // Notify target user
+    const actor = await db.query.user.findFirst({
+      where: (u, { eq }) => eq(u.id, session.user.id),
+      columns: { name: true, username: true, image: true },
+    });
+
+    await createNotification({
+      recipientUserId: targetUserId,
+      actorUserId: session.user.id,
+      notificationType: "follow",
+      deduplicationKey: `follow:${session.user.id}:${targetUserId}`,
+      metadata: {
+        actorName: actor?.name || session.user.name || "Someone",
+        actorUsername: actor?.username || null,
+        actorImage: actor?.image || session.user.image || null,
+        message: `${actor?.name || session.user.name || "Someone"} started following you.`,
+        targetUrl: actor?.username ? `/u/${actor.username}` : `/profile`,
+      },
     });
   }
 

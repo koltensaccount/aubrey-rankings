@@ -413,6 +413,8 @@ export const userRelations = relations(user, ({ many }) => ({
   likes: many(likes),
   comments: many(comments),
   feedActivities: many(feedActivities),
+  notifications: many(notifications, { relationName: "recipient" }),
+  releaseTrackingSubscriptions: many(releaseTrackingSubscriptions),
 }));
 
 export const mediaItemsRelations = relations(mediaItems, ({ many, one }) => ({
@@ -439,6 +441,8 @@ export const collectionsRelations = relations(collections, ({ one, many }) => ({
   likes: many(likes),
   comments: many(comments),
   feedActivities: many(feedActivities),
+  notifications: many(notifications),
+  releaseTrackingSubscriptions: many(releaseTrackingSubscriptions),
 }));
 
 export const collectionEntriesRelations = relations(
@@ -599,5 +603,144 @@ export const bugReportsRelations = relations(bugReports, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+// ==========================================
+// NOTIFICATIONS & RELEASE TRACKING (STAGE 8)
+// ==========================================
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: text("id").primaryKey(),
+    recipientUserId: text("recipient_user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    actorUserId: text("actor_user_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    notificationType: text("notification_type").notNull(), // 'follow' | 'like' | 'comment' | 'tv_release' | 'movie_release'
+    collectionId: text("collection_id").references(() => collections.id, {
+      onDelete: "cascade",
+    }),
+    mediaItemId: text("media_item_id").references(() => mediaItems.id, {
+      onDelete: "set null",
+    }),
+    metadata: jsonb("metadata"),
+    readAt: timestamp("read_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    deduplicationKey: text("deduplication_key"),
+  },
+  (table) => [
+    index("idx_notifications_recipient_created").on(
+      table.recipientUserId,
+      table.createdAt
+    ),
+    index("idx_notifications_recipient_unread").on(
+      table.recipientUserId,
+      table.readAt
+    ),
+    uniqueIndex("uniq_notifications_dedup")
+      .on(table.deduplicationKey)
+      .where(sql`"deduplication_key" IS NOT NULL`),
+  ]
+);
+
+export const notificationPreferences = pgTable("notification_preferences", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => user.id, { onDelete: "cascade" }),
+  notifyFollows: boolean("notify_follows").notNull().default(true),
+  notifyLikes: boolean("notify_likes").notNull().default(true),
+  notifyComments: boolean("notify_comments").notNull().default(true),
+  notifyTvReleases: boolean("notify_tv_releases").notNull().default(true),
+  notifyMovieReleases: boolean("notify_movie_releases").notNull().default(true),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const releaseTrackingSubscriptions = pgTable(
+  "release_tracking_subscriptions",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    collectionId: text("collection_id")
+      .notNull()
+      .references(() => collections.id, { onDelete: "cascade" }),
+    tmdbType: text("tmdb_type").notNull(), // 'tv' | 'movie_collection'
+    tmdbId: integer("tmdb_id").notNull(),
+    enabled: boolean("enabled").notNull().default(true),
+    baselineDate: text("baseline_date"),
+    lastCheckedAt: timestamp("last_checked_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uniq_release_sub_user_col").on(table.userId, table.collectionId),
+    index("idx_release_sub_tmdb").on(table.tmdbType, table.tmdbId),
+  ]
+);
+
+export const processedReleaseEvents = pgTable(
+  "processed_release_events",
+  {
+    id: text("id").primaryKey(),
+    eventKey: text("event_key").notNull(),
+    tmdbType: text("tmdb_type").notNull(),
+    tmdbId: integer("tmdb_id").notNull(),
+    releaseDate: text("release_date"),
+    metadata: jsonb("metadata"),
+    processedAt: timestamp("processed_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uniq_release_event_key").on(table.eventKey),
+  ]
+);
+
+export const notificationsRelations = relations(notifications, ({ one }) => ({
+  recipient: one(user, {
+    fields: [notifications.recipientUserId],
+    references: [user.id],
+    relationName: "recipient",
+  }),
+  actor: one(user, {
+    fields: [notifications.actorUserId],
+    references: [user.id],
+    relationName: "actor",
+  }),
+  collection: one(collections, {
+    fields: [notifications.collectionId],
+    references: [collections.id],
+  }),
+  mediaItem: one(mediaItems, {
+    fields: [notifications.mediaItemId],
+    references: [mediaItems.id],
+  }),
+}));
+
+export const notificationPreferencesRelations = relations(
+  notificationPreferences,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [notificationPreferences.userId],
+      references: [user.id],
+    }),
+  })
+);
+
+export const releaseTrackingSubscriptionsRelations = relations(
+  releaseTrackingSubscriptions,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [releaseTrackingSubscriptions.userId],
+      references: [user.id],
+    }),
+    collection: one(collections, {
+      fields: [releaseTrackingSubscriptions.collectionId],
+      references: [collections.id],
+    }),
+  })
+);
+
 
 

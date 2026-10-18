@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "@/lib/auth-client";
 import { Plus, Settings, LogOut } from "lucide-react";
+import { NotificationBell } from "@/components/notification-bell";
 
 export function Navbar() {
   const pathname = usePathname();
@@ -86,6 +87,8 @@ export function Navbar() {
                 <Plus size={14} />
                 <span>New ranking</span>
               </Link>
+
+              <NotificationBell />
 
               <Link
                 href="/settings"

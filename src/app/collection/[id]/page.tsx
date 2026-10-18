@@ -28,6 +28,7 @@ import {
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { RatingDialog } from "@/components/rating-dialog";
 import { LikeButton } from "@/components/social/like-button";
+import { ReleaseTrackingToggle } from "@/components/collections/release-tracking-toggle";
 import { CommentsSection } from "@/components/social/comments-section";
 import { calibrateOklchTheme } from "@/lib/palette";
 import { CinematicArtworkBanner } from "@/components/cinematic-artwork-banner";
@@ -702,6 +703,12 @@ export default function CollectionDetailPage({
                 </div>
               )}
               <LikeButton collectionId={collection.id} />
+              <ReleaseTrackingToggle
+                collectionId={collection.id}
+                collectionType={collection.collectionType}
+                tmdbId={collection.tmdbId}
+                isOwner={isOwner}
+              />
               <Link
                 href={`/compare?left=${collection.id}`}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-card/80 hover:bg-card text-muted-foreground hover:text-primary border border-border transition-colors"

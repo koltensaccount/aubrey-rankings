@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { comments, collections, user } from "@/db/schema";
 import { eq, asc, and } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { createNotification } from "@/lib/notifications";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession();
@@ -88,7 +89,7 @@ export async function POST(request: NextRequest) {
 
   const col = await db.query.collections.findFirst({
     where: (c, { eq }) => eq(c.id, collectionId),
-    columns: { id: true, userId: true, visibility: true, isPublic: true },
+    columns: { id: true, userId: true, visibility: true, isPublic: true, title: true },
   });
 
   if (!col) {
@@ -125,6 +126,25 @@ export async function POST(request: NextRequest) {
 
   if (!created) {
     return NextResponse.json({ error: "Failed to create comment" }, { status: 500 });
+  }
+
+  // Trigger notification if commenter is not the ranking owner
+  if (col.userId !== session.user.id) {
+    await createNotification({
+      recipientUserId: col.userId,
+      actorUserId: session.user.id,
+      notificationType: "comment",
+      collectionId: col.id,
+      metadata: {
+        actorName: created.user.name || session.user.name || "Someone",
+        actorUsername: created.user.username || null,
+        actorImage: created.user.image || session.user.image || null,
+        collectionTitle: col.title,
+        commentPreview: trimmedContent.slice(0, 100),
+        message: `${created.user.name || session.user.name || "Someone"} commented on your ranking "${col.title}": "${trimmedContent.slice(0, 80)}${trimmedContent.length > 80 ? "…" : ""}"`,
+        targetUrl: `/collection/${col.id}`,
+      },
+    });
   }
 
   return NextResponse.json({

@@ -9,6 +9,7 @@ import { normalizeUsername } from "@/lib/username";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { getTopRankedEntries } from "@/lib/scoring";
 import { FollowButton } from "@/components/social/follow-button";
+import { ProfileSocialStats } from "@/components/social/profile-social-stats";
 import { getAccentTokens } from "@/lib/theme";
 import {
   ArrowRight,
@@ -151,15 +152,15 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
               <p className="ar-profileBio">
                 {targetUser.bio || "Evaluating media by narrative rigor, visual texture, and weighted rubrics."}
               </p>
-              <div className="ar-profileFollowStats">
-                <span>
-                  <strong>{followersCount}</strong> followers
-                </span>
-                <span>·</span>
-                <span>
-                  <strong>{followingCount}</strong> following
-                </span>
-              </div>
+              <ProfileSocialStats
+                userId={targetUser.id}
+                username={targetUser.username}
+                targetName={targetUser.name}
+                initialFollowersCount={followersCount}
+                initialFollowingCount={followingCount}
+                initialIsFollowing={isFollowing}
+                isOwnProfile={isOwnProfile}
+              />
             </div>
 
             <div className="ar-profileActions">
