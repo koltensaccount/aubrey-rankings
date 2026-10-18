@@ -232,6 +232,10 @@ export const ratings = pgTable(
       { onDelete: "set null" }
     ),
     calculatedOverallScore: real("calculated_overall_score"),
+    sourceRating: real("source_rating"),
+    sourceScale: real("source_scale"),
+    sourceService: text("source_service"),
+    letterboxdUri: text("letterboxd_uri"),
     watchDate: timestamp("watch_date"),
     reviewText: text("review_text"),
     personalNotes: text("personal_notes"),

@@ -27,9 +27,10 @@
 - [x] Phase 7: Live production deployment to Ubuntu server (`koltensserver`), persistent database initialization, volume configuration, automated backups with off-server sync, and continuous deployment pipeline
 - [x] Stage 1 (Production UI): Unified Modern Cinema Editorial UI across all application pages (Home/Feed, Ranking Detail, Profile, Settings, Auth, Create Ranking) with locked Barlow Condensed + Inter typography
 - [x] Stage 2 (Accounts & Identity): Google OAuth provider, normalized lowercase unique usernames (3–20 chars, reserved keywords protection), case-insensitive unique DB index, `/onboarding` flow, live availability checking API, Settings profile editor, and Resend transactional email integration.
+- [x] Stage 3 (Letterboxd Importer): Repeatable, non-destructive Letterboxd ZIP archive importer (`ratings.csv`, `watched.csv`, `diary.csv`, `reviews.csv`), star rating scale preservation (0.5 to 5.0), duplicate protection, preview breakdown, and Settings UI.
 
 ## Active Implementation Stage
-- **Stage 3 — Letterboxd ZIP Importer**: Repeatable, duplicate-safe import from official user-data ZIP export, TMDB movie matching, rating scale preservation without losing source fidelity, import preview modal under Settings.
+- **Stage 4 — Privacy & Public Profiles**: Public profiles at `/u/[username]` displaying user metadata, avatar, bio, pinned ranking, public collections, reviews; Private (default), Unlisted, and Public ranking visibility states with server-side authorization enforcement.
 
 ## Long-Term Product Roadmap (Post Stage 3)
 - **Stage 4 — Privacy & Public Profiles**: Private (default), unlisted, and public rankings, shareable URLs, public user profiles, pinned rankings, public reviews, privacy-aware search.

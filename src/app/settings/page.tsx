@@ -15,6 +15,9 @@ import {
   AlertTriangle,
   Loader2,
   Save,
+  UploadCloud,
+  ExternalLink,
+  Film,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -127,6 +130,77 @@ export default function SettingsPage() {
       setProfileError(err?.message || "Failed to save profile.");
     } finally {
       setProfileSaving(false);
+    }
+  };
+
+  // Letterboxd import state
+  const [lbFile, setLbFile] = useState<File | null>(null);
+  const [lbPreviewLoading, setLbPreviewLoading] = useState(false);
+  const [lbPreviewData, setLbPreviewData] = useState<any | null>(null);
+  const [lbImporting, setLbImporting] = useState(false);
+  const [lbSuccessMsg, setLbSuccessMsg] = useState<string | null>(null);
+  const [lbErrorMsg, setLbErrorMsg] = useState<string | null>(null);
+
+  const handleLbFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setLbFile(file);
+    setLbErrorMsg(null);
+    setLbSuccessMsg(null);
+    setLbPreviewLoading(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await fetch("/api/import/letterboxd/preview", {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to parse Letterboxd ZIP archive.");
+      }
+
+      setLbPreviewData(json);
+    } catch (err: any) {
+      setLbErrorMsg(err?.message || "Failed to preview Letterboxd archive.");
+      setLbPreviewData(null);
+    } finally {
+      setLbPreviewLoading(false);
+    }
+  };
+
+  const handleLbExecuteImport = async () => {
+    if (!lbFile) return;
+
+    setLbImporting(true);
+    setLbErrorMsg(null);
+    setLbSuccessMsg(null);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", lbFile);
+
+      const res = await fetch("/api/import/letterboxd/execute", {
+        method: "POST",
+        body: formData,
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to execute import.");
+      }
+
+      setLbSuccessMsg(json.message || "Import completed successfully!");
+      setLbPreviewData(null);
+      setLbFile(null);
+    } catch (err: any) {
+      setLbErrorMsg(err?.message || "Import failed.");
+    } finally {
+      setLbImporting(false);
     }
   };
 
@@ -495,6 +569,160 @@ export default function SettingsPage() {
       {/* TAB 3: DATA & IMPORTER */}
       {activeTab === "data" && (
         <div className="max-w-2xl space-y-6">
+          {/* SECTION 1: LETTERBOXD ZIP IMPORTER */}
+          <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-5">
+            <div className="flex items-start justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-[#18251e] border border-[#3b4c40] flex items-center justify-center text-[#89d5d5]">
+                  <Film size={20} />
+                </div>
+                <div>
+                  <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+                    Import from Letterboxd
+                  </h3>
+                  <p className="text-xs text-[#8fa095] mt-0.5">
+                    Repeatable, non-destructive import of your watched films, star ratings, diary dates, and reviews.
+                  </p>
+                </div>
+              </div>
+              <a
+                href="https://letterboxd.com/settings/data/"
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1.5 text-[11px] text-[#89d5d5] hover:underline"
+              >
+                <span>Export Page</span>
+                <ExternalLink size={12} />
+              </a>
+            </div>
+
+            {lbErrorMsg && (
+              <div className="p-3 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+                {lbErrorMsg}
+              </div>
+            )}
+
+            {lbSuccessMsg && (
+              <div className="p-3 rounded bg-[#89d5d5]/10 border border-[#89d5d5]/30 text-[#89d5d5] text-xs">
+                {lbSuccessMsg}
+              </div>
+            )}
+
+            {/* Upload Area */}
+            {!lbPreviewData ? (
+              <div className="p-6 rounded-lg border border-dashed border-[#303b34] bg-[#111613] text-center space-y-3">
+                <UploadCloud size={28} className="mx-auto text-[#6c7d73]" />
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold text-[#f1f0e9]">
+                    Upload your Letterboxd export ZIP
+                  </p>
+                  <p className="text-[11px] text-[#8fa095]">
+                    Download your data ZIP from Letterboxd Settings → Export, then drop it here.
+                  </p>
+                </div>
+                <input
+                  type="file"
+                  accept=".zip"
+                  onChange={handleLbFileChange}
+                  disabled={lbPreviewLoading}
+                  className="block w-full text-xs text-[#8fa095] file:mr-4 file:py-2 file:px-4 file:rounded-md file:border file:border-[#3b4c40] file:text-xs file:font-semibold file:bg-[#18211d] file:text-[#89d5d5] hover:file:bg-[#202c25] file:cursor-pointer cursor-pointer"
+                />
+                {lbPreviewLoading && (
+                  <p className="text-xs text-[#89d5d5] animate-pulse">
+                    Analyzing Letterboxd archive contents and matching records...
+                  </p>
+                )}
+              </div>
+            ) : (
+              /* Preview Area */
+              <div className="space-y-4 rounded-lg border border-[#232d27] bg-[#111613] p-5">
+                <div className="flex items-center justify-between border-b border-[#232d27] pb-3">
+                  <div>
+                    <h4 className="font-display text-base uppercase font-bold text-[#f1f0e9]">
+                      Archive Preview: {lbPreviewData.totalFilms} Films
+                    </h4>
+                    <p className="text-[11px] text-[#8fa095]">
+                      Found {lbPreviewData.totalRatings} star ratings and {lbPreviewData.totalReviews} written reviews.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLbPreviewData(null);
+                      setLbFile(null);
+                    }}
+                    className="text-xs text-[#8fa095] hover:text-[#f1f0e9]"
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-center">
+                  <div className="p-3 rounded bg-[#18211d] border border-[#303b34]">
+                    <div className="font-display text-xl font-bold text-[#89d5d5]">
+                      {lbPreviewData.newCount}
+                    </div>
+                    <div className="text-[10px] uppercase tracking-wider text-[#8fa095]">
+                      New to Library
+                    </div>
+                  </div>
+                  <div className="p-3 rounded bg-[#18211d] border border-[#303b34]">
+                    <div className="font-display text-xl font-bold text-[#f1f0e9]">
+                      {lbPreviewData.existingCount}
+                    </div>
+                    <div className="text-[10px] uppercase tracking-wider text-[#8fa095]">
+                      Existing / Updated
+                    </div>
+                  </div>
+                  <div className="p-3 rounded bg-[#18211d] border border-[#303b34] col-span-2 sm:col-span-1">
+                    <div className="font-display text-xl font-bold text-[#f1f0e9]">
+                      {lbPreviewData.totalReviews}
+                    </div>
+                    <div className="text-[10px] uppercase tracking-wider text-[#8fa095]">
+                      Reviews to Sync
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sample items */}
+                {lbPreviewData.sampleFilms?.length > 0 && (
+                  <div className="space-y-1.5 pt-2">
+                    <div className="text-[10px] uppercase tracking-wider text-[#6c7d73]">
+                      Sample Archive Items:
+                    </div>
+                    <div className="space-y-1">
+                      {lbPreviewData.sampleFilms.slice(0, 5).map((f: any, idx: number) => (
+                        <div
+                          key={idx}
+                          className="flex items-center justify-between text-xs py-1 px-2 rounded bg-[#141b18]"
+                        >
+                          <span className="text-[#f1f0e9] font-medium">
+                            {f.title} {f.year ? `(${f.year})` : ""}
+                          </span>
+                          <span className="text-[#89d5d5] font-mono text-[11px]">
+                            {f.rating ? `★ ${f.rating.toFixed(1)}/5` : "Watched"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="pt-2 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={handleLbExecuteImport}
+                    disabled={lbImporting}
+                    className="px-5 py-2.5 rounded-lg bg-[#89d5d5] hover:bg-[#a0dede] text-[#111514] font-display text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    {lbImporting ? "Importing Archive..." : "Confirm & Sync into Library"}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* SECTION 2: AUBREY'S BLACK MIRROR SPREADSHEET IMPORTER */}
           <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-4">
             <div className="flex items-center gap-3">
               <div className="h-9 w-9 rounded-lg bg-[#1b2520] border border-[#3b4c40] flex items-center justify-center text-[#89d5d5]">
@@ -515,18 +743,19 @@ export default function SettingsPage() {
                 Paste CSV or JSON export from the original spreadsheet:
               </p>
               <textarea
-                rows={5}
+                rows={4}
                 placeholder="Episode, Season, Music, Acting, Cinematography, Writing, Vibes, Notes..."
                 className="w-full rounded-lg border border-[#303b34] bg-[#18211d] p-3 text-xs text-[#f1f0e9] placeholder:text-[#6d7e74] focus:outline-none focus:border-[#89d5d5] font-mono resize-none"
               />
               <div className="flex justify-end">
-                <button className="px-4 py-2 rounded bg-[#d8e2d8] hover:bg-[#edf5ed] text-[#102523] text-xs font-semibold">
+                <button className="px-4 py-2 rounded bg-[#d8e2d8] hover:bg-[#edf5ed] text-[#102523] text-xs font-semibold cursor-pointer">
                   Import Spreadsheet Ratings
                 </button>
               </div>
             </div>
           </div>
 
+          {/* SECTION 3: EXPORT */}
           <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-3">
             <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
               Export Your Data
@@ -534,7 +763,7 @@ export default function SettingsPage() {
             <p className="text-xs text-[#8fa095]">
               Download your complete library, rating histories, and reviews in JSON format.
             </p>
-            <button className="inline-flex items-center gap-1.5 px-4 py-2 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold transition-colors">
+            <button className="inline-flex items-center gap-1.5 px-4 py-2 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold transition-colors cursor-pointer">
               <Download size={14} />
               <span>Export JSON</span>
             </button>
