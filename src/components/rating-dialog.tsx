@@ -323,40 +323,42 @@ export function RatingDialog({
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
     >
       <div className="relative w-full max-w-2xl my-6 rounded-2xl bg-card border border-border text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.85)] overflow-hidden flex flex-col max-h-[92vh]">
-        {/* Header with Visual Still */}
-        <div className="relative h-44 sm:h-52 w-full bg-black shrink-0">
+        {/* Header with Visual Still (Vivid artwork with localized lower fade) */}
+        <div className="relative h-44 sm:h-52 w-full bg-card shrink-0 overflow-hidden">
           {backdropUrl ? (
             <img
               src={backdropUrl}
               alt={mediaItem.title}
-              className="w-full h-full object-cover object-center opacity-65 filter saturate-90"
+              className="w-full h-full object-cover object-center opacity-90 dark:opacity-85 filter saturate-[0.95]"
             />
           ) : (
-            <div className="w-full h-full bg-background" />
+            <div className="w-full h-full bg-surface" />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-card via-card/60 to-transparent" />
+
+          {/* Shorter localized bottom fade to transition into dialog surface */}
+          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-card via-card/60 to-transparent pointer-events-none" />
 
           {/* Close Button */}
           <button
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="absolute top-3 right-3 h-8 w-8 rounded-full bg-background/80 backdrop-blur-md text-foreground hover:bg-muted flex items-center justify-center border border-border transition-colors cursor-pointer z-10"
+            className="absolute top-3 right-3 h-8 w-8 rounded-full bg-card/80 backdrop-blur-md text-foreground hover:bg-muted flex items-center justify-center border border-border transition-colors cursor-pointer z-10 shadow-sm"
           >
             <X className="h-4 w-4" />
           </button>
 
           {/* Header Title Metadata */}
-          <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between gap-4">
+          <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between gap-4 z-10">
             <div className="space-y-1 min-w-0">
               {isEpisode && (
-                <span className="inline-block px-2.5 py-0.5 rounded bg-black/80 border border-border text-[10px] text-primary font-semibold tracking-wider uppercase">
+                <span className="inline-block px-2.5 py-0.5 rounded bg-card/90 backdrop-blur-sm border border-border text-[10px] text-primary font-semibold tracking-wider uppercase">
                   Season {mediaItem.seasonNumber} · Episode {mediaItem.episodeNumber}
                 </span>
               )}
               <h2
                 id="rating-dialog-title"
-                className="font-display text-2xl sm:text-3xl font-bold text-foreground uppercase tracking-tight truncate drop-shadow-md"
+                className="font-display text-2xl sm:text-3xl font-bold text-foreground uppercase tracking-tight truncate drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)]"
               >
                 {mediaItem.title}
               </h2>

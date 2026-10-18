@@ -748,6 +748,15 @@ export default function CollectionDetailPage({
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-end">
             <div className="lg:col-span-8 space-y-4">
+              {/* Prototype Editorial Eyebrow */}
+              <span className="text-[10px] text-primary font-semibold tracking-widest uppercase block mb-1">
+                {collection.collectionType === "tv_show"
+                  ? "The Episode Ranking"
+                  : collection.collectionType === "movie_franchise"
+                    ? "The Film Franchise"
+                    : "Curated Canon"}
+              </span>
+
               {/* Transparent ClearLOGO or Primary Typographic Heading (Never both) */}
               {collection.clearLogoUrl ? (
                 <div className="py-1">
@@ -759,7 +768,7 @@ export default function CollectionDetailPage({
                   <h1 className="sr-only">{collectionTitle}</h1>
                 </div>
               ) : (
-                <h1 className="font-display text-4xl sm:text-6xl lg:text-7xl tracking-tight text-foreground leading-[0.95] uppercase">
+                <h1 className="font-display text-4xl sm:text-6xl lg:text-7xl tracking-tight text-foreground leading-[0.95] uppercase drop-shadow-[0_4px_12px_rgba(0,0,0,0.5)]">
                   {collectionTitle}
                 </h1>
               )}
@@ -770,37 +779,32 @@ export default function CollectionDetailPage({
                 </p>
               )}
 
-              {/* Clear, elegant Ranking Progress indicator */}
-              <div className="p-4 sm:p-5 rounded-xl bg-card/95 border border-border space-y-3 backdrop-blur-sm max-w-xl">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">
-                      Rating Progress
+              {/* Understated, Frosted Ranking Progress */}
+              <div className="p-3.5 sm:p-4 rounded-xl bg-card/75 backdrop-blur-md border border-border/70 space-y-2.5 max-w-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs">
+                  <span className="font-display text-base sm:text-lg font-bold text-foreground uppercase tracking-tight">
+                    {completedCount} of {totalEntries} Rated{" "}
+                    <span className="text-primary font-mono text-xs font-semibold ml-1">
+                      ({completionPercentage}%)
                     </span>
-                    <div className="font-display text-xl sm:text-2xl font-bold text-foreground uppercase tracking-tight">
-                      {completedCount} of {totalEntries} Rated ({completionPercentage}%)
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2.5 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-primary" />
-                      <strong className="text-foreground">{completedCount}</strong> rated
+                  </span>
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <span>
+                      <strong className="text-foreground font-semibold">{completedCount}</strong> rated
                     </span>
                     <span>·</span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-amber-400" />
-                      <strong className="text-foreground">{inProgressCount}</strong> in progress
+                    <span>
+                      <strong className="text-foreground font-semibold">{inProgressCount}</strong> partial
                     </span>
                     <span>·</span>
-                    <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-muted" />
-                      <strong className="text-foreground">{unratedCount}</strong> unrated
+                    <span>
+                      <strong className="text-foreground font-semibold">{unratedCount}</strong> unrated
                     </span>
                   </div>
                 </div>
 
                 {/* Progress Track */}
-                <div className="h-2 w-full rounded-full bg-surface overflow-hidden flex border border-border">
+                <div className="h-1.5 w-full rounded-full bg-surface/80 overflow-hidden flex border border-border/50">
                   <div
                     style={{ width: `${(completedCount / Math.max(1, totalEntries)) * 100}%` }}
                     className="h-full bg-primary transition-all duration-300"
@@ -815,8 +819,8 @@ export default function CollectionDetailPage({
               </div>
             </div>
 
-            {/* Rubric Breakdown Panel */}
-            <div className="lg:col-span-4 p-5 rounded-xl bg-card/95 border border-border space-y-2.5 text-xs backdrop-blur-sm">
+            {/* Frosted Glass Rubric Breakdown Panel */}
+            <div className="lg:col-span-4 p-4 sm:p-5 rounded-xl bg-card/75 backdrop-blur-md border border-border/70 space-y-2.5 text-xs shadow-lg">
               <div className="flex justify-between items-center pb-2 border-b border-border font-semibold">
                 <span className="font-display uppercase tracking-wider text-sm text-foreground">
                   {collection.defaultRatingSystem?.name || "Weighted Rubric"}
@@ -1021,7 +1025,7 @@ export default function CollectionDetailPage({
             )}
           </div>
         ) : viewMode === "list" ? (
-          <div className="space-y-3">
+          <div className="divide-y divide-border border-t border-border">
             {processedEntries.map((entry: any, index: number) => {
               const media = entry.mediaItem;
               const { state, score, actionLabel, scoredCount, totalCategories } = entry.ratingStatus;
@@ -1033,21 +1037,15 @@ export default function CollectionDetailPage({
               return (
                 <div
                   key={entry.id}
-                  className={`flex items-center gap-4 sm:gap-6 p-4 rounded-xl border transition-colors group ${
-                    state === "rated"
-                      ? "border-border bg-card hover:border-primary/50 shadow-sm"
-                      : state === "in_progress"
-                        ? "border-amber-500/30 bg-surface hover:border-amber-500/50"
-                        : "border-border bg-surface/50 hover:border-border"
-                  }`}
+                  className="flex items-center gap-4 sm:gap-6 py-4 hover:bg-surface/40 px-2 sm:px-3 -mx-2 sm:-mx-3 rounded-lg transition-colors group"
                 >
                   {/* Rank Numeral */}
-                  <span className="w-8 sm:w-10 text-center font-display text-2xl sm:text-3xl font-bold text-muted-foreground group-hover:text-primary transition-colors">
+                  <span className="w-8 sm:w-10 text-center font-display text-2xl sm:text-3xl font-bold text-muted-foreground/70 group-hover:text-primary transition-colors shrink-0">
                     {index < 9 ? `0${index + 1}` : index + 1}
                   </span>
 
                   {/* Cinematic Card: 2:3 Portrait for Movies, 16:9 for Episodes */}
-                  <div className={isMovie ? "w-[84px] sm:w-[96px] shrink-0" : "w-28 sm:w-36 shrink-0"}>
+                  <div className={isMovie ? "w-[72px] sm:w-[84px] shrink-0" : "w-28 sm:w-36 shrink-0"}>
                     <CinematicMediaCard
                       stillPath={media.stillPath}
                       posterPath={media.posterPath}
@@ -1058,15 +1056,15 @@ export default function CollectionDetailPage({
 
                   {/* Title & Metadata */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium">
                       {media.seasonNumber && media.episodeNumber && (
                         <span>
-                          S{media.seasonNumber}, Ep {media.episodeNumber}
+                          Season {media.seasonNumber} · Episode {media.episodeNumber}
                         </span>
                       )}
                       {media.releaseDate && <span>· {media.releaseDate.split("-")[0]}</span>}
                     </div>
-                    <h3 className="font-display text-xl sm:text-2xl font-bold text-foreground uppercase tracking-tight truncate mt-0.5">
+                    <h3 className="font-display text-xl sm:text-2xl font-bold text-foreground uppercase tracking-tight truncate mt-0.5 group-hover:text-primary transition-colors">
                       {media.title}
                     </h3>
                     {entry.userRating?.reviewText && (
@@ -1082,32 +1080,32 @@ export default function CollectionDetailPage({
                       {state === "rated" && score !== null ? (
                         <div className="font-display text-2xl sm:text-3xl font-bold text-primary">
                           {score.toFixed(1)}
-                          <span className="text-xs text-muted-foreground ml-1 font-sans">/ 10</span>
+                          <span className="text-[11px] text-muted-foreground/70 ml-1 font-sans font-normal">/ 10</span>
                         </div>
                       ) : state === "in_progress" ? (
                         <div className="text-right">
-                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 uppercase tracking-wider">
+                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold text-amber-400 bg-amber-500/10 border border-amber-500/30 uppercase tracking-wider">
                             {scoredCount}/{totalCategories} Rated
                           </span>
                           {score !== null && (
-                            <div className="font-display text-lg font-bold text-amber-300/90 mt-0.5">
+                            <div className="font-display text-base font-bold text-amber-400/90 mt-0.5">
                               ★ {score.toFixed(1)}
                             </div>
                           )}
                         </div>
                       ) : (
-                        <span className="text-xs text-muted-foreground font-medium">— Unrated</span>
+                        <span className="text-xs text-muted-foreground/60 font-medium">—</span>
                       )}
                     </div>
 
                     <button
                       onClick={() => setSelectedItemForRating(media)}
-                      className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                      className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border ${
                         state === "rated"
-                          ? "bg-secondary hover:bg-surface text-foreground border border-border"
+                          ? "bg-surface hover:bg-surface-elevated text-foreground border-border"
                           : state === "in_progress"
-                            ? "bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/40"
-                            : "bg-primary hover:bg-primary-hover text-primary-foreground shadow-sm"
+                            ? "bg-amber-400/15 hover:bg-amber-400/25 text-amber-400 border-amber-400/30"
+                            : "bg-primary hover:bg-primary-hover text-primary-foreground border-primary shadow-sm"
                       }`}
                     >
                       <Sliders size={13} />

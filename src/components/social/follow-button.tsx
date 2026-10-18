@@ -13,6 +13,7 @@ interface FollowButtonProps {
   isOwnProfile?: boolean;
   accentColor?: string;
   accentFg?: string;
+  showStats?: boolean;
 }
 
 export function FollowButton({
@@ -24,6 +25,7 @@ export function FollowButton({
   isOwnProfile = false,
   accentColor,
   accentFg,
+  showStats = true,
 }: FollowButtonProps) {
   const [isFollowing, setIsFollowing] = useState(initialIsFollowing);
   const [followersCount, setFollowersCount] = useState(initialFollowersCount);
@@ -34,20 +36,22 @@ export function FollowButton({
   if (isOwnProfile) {
     return (
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-3 text-xs text-[#8fa095]">
-          <span>
-            <strong className="text-[#f1f0e9] font-medium">{followersCount}</strong> followers
-          </span>
-          <span className="text-[#3b4c40]">·</span>
-          <span>
-            <strong className="text-[#f1f0e9] font-medium">{followingCount}</strong> following
-          </span>
-        </div>
+        {showStats && (
+          <div className="flex items-center gap-3 text-xs text-muted-foreground">
+            <span>
+              <strong className="text-foreground font-medium">{followersCount}</strong> followers
+            </span>
+            <span className="text-muted-foreground/60">·</span>
+            <span>
+              <strong className="text-foreground font-medium">{followingCount}</strong> following
+            </span>
+          </div>
+        )}
         <Link
           href="/settings"
-          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-[#3b4c40] bg-[#17201c] hover:bg-[#1f2b26] text-xs font-semibold text-[#f1f0e9] transition-colors"
+          className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-border bg-surface hover:bg-surface-elevated text-xs font-semibold text-foreground transition-colors"
         >
-          <Settings size={13} className="text-[#89d5d5]" />
+          <Settings size={13} className="text-primary" />
           <span>Edit Profile</span>
         </Link>
       </div>
@@ -91,15 +95,17 @@ export function FollowButton({
 
   return (
     <div className="flex items-center gap-4">
-      <div className="flex items-center gap-3 text-xs text-[#8fa095]">
-        <span>
-          <strong className="text-[#f1f0e9] font-medium">{followersCount}</strong> followers
-        </span>
-        <span className="text-[#3b4c40]">·</span>
-        <span>
-          <strong className="text-[#f1f0e9] font-medium">{followingCount}</strong> following
-        </span>
-      </div>
+      {showStats && (
+        <div className="flex items-center gap-3 text-xs text-muted-foreground">
+          <span>
+            <strong className="text-foreground font-medium">{followersCount}</strong> followers
+          </span>
+          <span className="text-muted-foreground/60">·</span>
+          <span>
+            <strong className="text-foreground font-medium">{followingCount}</strong> following
+          </span>
+        </div>
+      )}
 
       <button
         onClick={handleToggleFollow}
@@ -117,10 +123,10 @@ export function FollowButton({
               ? { backgroundColor: accentColor, color: accentFg || "#102523" }
               : undefined
         }
-        className={`inline-flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all min-w-[105px] ${
+        className={`inline-flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all min-w-[105px] cursor-pointer ${
           isFollowing
             ? isHovered
-              ? "bg-red-950/30 text-red-400 border border-red-800"
+              ? "bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20"
               : accentColor
                 ? "bg-card border"
                 : "bg-card text-primary border border-border"

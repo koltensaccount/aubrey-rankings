@@ -107,75 +107,62 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
       })
     : "Recent";
 
+  const meanScore = userRatings.length
+    ? (
+        userRatings.reduce((acc, r) => acc + (r.calculatedOverallScore || 0), 0) /
+        userRatings.length
+      ).toFixed(1)
+    : "—";
+
   const profileAccentTokens = getAccentTokens(targetUser.accentColor || "#89D5D5");
 
   return (
     <div
-      className="min-h-screen bg-background text-foreground pb-24 transition-colors"
+      className="ar-homeContent ar-profilePage min-h-screen bg-background text-foreground pb-24 transition-colors"
       style={{
         "--profile-accent": profileAccentTokens.primary,
         "--profile-accent-fg": profileAccentTokens.primaryForeground,
         "--profile-accent-hover": profileAccentTokens.primaryHover,
       } as React.CSSProperties}
     >
-      {/* Editorial Profile Header */}
-      <header className="border-b border-border bg-card/60 pt-10 pb-8 px-4 sm:px-8">
-        <div className="max-w-5xl mx-auto">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
-            <div className="flex items-start gap-4">
-              <div
-                className="h-16 w-16 rounded-full bg-muted border-2 flex items-center justify-center font-display text-2xl font-bold shrink-0 shadow-sm"
-                style={{
-                  borderColor: `${profileAccentTokens.primary}60`,
-                  color: profileAccentTokens.primary,
-                }}
-              >
-                {targetUser.image ? (
-                  <img
-                    src={targetUser.image}
-                    alt={targetUser.name || "Avatar"}
-                    className="h-full w-full rounded-full object-cover"
-                  />
-                ) : (
-                  initialLetter
-                )}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+        {/* Compact Profile Identity Header (Prototype Screen C Alignment) */}
+        <header className="ar-profileHeader">
+          <div className="ar-profileBioRow">
+            <div className="ar-profileAvatar overflow-hidden">
+              {targetUser.image ? (
+                <img
+                  src={targetUser.image}
+                  alt={targetUser.name || "Avatar"}
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                initialLetter
+              )}
+            </div>
+            <div className="ar-profileIdentity">
+              <div className="ar-profileNameLine">
+                <h1>{targetUser.name || targetUser.username}</h1>
+                <span className="ar-profileHandle">
+                  @{targetUser.username}
+                </span>
+                <span className="ar-profileBadge">Curator</span>
               </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <h1 className="font-display text-2xl sm:text-3xl font-bold uppercase tracking-tight text-foreground">
-                    {targetUser.name || targetUser.username}
-                  </h1>
-                  <span
-                    className="text-xs font-mono font-semibold"
-                    style={{ color: profileAccentTokens.primary }}
-                  >
-                    @{targetUser.username}
-                  </span>
-                </div>
-                {targetUser.bio && (
-                  <p className="text-xs text-muted-foreground max-w-xl leading-relaxed">
-                    {targetUser.bio}
-                  </p>
-                )}
-                <div className="flex flex-wrap items-center gap-4 text-[11px] text-muted-foreground pt-1">
-                  <span className="flex items-center gap-1.5">
-                    <Calendar size={13} />
-                    Member since {formattedJoinDate}
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <Layers size={13} />
-                    {publicCollections.length} Public Canons
-                  </span>
-                  <span className="flex items-center gap-1.5">
-                    <MessageSquare size={13} />
-                    {publicReviews.length} Reviews
-                  </span>
-                </div>
+              <p className="ar-profileBio">
+                {targetUser.bio || "Evaluating media by narrative rigor, visual texture, and weighted rubrics."}
+              </p>
+              <div className="ar-profileFollowStats">
+                <span>
+                  <strong>{followersCount}</strong> followers
+                </span>
+                <span>·</span>
+                <span>
+                  <strong>{followingCount}</strong> following
+                </span>
               </div>
             </div>
 
-            {/* Actions: Interactive Follow Button & Stats */}
-            <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
+            <div className="ar-profileActions">
               <FollowButton
                 targetUserId={targetUser.id}
                 targetUsername={targetUser.username || ""}
@@ -185,13 +172,30 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                 isOwnProfile={isOwnProfile}
                 accentColor={profileAccentTokens.primary}
                 accentFg={profileAccentTokens.primaryForeground}
+                showStats={false}
               />
             </div>
           </div>
-        </div>
-      </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-8 pt-8 space-y-12">
+          {/* Subtle Horizontal Metadata Bar */}
+          <div className="ar-profileMetaBar">
+            <span>
+              <strong>{userRatings.length}</strong> rated
+            </span>
+            <span className="ar-dot">·</span>
+            <span>
+              <strong>{publicCollections.length}</strong> rankings
+            </span>
+            <span className="ar-dot">·</span>
+            <span>
+              <strong>{meanScore}</strong> mean score
+            </span>
+            <span className="ar-dot">·</span>
+            <span className="ar-profileRubricSummary">Weighted Rubric</span>
+          </div>
+        </header>
+
+      <main className="pt-8 space-y-12">
         {/* Pinned Ranking Feature Card */}
         {pinnedCollection && (
           <section className="space-y-3">
@@ -404,6 +408,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
           </section>
         )}
       </main>
+      </div>
     </div>
   );
 }

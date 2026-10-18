@@ -274,9 +274,9 @@ h1, h2, h3, h4 {
   position: relative;
   isolation: isolate;
   overflow: hidden;
-  height: 230px;
+  height: 260px;
   background: #0b1717;
-  border-radius: 4px;
+  border-radius: 6px;
   text-decoration: none;
   color: #f1f0e9;
 }
@@ -285,11 +285,12 @@ h1, h2, h3, h4 {
   height: 100%;
   object-fit: cover;
   object-position: center 44%;
+  filter: saturate(0.9) brightness(0.95);
 }
 .ar-feedCoverShade {
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, #0a1818fa 0%, #0a1818a0 40%, transparent 80%), linear-gradient(0deg, #081818dd, transparent 90%);
+  background: linear-gradient(90deg, rgba(10, 24, 24, 0.95) 0%, rgba(10, 24, 24, 0.75) 35%, transparent 70%), linear-gradient(0deg, rgba(8, 24, 24, 0.85) 0%, transparent 50%);
 }
 .ar-feedCover > div:not(.ar-feedCoverShade) {
   position: absolute;
@@ -299,8 +300,10 @@ h1, h2, h3, h4 {
 }
 .ar-feedCover > div > span {
   font-size: 11px;
-  color: #a7d9d6;
-  letter-spacing: .04em;
+  color: var(--primary, #89d5d5);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  font-weight: 600;
 }
 .ar-feedCover h2 {
   font-family: var(--type-display-font);
@@ -308,9 +311,10 @@ h1, h2, h3, h4 {
   line-height: .98;
   letter-spacing: var(--type-display-tracking);
   text-transform: uppercase;
-  margin-top: 10px;
+  margin-top: 8px;
   font-weight: 700;
   color: #f1f0e9;
+  text-shadow: 0 4px 16px rgba(0,0,0,0.8);
 }
 .ar-feedCover .ar-feedCoverLogo {
   position: absolute;
@@ -338,8 +342,8 @@ h1, h2, h3, h4 {
   min-width: 0;
 }
 .ar-rankingPeek > div > span {
-  font-size: 11px;
-  color: var(--muted-foreground);
+  font-size: 12px;
+  color: var(--primary);
   font-variant-numeric: tabular-nums;
   font-weight: 700;
   flex-shrink: 0;
