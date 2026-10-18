@@ -7,6 +7,7 @@ import { eq, and, desc, sql, isNotNull } from "drizzle-orm";
 import { getServerSession } from "@/lib/server-session";
 import { normalizeUsername } from "@/lib/username";
 import { getTmdbImageUrl } from "@/lib/tmdb";
+import { getTopRankedEntries } from "@/lib/scoring";
 import { FollowButton } from "@/components/social/follow-button";
 import {
   ArrowRight,
@@ -222,31 +223,35 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                   href={`/collection/${pinnedCollection.id}`}
                   aria-label={`Preview ${pinnedCollection.title}`}
                 >
-                  {pinnedCollection.entries.slice(0, 3).map((ep, idx) => {
-                    const r = userRatings.find(
-                      (rate) => rate.mediaItemId === ep.mediaItemId
-                    );
+                  {getTopRankedEntries(pinnedCollection.entries, userRatings).map(({ entry, rank, score }) => {
+                    const isMovie =
+                      pinnedCollection.collectionType === "movie_franchise" ||
+                      entry.mediaItem?.mediaType === "movie" ||
+                      (!entry.mediaItem?.seasonNumber && Boolean(entry.mediaItem?.posterPath));
+                    const imgUrl = isMovie
+                      ? entry.mediaItem?.posterPath
+                        ? getTmdbImageUrl(entry.mediaItem.posterPath, "w300")
+                        : "/placeholders/poster-placeholder.svg"
+                      : entry.mediaItem?.stillPath
+                        ? getTmdbImageUrl(entry.mediaItem.stillPath, "w300")
+                        : entry.mediaItem?.posterPath
+                          ? getTmdbImageUrl(entry.mediaItem.posterPath, "w300")
+                          : "/placeholders/backdrop-placeholder.svg";
+
                     return (
-                      <div key={ep.id}>
-                        <span>0{idx + 1}</span>
+                      <div key={entry.id}>
+                        <span className="ar-peekRank">0{rank}</span>
                         <img
-                          src={
-                            ep.mediaItem?.stillPath
-                              ? getTmdbImageUrl(ep.mediaItem.stillPath, "w300")
-                              : ep.mediaItem?.posterPath
-                                ? getTmdbImageUrl(ep.mediaItem.posterPath, "w300")
-                                : "/placeholders/backdrop-placeholder.svg"
-                          }
-                          alt={ep.mediaItem?.title || "Item"}
+                          src={imgUrl}
+                          alt={entry.mediaItem?.title || "Item"}
+                          className={isMovie ? "ar-peekPoster" : "ar-peekStill"}
                         />
-                        <strong>{ep.mediaItem?.title || "Item"}</strong>
-                        <small>
-                          {r?.calculatedOverallScore
-                            ? r.calculatedOverallScore.toFixed(1)
-                            : r?.sourceRating
-                              ? `★ ${r.sourceRating.toFixed(1)}`
-                              : "—"}
-                        </small>
+                        <div className="ar-peekMeta">
+                          <strong>{entry.mediaItem?.title || "Item"}</strong>
+                          <small>
+                            {score !== null ? `★ ${score.toFixed(1)}` : "—"}
+                          </small>
+                        </div>
                       </div>
                     );
                   })}

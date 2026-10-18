@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { ratingSystems, ratingCategories, collections, categoryScores } from "@/db/schema";
+import { ratingSystems, ratingCategories, collections, categoryScores, ratings } from "@/db/schema";
 import { nanoid } from "@/lib/utils";
-import { eq, and, asc, not, inArray } from "drizzle-orm";
+import { eq, and, asc, not, inArray, sql } from "drizzle-orm";
 
 export async function GET(
   request: NextRequest,
@@ -202,6 +202,32 @@ export async function DELETE(
       return NextResponse.json(
         { error: "You cannot delete your only rating system." },
         { status: 400 }
+      );
+    }
+
+    // Protect historical ratings: block deletion if in use by existing ratings or category scores
+    const catIds = target.categories.map((c) => c.id);
+    const inUseRatingsCount = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(ratings)
+      .where(and(eq(ratings.userId, session.user.id), eq(ratings.ratingSystemId, id)))
+      .then((res) => Number(res[0]?.count ?? 0));
+
+    let inUseScoresCount = 0;
+    if (catIds.length > 0) {
+      inUseScoresCount = await db
+        .select({ count: sql<number>`count(*)` })
+        .from(categoryScores)
+        .where(inArray(categoryScores.categoryId, catIds))
+        .then((res) => Number(res[0]?.count ?? 0));
+    }
+
+    if (inUseRatingsCount > 0 || inUseScoresCount > 0) {
+      return NextResponse.json(
+        {
+          error: `Cannot delete "${target.name}" because it is currently in use by ${inUseRatingsCount} saved rating(s) with ${inUseScoresCount} category score(s). To protect historical data, rubrics cannot be deleted while assigned.`,
+        },
+        { status: 409 }
       );
     }
 

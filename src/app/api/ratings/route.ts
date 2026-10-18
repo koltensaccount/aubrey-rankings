@@ -154,36 +154,42 @@ export async function POST(request: NextRequest) {
           { error: "Invalid rating system or access denied" },
           { status: 400 },
         );
+      const isScoresUpdate = scores !== undefined || inputCategoryScores !== undefined;
       const categories = system?.categories ?? [];
-      let finalScores: Record<string, number>;
-      try {
-        finalScores = normalizeRatingScores(
+      let finalScores: Record<string, number> = {};
+      let calculatedOverallScore: number | null = existing?.calculatedOverallScore ?? null;
+
+      if (isScoresUpdate) {
+        try {
+          finalScores = normalizeRatingScores(
+            categories,
+            Object.fromEntries(
+              (existing?.categoryScores ?? []).map((score) => [
+                score.categoryId,
+                score.score,
+              ]),
+            ),
+            scores,
+            inputCategoryScores,
+            system?.scale ?? 10,
+          );
+        } catch (error) {
+          return NextResponse.json(
+            { error: error instanceof Error ? error.message : "Invalid scores" },
+            { status: 400 },
+          );
+        }
+        calculatedOverallScore = calculateWeightedAverage(
           categories,
-          Object.fromEntries(
-            (existing?.categoryScores ?? []).map((score) => [
-              score.categoryId,
-              score.score,
-            ]),
-          ),
-          scores,
-          inputCategoryScores,
-          system?.scale ?? 10,
-        );
-      } catch (error) {
-        return NextResponse.json(
-          { error: error instanceof Error ? error.message : "Invalid scores" },
-          { status: 400 },
-        );
+          finalScores,
+        ).weightedScore;
       }
-      const calculatedOverallScore = calculateWeightedAverage(
-        categories,
-        finalScores,
-      ).weightedScore;
+
       const ratingId = existing?.id ?? `rate_${Date.now()}_${nanoid(6)}`;
       {
         const values = {
           calculatedOverallScore,
-          ratingSystemId: activeRatingSystemId,
+          ratingSystemId: isScoresUpdate ? activeRatingSystemId : (existing?.ratingSystemId ?? activeRatingSystemId),
           watchDate:
             parsedWatchDate === undefined
               ? (existing?.watchDate ?? null)
@@ -220,20 +226,23 @@ export async function POST(request: NextRequest) {
               collectionId: collectionId || null,
               ...values,
             });
-        // Replace atomically for both input formats; remove categories from any previous system.
-        await tx
-          .delete(categoryScores)
-          .where(eq(categoryScores.ratingId, ratingId));
-        const rows = categories
-          .filter((category) => finalScores[category.id] !== undefined)
-          .map((category) => ({
-            id: `cs_${ratingId}_${category.id}`,
-            ratingId,
-            categoryId: category.id,
-            score: finalScores[category.id],
-            weightApplied: category.weight,
-          }));
-        if (rows.length) await tx.insert(categoryScores).values(rows);
+
+        if (isScoresUpdate) {
+          // Replace atomically for both input formats; remove categories from any previous system.
+          await tx
+            .delete(categoryScores)
+            .where(eq(categoryScores.ratingId, ratingId));
+          const rows = categories
+            .filter((category) => finalScores[category.id] !== undefined)
+            .map((category) => ({
+              id: `cs_${ratingId}_${category.id}`,
+              ratingId,
+              categoryId: category.id,
+              score: finalScores[category.id],
+              weightApplied: category.weight,
+            }));
+          if (rows.length) await tx.insert(categoryScores).values(rows);
+        }
       }
       const rating = await tx.query.ratings.findFirst({
         where: (r, { eq }) => eq(r.id, ratingId),
@@ -306,6 +315,35 @@ export async function DELETE(request: NextRequest) {
         { error: "Rating not found or access denied" },
         { status: 404 },
       );
+    }
+
+    const clearScoresOnly = url.searchParams.get("clearScoresOnly") === "true";
+
+    if (clearScoresOnly) {
+      await db.transaction(async (tx) => {
+        await tx
+          .delete(categoryScores)
+          .where(eq(categoryScores.ratingId, targetRating!.id));
+        await tx
+          .update(ratings)
+          .set({
+            calculatedOverallScore: null,
+            updatedAt: new Date(),
+          })
+          .where(
+            and(
+              eq(ratings.id, targetRating!.id),
+              eq(ratings.userId, session.user.id),
+            ),
+          );
+      });
+
+      return NextResponse.json({
+        success: true,
+        clearedScoresOnly: true,
+        deletedRatingId: targetRating.id,
+        mediaItemId: targetRating.mediaItemId,
+      });
     }
 
     // Delete rating record (foreign key cascade removes related categoryScores)

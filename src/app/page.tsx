@@ -5,6 +5,7 @@ import { collections, ratings, follows } from "@/db/schema";
 import { desc, eq, sql, and, ne, or } from "drizzle-orm";
 import { Plus, ArrowRight, Tv, Film, ListPlus, ArrowUpRight, Globe, Users } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
+import { getTopRankedEntries } from "@/lib/scoring";
 
 export default async function HomePage() {
   const session = await getServerSession();
@@ -293,25 +294,33 @@ export default async function HomePage() {
                       className="ar-rankingPeek"
                       style={{ padding: "16px 22px 10px", borderTop: "1px solid #232d27" }}
                     >
-                      {pinnedCollection.entries.slice(0, 3).map((entry, idx) => {
-                        const r = pinnedCollection.ratings.find(
-                          (rate) => rate.mediaItemId === entry.mediaItemId
-                        );
+                      {getTopRankedEntries(pinnedCollection.entries, pinnedCollection.ratings).map(({ entry, rank, score }) => {
+                        const isMovie =
+                          pinnedCollection.collectionType === "movie_franchise" ||
+                          entry.mediaItem?.mediaType === "movie" ||
+                          (!entry.mediaItem?.seasonNumber && Boolean(entry.mediaItem?.posterPath));
+                        const imgUrl = isMovie
+                          ? entry.mediaItem?.posterPath
+                            ? getTmdbImageUrl(entry.mediaItem.posterPath, "w300")
+                            : "/placeholders/poster-placeholder.svg"
+                          : entry.mediaItem?.stillPath
+                            ? getTmdbImageUrl(entry.mediaItem.stillPath, "w300")
+                            : entry.mediaItem?.posterPath
+                              ? getTmdbImageUrl(entry.mediaItem.posterPath, "w300")
+                              : "/placeholders/backdrop-placeholder.svg";
+
                         return (
                           <div key={entry.id}>
-                            <span>0{idx + 1}</span>
+                            <span className="ar-peekRank">0{rank}</span>
                             <img
-                              src={
-                                entry.mediaItem?.stillPath
-                                  ? getTmdbImageUrl(entry.mediaItem.stillPath, "w300")
-                                  : entry.mediaItem?.posterPath
-                                    ? getTmdbImageUrl(entry.mediaItem.posterPath, "w300")
-                                    : "/placeholders/backdrop-placeholder.svg"
-                              }
+                              src={imgUrl}
                               alt={entry.mediaItem?.title || "Item"}
+                              className={isMovie ? "ar-peekPoster" : "ar-peekStill"}
                             />
-                            <strong>{entry.mediaItem?.title || `Item ${idx + 1}`}</strong>
-                            <small>{r?.calculatedOverallScore ? r.calculatedOverallScore.toFixed(1) : "—"}</small>
+                            <div className="ar-peekMeta">
+                              <strong>{entry.mediaItem?.title || `Item ${rank}`}</strong>
+                              <small>{score !== null ? `★ ${score.toFixed(1)}` : "—"}</small>
+                            </div>
                           </div>
                         );
                       })}

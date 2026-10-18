@@ -32,9 +32,10 @@ import { CommentsSection } from "@/components/social/comments-section";
 import { calibrateOklchTheme } from "@/lib/palette";
 import { CinematicArtworkBanner } from "@/components/cinematic-artwork-banner";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
+import { getItemRatingStatus } from "@/lib/scoring";
 
 type SortOption = "score_desc" | "score_asc" | "order" | "title";
-type FilterOption = "all" | "rated" | "unrated";
+type FilterOption = "all" | "rated" | "in_progress" | "unrated";
 
 export default function CollectionDetailPage({
   params,
@@ -487,26 +488,63 @@ export default function CollectionDetailPage({
     return calibrateOklchTheme(collection?.customCoverColor || "#89d5d5");
   }, [collection]);
 
+  const rubricCategories = collection?.defaultRatingSystem?.categories || [];
+
+  // Calculate accurate collection rating progress
+  const { completedCount, inProgressCount, unratedCount, completionPercentage } = useMemo(() => {
+    if (!collection?.entries) return { completedCount: 0, inProgressCount: 0, unratedCount: 0, completionPercentage: 0 };
+    const categories = collection.defaultRatingSystem?.categories || [];
+    let completed = 0;
+    let inProgress = 0;
+    let unrated = 0;
+
+    for (const entry of collection.entries) {
+      const ur = ratingsMap[entry.mediaItem?.id];
+      const status = getItemRatingStatus(categories, ur);
+      if (status.state === "rated") {
+        completed++;
+      } else if (status.state === "in_progress") {
+        inProgress++;
+      } else {
+        unrated++;
+      }
+    }
+
+    const total = collection.entries.length;
+    const pct = total > 0 ? Math.round((completed / Math.max(1, total)) * 100) : 0;
+    return {
+      completedCount: completed,
+      inProgressCount: inProgress,
+      unratedCount: unrated,
+      completionPercentage: pct,
+    };
+  }, [collection, ratingsMap]);
+
   // Process and sort entries
   const processedEntries = useMemo(() => {
     if (!collection?.entries) return [];
+    const categories = collection.defaultRatingSystem?.categories || [];
 
     let list = collection.entries.map((entry: any) => {
       const media = entry.mediaItem;
       const userRating = ratingsMap[media.id];
-      const score = userRating?.calculatedOverallScore ?? null;
+      const ratingStatus = getItemRatingStatus(categories, userRating);
+      const score = ratingStatus.score;
       return {
         ...entry,
         score,
+        ratingStatus,
         userRating,
       };
     });
 
     // Filtering
     if (filterRated === "rated") {
-      list = list.filter((e: any) => e.score !== null);
+      list = list.filter((e: any) => e.ratingStatus.state === "rated");
+    } else if (filterRated === "in_progress") {
+      list = list.filter((e: any) => e.ratingStatus.state === "in_progress");
     } else if (filterRated === "unrated") {
-      list = list.filter((e: any) => e.score === null);
+      list = list.filter((e: any) => e.ratingStatus.state === "unrated");
     }
 
     if (selectedSeason !== "all") {
@@ -594,8 +632,6 @@ export default function CollectionDetailPage({
 
   const collectionTitle = collection.title || collection.name || "";
   const totalEntries = collection.entries?.length || 0;
-  const ratedCount = Object.keys(ratingsMap).length;
-  const rubricCategories = collection.defaultRatingSystem?.categories || [];
 
   return (
     <div className="min-h-screen pb-28">
@@ -732,14 +768,48 @@ export default function CollectionDetailPage({
                 </p>
               )}
 
-              <div className="flex flex-wrap items-center gap-4 text-xs text-[#8fa095] pt-2">
-                <span>
-                  <strong className="text-[#f1f0e9]">{ratedCount}</strong> of {totalEntries} rated
-                </span>
-                <span>·</span>
-                <span className="text-[#89d5d5] font-medium">
-                  {rubricCategories.length > 0 ? `${rubricCategories.length}-part weighted rubric` : "Weighted rubric"}
-                </span>
+              {/* Requirement 6: Clear, elegant Ranking Progress indicator */}
+              <div className="p-4 sm:p-5 rounded-xl bg-[#141a17]/95 border border-[#303b34] space-y-3 backdrop-blur-sm max-w-xl">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-[#8fa095] block">
+                      Rating Progress
+                    </span>
+                    <div className="font-display text-xl sm:text-2xl font-bold text-[#f1f0e9] uppercase tracking-tight">
+                      {completedCount} of {totalEntries} Rated ({completionPercentage}%)
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2.5 text-xs text-[#8fa095]">
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-[#89d5d5]" />
+                      <strong className="text-[#f1f0e9]">{completedCount}</strong> rated
+                    </span>
+                    <span>·</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-amber-400" />
+                      <strong className="text-[#f1f0e9]">{inProgressCount}</strong> in progress
+                    </span>
+                    <span>·</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-[#3b4c40]" />
+                      <strong className="text-[#f1f0e9]">{unratedCount}</strong> unrated
+                    </span>
+                  </div>
+                </div>
+
+                {/* Dual-color Progress Track */}
+                <div className="h-2 w-full rounded-full bg-[#18211d] overflow-hidden flex border border-[#2b3730]">
+                  <div
+                    style={{ width: `${(completedCount / Math.max(1, totalEntries)) * 100}%` }}
+                    className="h-full bg-gradient-to-r from-[#214b43] to-[#89d5d5] transition-all duration-300"
+                    title={`${completedCount} rated`}
+                  />
+                  <div
+                    style={{ width: `${(inProgressCount / Math.max(1, totalEntries)) * 100}%` }}
+                    className="h-full bg-amber-400/80 transition-all duration-300"
+                    title={`${inProgressCount} in progress`}
+                  />
+                </div>
               </div>
             </div>
 
@@ -795,12 +865,12 @@ export default function CollectionDetailPage({
       </CinematicArtworkBanner>
 
       {/* =========================================================================
-          CONTROLS BAR (Season Filter, View Modes, Sort)
+          CONTROLS BAR (Season Filter, Rating Status Filter, View Modes, Sort)
           ========================================================================= */}
       <div className="sticky top-20 z-30 bg-[#111514]/95 backdrop-blur-md border-b border-[#303b34]">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
-          {/* Left: Season Filter Pills & Add Item */}
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 text-xs">
+          {/* Left: Action, Status Filters, & Season Filters */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
             {isOwner && (
               <button
                 type="button"
@@ -812,11 +882,59 @@ export default function CollectionDetailPage({
               </button>
             )}
 
+            {/* Requirement 6: Rating Status Filters */}
+            <div className="flex items-center gap-1 bg-[#141a17] p-1 rounded-lg border border-[#303b34] shrink-0">
+              <button
+                type="button"
+                onClick={() => setFilterRated("all")}
+                className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
+                  filterRated === "all"
+                    ? "bg-[#25322a] text-[#89d5d5] font-semibold"
+                    : "text-[#8fa095] hover:text-[#f1f0e9]"
+                }`}
+              >
+                All ({totalEntries})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterRated("rated")}
+                className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
+                  filterRated === "rated"
+                    ? "bg-[#89d5d5] text-[#102523] font-bold"
+                    : "text-[#8fa095] hover:text-[#f1f0e9]"
+                }`}
+              >
+                Rated ({completedCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterRated("in_progress")}
+                className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
+                  filterRated === "in_progress"
+                    ? "bg-amber-400 text-[#1b1509] font-bold"
+                    : "text-[#8fa095] hover:text-[#f1f0e9]"
+                }`}
+              >
+                In Progress ({inProgressCount})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterRated("unrated")}
+                className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
+                  filterRated === "unrated"
+                    ? "bg-[#25322a] text-[#f1f0e9] font-semibold"
+                    : "text-[#8fa095] hover:text-[#f1f0e9]"
+                }`}
+              >
+                Unrated ({unratedCount})
+              </button>
+            </div>
+
             {availableSeasons.length > 0 && (
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0 pl-1 border-l border-[#303b34]">
                 <button
                   onClick={() => setSelectedSeason("all")}
-                  className={`px-3 py-1.5 rounded text-xs transition-colors whitespace-nowrap ${
+                  className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
                     selectedSeason === "all"
                       ? "bg-[#89d5d5] text-[#102523] font-semibold"
                       : "text-[#8fa095] hover:text-[#f1f0e9] hover:bg-[#1a221e]"
@@ -828,7 +946,7 @@ export default function CollectionDetailPage({
                   <button
                     key={s}
                     onClick={() => setSelectedSeason(s.toString())}
-                    className={`px-3 py-1.5 rounded text-xs transition-colors whitespace-nowrap ${
+                    className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
                       selectedSeason === s.toString()
                         ? "bg-[#89d5d5] text-[#102523] font-semibold"
                         : "text-[#8fa095] hover:text-[#f1f0e9] hover:bg-[#1a221e]"
@@ -904,7 +1022,7 @@ export default function CollectionDetailPage({
           <div className="space-y-3">
             {processedEntries.map((entry: any, index: number) => {
               const media = entry.mediaItem;
-              const hasScore = entry.score !== null;
+              const { state, score, actionLabel, scoredCount, totalCategories } = entry.ratingStatus;
               const isMovie =
                 media.mediaType === "movie" ||
                 collection.collectionType === "movie_franchise" ||
@@ -913,7 +1031,13 @@ export default function CollectionDetailPage({
               return (
                 <div
                   key={entry.id}
-                  className="flex items-center gap-4 sm:gap-6 p-4 rounded-xl border border-[#303b34] bg-[#141a17] hover:border-[#425247] transition-colors group"
+                  className={`flex items-center gap-4 sm:gap-6 p-4 rounded-xl border transition-colors group ${
+                    state === "rated"
+                      ? "border-[#303b34] bg-[#141a17] hover:border-[#425247]"
+                      : state === "in_progress"
+                        ? "border-amber-500/25 bg-[#171a16] hover:border-amber-500/40"
+                        : "border-[#253229] bg-[#121614] hover:border-[#303b34]"
+                  }`}
                 >
                   {/* Rank Numeral */}
                   <span className="w-8 sm:w-10 text-center font-display text-2xl sm:text-3xl font-bold text-[#8fa095] group-hover:text-[#89d5d5] transition-colors">
@@ -951,12 +1075,23 @@ export default function CollectionDetailPage({
                   </div>
 
                   {/* Score & Rate Button */}
-                  <div className="flex items-center gap-4 shrink-0">
+                  <div className="flex items-center gap-3 sm:gap-4 shrink-0">
                     <div className="text-right">
-                      {hasScore ? (
+                      {state === "rated" && score !== null ? (
                         <div className="font-display text-2xl sm:text-3xl font-bold text-[#89d5d5]">
-                          {entry.score.toFixed(1)}
+                          {score.toFixed(1)}
                           <span className="text-xs text-[#8fa095] ml-1 font-sans">/ 10</span>
+                        </div>
+                      ) : state === "in_progress" ? (
+                        <div className="text-right">
+                          <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold text-amber-300 bg-amber-500/10 border border-amber-500/30 uppercase tracking-wider">
+                            {scoredCount}/{totalCategories} Rated
+                          </span>
+                          {score !== null && (
+                            <div className="font-display text-lg font-bold text-amber-300/90 mt-0.5">
+                              ★ {score.toFixed(1)}
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <span className="text-xs text-[#6d7e74] font-medium">— Unrated</span>
@@ -965,10 +1100,17 @@ export default function CollectionDetailPage({
 
                     <button
                       onClick={() => setSelectedItemForRating(media)}
-                      className="px-3 py-1.5 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                      className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
+                        state === "rated"
+                          ? "bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40]"
+                          : state === "in_progress"
+                            ? "bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/40"
+                            : "bg-[#161d19] hover:bg-[#202a24] text-[#8fa095] hover:text-[#f1f0e9] border border-[#2b3730]"
+                      }`}
                     >
                       <Sliders size={13} />
-                      <span className="hidden sm:inline">Rate</span>
+                      <span className="hidden sm:inline">{actionLabel}</span>
+                      <span className="sm:hidden">{state === "rated" ? "Edit" : state === "in_progress" ? "Cont." : "Rate"}</span>
                     </button>
 
                     {isOwner && (
@@ -991,32 +1133,46 @@ export default function CollectionDetailPage({
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
             {processedEntries.map((entry: any, index: number) => {
               const media = entry.mediaItem;
-              const hasScore = entry.score !== null;
+              const { state, score, actionLabel, scoredCount, totalCategories } = entry.ratingStatus;
+              const isMovie =
+                collection.collectionType === "movie_franchise" ||
+                media.mediaType === "movie" ||
+                !media.seasonNumber;
 
               return (
                 <div
                   key={entry.id}
-                  className="rounded-xl border border-[#303b34] bg-[#141a17] overflow-hidden flex flex-col justify-between group hover:border-[#425247] transition-colors"
+                  className={`rounded-xl border overflow-hidden flex flex-col justify-between group transition-colors ${
+                    state === "rated"
+                      ? "border-[#303b34] bg-[#141a17] hover:border-[#425247]"
+                      : state === "in_progress"
+                        ? "border-amber-500/30 bg-[#171a16] hover:border-amber-500/45"
+                        : "border-[#253229] bg-[#121614] hover:border-[#303b34]"
+                  }`}
                 >
                   <div className="relative overflow-hidden">
                     <CinematicMediaCard
                       stillPath={media.stillPath}
                       posterPath={media.posterPath}
                       title={media.title}
-                      aspect={
-                        collection.collectionType === "movie_franchise" ||
-                        media.mediaType === "movie" ||
-                        !media.seasonNumber
-                          ? "poster"
-                          : "video"
-                      }
+                      aspect={isMovie ? "poster" : "video"}
                     />
-                    <div className="absolute top-3 left-3 px-2 py-0.5 rounded bg-black/80 font-display text-lg text-[#f1f0e9]">
+                    <div className="absolute top-3 left-3 px-2 py-0.5 rounded bg-black/85 backdrop-blur-md font-display text-lg text-[#f1f0e9] border border-white/10">
                       #{index < 9 ? `0${index + 1}` : index + 1}
                     </div>
-                    {hasScore && (
-                      <div className="absolute top-3 right-3 px-2 py-0.5 rounded bg-black/80 border border-[#89d5d5]/40 text-[#89d5d5] font-display text-base">
-                        ★ {entry.score.toFixed(1)}
+
+                    {/* State Badge Top Right */}
+                    {state === "rated" && score !== null ? (
+                      <div className="absolute top-3 right-3 px-2 py-0.5 rounded bg-black/85 backdrop-blur-md border border-[#89d5d5]/40 text-[#89d5d5] font-display text-base shadow-lg">
+                        ★ {score.toFixed(1)}
+                      </div>
+                    ) : state === "in_progress" ? (
+                      <div className="absolute top-3 right-3 px-2 py-0.5 rounded bg-black/85 backdrop-blur-md border border-amber-500/50 text-amber-300 font-display text-xs tracking-wider uppercase font-bold shadow-lg">
+                        {scoredCount}/{totalCategories} Rated
+                      </div>
+                    ) : (
+                      <div className="absolute top-3 right-3 px-2 py-0.5 rounded bg-black/85 backdrop-blur-md border border-[#303b34] text-[#6c7d73] text-[10px] uppercase font-semibold">
+                        Unrated
                       </div>
                     )}
                   </div>
@@ -1026,7 +1182,7 @@ export default function CollectionDetailPage({
                       <span className="text-[10px] text-[#8fa095] block">
                         {media.seasonNumber ? `Season ${media.seasonNumber}, Ep ${media.episodeNumber}` : "Movie"}
                       </span>
-                      <h3 className="font-display text-xl font-bold text-[#f1f0e9] uppercase tracking-tight mt-0.5">
+                      <h3 className="font-display text-xl font-bold text-[#f1f0e9] uppercase tracking-tight mt-0.5 truncate">
                         {media.title}
                       </h3>
                     </div>
@@ -1034,10 +1190,16 @@ export default function CollectionDetailPage({
                     <div className="flex items-center gap-2 mt-2">
                       <button
                         onClick={() => setSelectedItemForRating(media)}
-                        className="flex-1 py-2 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                        className={`flex-1 py-2 rounded text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                          state === "rated"
+                            ? "bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40]"
+                            : state === "in_progress"
+                              ? "bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/40"
+                              : "bg-[#161d19] hover:bg-[#202a24] text-[#8fa095] hover:text-[#f1f0e9] border border-[#2b3730]"
+                        }`}
                       >
                         <Sliders size={13} />
-                        <span>{hasScore ? "Adjust Score" : "Rate"}</span>
+                        <span>{actionLabel}</span>
                       </button>
                       {isOwner && (
                         <button
