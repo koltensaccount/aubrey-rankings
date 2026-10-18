@@ -30,6 +30,7 @@ import {
   RotateCcw,
 } from "lucide-react";
 import { useTheme } from "@/components/theme-provider";
+import { CinematicSlider } from "@/components/cinematic-slider";
 import {
   ACCENT_PRESETS,
   getContrastRatio,
@@ -51,6 +52,8 @@ export default function SettingsPage() {
     resetToDefaults,
     resolvedTheme,
     isSaving: isSavingTheme,
+    saveStatus: themeSaveStatus,
+    saveError: themeSaveError,
   } = useTheme();
 
   const [activeTab, setActiveTab] = useState<
@@ -915,17 +918,22 @@ export default function SettingsPage() {
               </button>
 
               <div className="flex items-center gap-2 text-muted-foreground">
-                {isSavingTheme ? (
+                {themeSaveStatus === "saving" ? (
                   <span className="flex items-center gap-1 text-[11px]">
                     <Loader2 size={12} className="animate-spin text-primary" />
                     <span>Saving to profile...</span>
                   </span>
-                ) : (
+                ) : themeSaveStatus === "error" ? (
+                  <span className="flex items-center gap-1 text-[11px] text-destructive font-medium" title={themeSaveError || ""}>
+                    <AlertTriangle size={12} />
+                    <span>Failed to sync with server</span>
+                  </span>
+                ) : themeSaveStatus === "saved" ? (
                   <span className="flex items-center gap-1 text-[11px] text-emerald-500 font-medium">
                     <Check size={12} />
                     <span>Appearance saved</span>
                   </span>
-                )}
+                ) : null}
               </div>
             </div>
           </div>
@@ -937,14 +945,14 @@ export default function SettingsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Left Column: List of Systems */}
           <div className="lg:col-span-4 space-y-3">
-            <div className="flex items-center justify-between pb-1 border-b border-[#28342d]">
-              <span className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider">
+            <div className="flex items-center justify-between pb-1 border-b border-border">
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                 Your Rubrics ({ratingSystems.length})
               </span>
               <button
                 type="button"
                 onClick={handleCreateNewSystem}
-                className="text-[11px] font-semibold text-[#89d5d5] hover:text-[#b2e8e8] flex items-center gap-1 cursor-pointer"
+                className="text-[11px] font-semibold text-primary hover:text-primary-hover flex items-center gap-1 cursor-pointer"
               >
                 <Plus size={13} />
                 <span>New Rubric</span>
@@ -960,29 +968,29 @@ export default function SettingsPage() {
                     onClick={() => setEditingSystem(sys)}
                     className={`p-3.5 rounded-lg border transition-all cursor-pointer ${
                       isSelected
-                        ? "bg-[#18221c] border-[#89d5d5]/60 shadow-lg shadow-[#89d5d5]/5"
-                        : "bg-[#141a17] border-[#2b3730] hover:border-[#3d4f43]"
+                        ? "bg-primary/10 border-primary ring-1 ring-primary/30 shadow-sm"
+                        : "bg-card border-border hover:border-primary/40"
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <h4 className="font-display text-base font-bold uppercase tracking-tight text-[#f1f0e9] truncate">
+                          <h4 className="font-display text-base font-bold uppercase tracking-tight text-foreground truncate">
                             {sys.name}
                           </h4>
                           {sys.isDefault && (
-                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-[#89d5d5]/15 text-[#89d5d5] border border-[#89d5d5]/30">
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-primary/15 text-primary border border-primary/30">
                               Default
                             </span>
                           )}
                         </div>
-                        <p className="text-[11px] text-[#8fa095] mt-0.5">
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
                           {sys.categories?.length || 0} categories · Scale 1–{sys.scale || 10}
                         </p>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 mt-3 pt-2 border-t border-[#232d26] text-[10px]">
+                    <div className="flex items-center gap-2 mt-3 pt-2 border-t border-border text-[10px]">
                       {!sys.isDefault && (
                         <button
                           type="button"
@@ -990,7 +998,7 @@ export default function SettingsPage() {
                             e.stopPropagation();
                             handleSetDefaultSystem(sys.id);
                           }}
-                          className="text-[#8fa095] hover:text-[#89d5d5] transition-colors flex items-center gap-1 cursor-pointer"
+                          className="text-muted-foreground hover:text-primary transition-colors flex items-center gap-1 cursor-pointer"
                           title="Set as Default Rubric"
                         >
                           <Star size={11} />
@@ -1003,7 +1011,7 @@ export default function SettingsPage() {
                           e.stopPropagation();
                           handleDuplicateSystem(sys.id);
                         }}
-                        className="text-[#8fa095] hover:text-[#f1f0e9] transition-colors flex items-center gap-1 ml-auto cursor-pointer"
+                        className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 ml-auto cursor-pointer"
                         title="Duplicate Rubric"
                       >
                         <Copy size={11} />
@@ -1016,7 +1024,7 @@ export default function SettingsPage() {
                             e.stopPropagation();
                             setSystemToDelete(sys);
                           }}
-                          className="text-[#8fa095] hover:text-red-400 transition-colors p-0.5 cursor-pointer"
+                          className="text-muted-foreground hover:text-red-400 transition-colors p-0.5 cursor-pointer"
                           title="Delete Rubric"
                         >
                           <Trash2 size={12} />
@@ -1032,10 +1040,10 @@ export default function SettingsPage() {
           {/* Right Column: Active System Editor */}
           <div className="lg:col-span-8">
             {editingSystem ? (
-              <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-6">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#28342d] pb-4">
+              <div className="p-6 rounded-xl border border-border bg-card space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
                   <div className="flex-1 space-y-2">
-                    <label className="text-[10px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                    <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
                       Rubric Name
                     </label>
                     <input
@@ -1045,13 +1053,13 @@ export default function SettingsPage() {
                         setEditingSystem({ ...editingSystem, name: e.target.value })
                       }
                       placeholder="e.g. Cinema Criterion, Director Filmography Rubric..."
-                      className="w-full text-lg font-display uppercase font-bold px-3 py-1.5 rounded bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                      className="w-full text-lg font-display uppercase font-bold px-3 py-1.5 rounded bg-surface border border-input-border text-foreground focus:outline-none focus:border-primary"
                     />
                   </div>
 
                   <div className="flex items-end gap-3 shrink-0">
                     <div>
-                      <label className="text-[10px] font-semibold text-[#8fa095] uppercase tracking-wider block mb-1">
+                      <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block mb-1">
                         Scale
                       </label>
                       <select
@@ -1062,7 +1070,7 @@ export default function SettingsPage() {
                             scale: parseInt(e.target.value, 10),
                           })
                         }
-                        className="h-10 px-3 text-xs rounded bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                        className="h-10 px-3 text-xs rounded bg-surface border border-input-border text-foreground focus:outline-none focus:border-primary"
                       >
                         <option value={10}>Scale 1–10 (Standard)</option>
                         <option value={5}>Scale 1–5</option>
@@ -1073,7 +1081,7 @@ export default function SettingsPage() {
                     <button
                       type="button"
                       onClick={handleSaveSystem}
-                      className="h-10 px-5 rounded bg-[#89d5d5] hover:bg-[#a5e2e2] text-[#102523] text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-[#89d5d5]/10 cursor-pointer"
+                      className="h-10 px-5 rounded bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer"
                     >
                       {saveSuccess ? (
                         <>
@@ -1093,10 +1101,10 @@ export default function SettingsPage() {
                 {/* Categories and Weights */}
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
                       Scoring Categories & Multiplier Weights
                     </span>
-                    <span className="text-[10px] text-[#6c7d73]">
+                    <span className="text-[10px] text-muted-foreground/70">
                       Weights calibrate relative influence on the overall score
                     </span>
                   </div>
@@ -1105,7 +1113,7 @@ export default function SettingsPage() {
                     {editingSystem.categories?.map((cat: any) => (
                       <div
                         key={cat.id}
-                        className="p-3.5 rounded-lg border border-[#2b3730] bg-[#111613] flex items-center justify-between gap-4"
+                        className="p-3.5 rounded-lg border border-border bg-surface flex items-center justify-between gap-4"
                       >
                         <div className="flex-1 min-w-0 space-y-1.5">
                           <input
@@ -1114,30 +1122,30 @@ export default function SettingsPage() {
                             onChange={(e) =>
                               handleUpdateCategoryName(cat.id, e.target.value)
                             }
-                            className="w-full text-xs font-semibold text-[#f1f0e9] bg-transparent border-b border-transparent hover:border-[#3b4c40] focus:border-[#89d5d5] focus:outline-none py-0.5"
+                            className="w-full text-xs font-semibold text-foreground bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none py-0.5"
                           />
-                          <div className="flex items-center gap-3">
-                            <input
-                              type="range"
-                              min="0"
-                              max="10"
-                              step="0.5"
+                          <div className="w-full">
+                            <CinematicSlider
+                              min={0}
+                              max={10}
+                              step={0.5}
                               value={cat.weight}
-                              onChange={(e) =>
-                                handleUpdateWeight(cat.id, parseFloat(e.target.value))
+                              onChange={(val) =>
+                                handleUpdateWeight(cat.id, val ?? 1)
                               }
-                              className="w-28 accent-[#89d5d5] cursor-pointer"
+                              allowUnset={false}
+                              showValue={true}
+                              valueSuffix="x"
+                              size="sm"
+                              ariaLabel={`Weight for ${cat.name}`}
                             />
-                            <span className="text-xs font-bold text-[#89d5d5] font-display">
-                              {cat.weight}x
-                            </span>
                           </div>
                         </div>
 
                         <button
                           type="button"
                           onClick={() => handleRemoveCategory(cat.id)}
-                          className="text-[#8fa095] hover:text-red-400 p-1 transition-colors bg-transparent border-0 cursor-pointer"
+                          className="text-muted-foreground hover:text-red-400 p-1 transition-colors bg-transparent border-0 cursor-pointer shrink-0"
                           title="Remove Category"
                         >
                           <Trash2 size={15} />
@@ -1148,12 +1156,12 @@ export default function SettingsPage() {
                 </div>
 
                 {/* Add New Category Form */}
-                <div className="pt-3 border-t border-[#28342d] flex items-center gap-3">
+                <div className="pt-3 border-t border-border flex items-center gap-3">
                   <input
                     placeholder="New category (e.g. Atmosphere, Pacing, Direction)..."
                     value={newCategoryName}
                     onChange={(e) => setNewCategoryName(e.target.value)}
-                    className="flex-1 h-9 px-3 text-xs rounded bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                    className="flex-1 h-9 px-3 text-xs rounded bg-surface border border-input-border text-foreground focus:outline-none focus:border-primary"
                   />
                   <input
                     type="number"
@@ -1162,12 +1170,12 @@ export default function SettingsPage() {
                     placeholder="Weight"
                     value={newCategoryWeight}
                     onChange={(e) => setNewCategoryWeight(e.target.value)}
-                    className="w-20 h-9 text-center text-xs rounded bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                    className="w-20 h-9 text-center text-xs rounded bg-surface border border-input-border text-foreground focus:outline-none focus:border-primary"
                   />
                   <button
                     type="button"
                     onClick={handleAddCategory}
-                    className="px-4 h-9 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                    className="px-4 h-9 rounded bg-secondary hover:bg-surface text-foreground border border-border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
                     <Plus size={14} />
                     <span>Add Category</span>
@@ -1176,10 +1184,10 @@ export default function SettingsPage() {
 
                 {/* Danger Zone: Delete Rubric */}
                 {ratingSystems.length > 1 && (
-                  <div className="pt-4 border-t border-[#28342d] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                  <div className="pt-4 border-t border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
                     <div>
                       <span className="font-semibold text-red-400 block">Delete Rating System</span>
-                      <span className="text-[#8fa095] text-[11px]">
+                      <span className="text-muted-foreground text-[11px]">
                         {editingSystem.isDefault
                           ? "This is currently your default rubric. Set another rubric as default before deleting."
                           : "Permanently delete this rubric. Collections using it will revert to your default rubric."}
@@ -1199,7 +1207,7 @@ export default function SettingsPage() {
                 )}
               </div>
             ) : (
-              <div className="p-12 text-center border border-dashed border-[#303b34] rounded-xl text-xs text-[#8fa095]">
+              <div className="p-12 text-center border border-dashed border-border rounded-xl text-xs text-muted-foreground">
                 Select a rubric on the left or create a new one to begin editing.
               </div>
             )}
@@ -1210,20 +1218,20 @@ export default function SettingsPage() {
       {/* TAB 2: ACCOUNT & SECURITY */}
       {activeTab === "account" && (
         <div className="max-w-2xl space-y-6">
-          <form onSubmit={handleSaveProfile} className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-6">
-            <div className="flex items-center justify-between border-b border-[#232d27] pb-4">
+          <form onSubmit={handleSaveProfile} className="p-6 rounded-xl border border-border bg-card space-y-6">
+            <div className="flex items-center justify-between border-b border-border pb-4">
               <div>
-                <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+                <h3 className="font-display text-xl uppercase font-bold text-foreground">
                   Profile & Identity
                 </h3>
-                <p className="text-xs text-[#8fa095] mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Manage your public handle, display name, and community biography.
                 </p>
               </div>
               {initialUsername && (
                 <Link
                   href={`/u/${initialUsername}`}
-                  className="text-xs text-[#89d5d5] hover:underline flex items-center gap-1 font-mono"
+                  className="text-xs text-primary hover:underline flex items-center gap-1 font-mono"
                 >
                   <span>/u/{initialUsername}</span>
                 </Link>
@@ -1237,18 +1245,18 @@ export default function SettingsPage() {
             )}
 
             {profileSuccess && (
-              <div className="p-3 rounded bg-[#89d5d5]/10 border border-[#89d5d5]/30 text-[#89d5d5] text-xs">
+              <div className="p-3 rounded bg-primary/10 border border-primary/30 text-primary text-xs">
                 Profile updated successfully.
               </div>
             )}
 
             {/* Profile Photo Upload */}
             <div className="space-y-2 pb-2">
-              <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
                 Profile Photo
               </label>
               <div className="flex items-center gap-4">
-                <div className="h-16 w-16 rounded-full bg-[#1b2520] border-2 border-[#3b4c40] flex items-center justify-center text-[#89d5d5] font-display text-2xl font-bold shrink-0 overflow-hidden relative group">
+                <div className="h-16 w-16 rounded-full bg-secondary border-2 border-border flex items-center justify-center text-primary font-display text-2xl font-bold shrink-0 overflow-hidden relative group">
                   {profileImage ? (
                     <img
                       src={profileImage}
@@ -1260,7 +1268,7 @@ export default function SettingsPage() {
                   )}
                   {avatarUploading && (
                     <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
-                      <Loader2 size={18} className="animate-spin text-[#89d5d5]" />
+                      <Loader2 size={18} className="animate-spin text-primary" />
                     </div>
                   )}
                 </div>
@@ -1278,7 +1286,7 @@ export default function SettingsPage() {
                       type="button"
                       onClick={() => avatarInputRef.current?.click()}
                       disabled={avatarUploading}
-                      className="px-3.5 py-1.5 rounded-md bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                      className="px-3.5 py-1.5 rounded-md bg-secondary hover:bg-surface text-foreground border border-border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
                     >
                       <Camera size={13} />
                       <span>{avatarUploading ? "Uploading..." : "Upload Photo"}</span>
@@ -1288,13 +1296,13 @@ export default function SettingsPage() {
                         type="button"
                         onClick={handleRemoveAvatar}
                         disabled={avatarUploading}
-                        className="px-3 py-1.5 rounded-md text-[#8fa095] hover:text-red-400 hover:bg-red-500/10 text-xs font-medium transition-colors cursor-pointer"
+                        className="px-3 py-1.5 rounded-md text-muted-foreground hover:text-red-400 hover:bg-red-500/10 text-xs font-medium transition-colors cursor-pointer"
                       >
                         Remove
                       </button>
                     )}
                   </div>
-                  <p className="text-[10px] text-[#6c7d73]">
+                  <p className="text-[10px] text-muted-foreground/80">
                     Square avatar recommended. JPEG, PNG, or WebP up to 5MB.
                   </p>
                 </div>
@@ -1303,12 +1311,12 @@ export default function SettingsPage() {
 
             {/* Username Field */}
             <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider flex items-center justify-between">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
                 <span>Unique Handle (@username)</span>
-                <span className="text-[10px] text-[#6c7d73]">3–20 chars · a–z, 0–9, _</span>
+                <span className="text-[10px] text-muted-foreground/70">3–20 chars · a–z, 0–9, _</span>
               </label>
               <div className="relative flex items-center">
-                <span className="absolute left-3.5 text-[#6c7d73] font-mono text-xs select-none">
+                <span className="absolute left-3.5 text-muted-foreground font-mono text-xs select-none">
                   @
                 </span>
                 <input
@@ -1317,13 +1325,13 @@ export default function SettingsPage() {
                   onChange={(e) => setProfileUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ""))}
                   placeholder="username"
                   maxLength={20}
-                  className="w-full text-xs font-mono rounded-lg pl-8 pr-10 py-2.5 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                  className="w-full text-xs font-mono rounded-lg pl-8 pr-10 py-2.5 bg-surface border border-input-border text-foreground focus:outline-none focus:border-primary"
                 />
                 <div className="absolute right-3">
                   {usernameChecking ? (
-                    <span className="text-[10px] text-[#8fa597] animate-pulse">verifying...</span>
+                    <span className="text-[10px] text-muted-foreground animate-pulse">verifying...</span>
                   ) : usernameAvailable === true ? (
-                    <span className="text-[10px] text-[#89d5d5] font-semibold">Available</span>
+                    <span className="text-[10px] text-primary font-semibold">Available</span>
                   ) : usernameAvailable === false ? (
                     <span className="text-[10px] text-red-400 font-semibold">{usernameReason || "Taken"}</span>
                   ) : null}
@@ -1333,7 +1341,7 @@ export default function SettingsPage() {
 
             {/* Display Name */}
             <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
                 Display Name
               </label>
               <input
@@ -1341,34 +1349,34 @@ export default function SettingsPage() {
                 value={profileName}
                 onChange={(e) => setProfileName(e.target.value)}
                 placeholder="Aubrey"
-                className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-surface border border-input-border text-foreground focus:outline-none focus:border-primary"
               />
             </div>
 
             {/* Bio */}
             <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider flex items-center justify-between">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
                 <span>Biography</span>
-                <span className="text-[10px] text-[#6c7d73]">{profileBio.length}/300</span>
+                <span className="text-[10px] text-muted-foreground/70">{profileBio.length}/300</span>
               </label>
               <textarea
                 value={profileBio}
                 onChange={(e) => setProfileBio(e.target.value.slice(0, 300))}
                 rows={3}
                 placeholder="Write a brief note on your rating philosophy, favorite filmmakers, or sensory preferences..."
-                className="w-full text-xs rounded-lg p-3 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5] resize-none"
+                className="w-full text-xs rounded-lg p-3 bg-surface border border-input-border text-foreground focus:outline-none focus:border-primary resize-none"
               />
             </div>
 
             {/* Email (Read Only) */}
             <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
                 Account Email
               </label>
               <input
                 defaultValue={session?.user.email || ""}
                 disabled
-                className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#6c7d73] cursor-not-allowed"
+                className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-surface border border-input-border text-muted-foreground cursor-not-allowed"
               />
             </div>
 
@@ -1376,7 +1384,7 @@ export default function SettingsPage() {
               <button
                 type="submit"
                 disabled={profileSaving || usernameAvailable === false}
-                className="px-5 py-2.5 rounded-lg bg-[#89d5d5] hover:bg-[#a0dede] text-[#111514] font-display text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+                className="px-5 py-2.5 rounded-lg bg-primary hover:bg-primary-hover text-primary-foreground font-display text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shadow-sm"
               >
                 {profileSaving ? "Saving..." : "Save Profile Changes"}
               </button>
@@ -1384,16 +1392,16 @@ export default function SettingsPage() {
           </form>
 
           {/* Change Password Form */}
-          <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-5">
+          <div className="p-6 rounded-xl border border-border bg-card space-y-5">
             <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-[#18251e] border border-[#3b4c40] flex items-center justify-center text-[#89d5d5]">
+              <div className="h-9 w-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
                 <KeyRound size={18} />
               </div>
               <div>
-                <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+                <h3 className="font-display text-xl uppercase font-bold text-foreground">
                   Change Password
                 </h3>
-                <p className="text-xs text-[#8fa095] mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Update your Aubrey Rankings account password.
                 </p>
               </div>
@@ -1407,7 +1415,7 @@ export default function SettingsPage() {
             )}
 
             {passwordSuccess && (
-              <div className="p-3 rounded-lg bg-[#89d5d5]/10 border border-[#89d5d5]/30 text-[#89d5d5] text-xs flex items-center gap-2">
+              <div className="p-3 rounded-lg bg-primary/10 border border-primary/30 text-primary text-xs flex items-center gap-2">
                 <Check size={15} className="shrink-0" />
                 <span>Your password has been successfully updated.</span>
               </div>
@@ -1415,7 +1423,7 @@ export default function SettingsPage() {
 
             <form onSubmit={handleChangePassword} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
                   Current Password
                 </label>
                 <input
@@ -1425,13 +1433,13 @@ export default function SettingsPage() {
                   onChange={(e) => setCurrentPassword(e.target.value)}
                   required
                   disabled={passwordChanging}
-                  className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                  className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-surface border border-input-border text-foreground focus:outline-none focus:border-primary"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
                     New Password
                   </label>
                   <input
@@ -1441,12 +1449,12 @@ export default function SettingsPage() {
                     onChange={(e) => setNewPassword(e.target.value)}
                     required
                     disabled={passwordChanging}
-                    className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                    className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-surface border border-input-border text-foreground focus:outline-none focus:border-primary"
                   />
                 </div>
 
                 <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
                     Confirm New Password
                   </label>
                   <input
@@ -1456,7 +1464,7 @@ export default function SettingsPage() {
                     onChange={(e) => setConfirmNewPassword(e.target.value)}
                     required
                     disabled={passwordChanging}
-                    className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                    className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-surface border border-input-border text-foreground focus:outline-none focus:border-primary"
                   />
                 </div>
               </div>
@@ -1465,7 +1473,7 @@ export default function SettingsPage() {
                 <button
                   type="submit"
                   disabled={passwordChanging || !currentPassword || !newPassword}
-                  className="px-5 py-2.5 rounded-lg bg-[#89d5d5] hover:bg-[#a0dede] text-[#111514] font-display text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer flex items-center gap-2"
+                  className="px-5 py-2.5 rounded-lg bg-primary hover:bg-primary-hover text-primary-foreground font-display text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer flex items-center gap-2 shadow-sm"
                 >
                   {passwordChanging ? (
                     <>
@@ -1486,17 +1494,17 @@ export default function SettingsPage() {
       {activeTab === "data" && (
         <div className="max-w-2xl space-y-6">
           {/* SECTION 1: LETTERBOXD ZIP IMPORTER */}
-          <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-5">
+          <div className="p-6 rounded-xl border border-border bg-card space-y-5">
             <div className="flex items-start justify-between">
               <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-[#18251e] border border-[#3b4c40] flex items-center justify-center text-[#89d5d5]">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
                   <Film size={20} />
                 </div>
                 <div>
-                  <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+                  <h3 className="font-display text-xl uppercase font-bold text-foreground">
                     Import from Letterboxd
                   </h3>
-                  <p className="text-xs text-[#8fa095] mt-0.5">
+                  <p className="text-xs text-muted-foreground mt-0.5">
                     Repeatable, non-destructive import of your watched films, star ratings, diary dates, and reviews.
                   </p>
                 </div>
@@ -1505,7 +1513,7 @@ export default function SettingsPage() {
                 href="https://letterboxd.com/settings/data/"
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex items-center gap-1.5 text-[11px] text-[#89d5d5] hover:underline"
+                className="inline-flex items-center gap-1.5 text-[11px] text-primary hover:underline"
               >
                 <span>Export Page</span>
                 <ExternalLink size={12} />
@@ -1519,20 +1527,20 @@ export default function SettingsPage() {
             )}
 
             {lbSuccessMsg && (
-              <div className="p-3 rounded bg-[#89d5d5]/10 border border-[#89d5d5]/30 text-[#89d5d5] text-xs">
+              <div className="p-3 rounded bg-primary/10 border border-primary/30 text-primary text-xs">
                 {lbSuccessMsg}
               </div>
             )}
 
             {/* Upload Area */}
             {!lbPreviewData ? (
-              <div className="p-6 rounded-lg border border-dashed border-[#303b34] bg-[#111613] text-center space-y-3">
-                <UploadCloud size={28} className="mx-auto text-[#6c7d73]" />
+              <div className="p-6 rounded-lg border border-dashed border-border bg-surface text-center space-y-3">
+                <UploadCloud size={28} className="mx-auto text-muted-foreground" />
                 <div className="space-y-1">
-                  <p className="text-xs font-semibold text-[#f1f0e9]">
+                  <p className="text-xs font-semibold text-foreground">
                     Upload your Letterboxd export ZIP
                   </p>
-                  <p className="text-[11px] text-[#8fa095]">
+                  <p className="text-[11px] text-muted-foreground">
                     Download your data ZIP from Letterboxd Settings → Export, then drop it here.
                   </p>
                 </div>
@@ -1541,23 +1549,23 @@ export default function SettingsPage() {
                   accept=".zip"
                   onChange={handleLbFileChange}
                   disabled={lbPreviewLoading}
-                  className="block w-full text-xs text-[#8fa095] file:mr-4 file:py-2 file:px-4 file:rounded-md file:border file:border-[#3b4c40] file:text-xs file:font-semibold file:bg-[#18211d] file:text-[#89d5d5] hover:file:bg-[#202c25] file:cursor-pointer cursor-pointer"
+                  className="block w-full text-xs text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-md file:border file:border-border file:text-xs file:font-semibold file:bg-secondary file:text-foreground hover:file:bg-surface file:cursor-pointer cursor-pointer"
                 />
                 {lbPreviewLoading && (
-                  <p className="text-xs text-[#89d5d5] animate-pulse">
+                  <p className="text-xs text-primary animate-pulse">
                     Analyzing Letterboxd archive contents and matching records...
                   </p>
                 )}
               </div>
             ) : (
               /* Preview Area */
-              <div className="space-y-4 rounded-lg border border-[#232d27] bg-[#111613] p-5">
-                <div className="flex items-center justify-between border-b border-[#232d27] pb-3">
+              <div className="space-y-4 rounded-lg border border-border bg-surface p-5">
+                <div className="flex items-center justify-between border-b border-border pb-3">
                   <div>
-                    <h4 className="font-display text-base uppercase font-bold text-[#f1f0e9]">
+                    <h4 className="font-display text-base uppercase font-bold text-foreground">
                       Archive Preview: {lbPreviewData.totalFilms} Films
                     </h4>
-                    <p className="text-[11px] text-[#8fa095]">
+                    <p className="text-[11px] text-muted-foreground">
                       Found {lbPreviewData.totalRatings} star ratings and {lbPreviewData.totalReviews} written reviews.
                     </p>
                   </div>
@@ -1567,34 +1575,34 @@ export default function SettingsPage() {
                       setLbPreviewData(null);
                       setLbFile(null);
                     }}
-                    className="text-xs text-[#8fa095] hover:text-[#f1f0e9]"
+                    className="text-xs text-muted-foreground hover:text-foreground"
                   >
                     Cancel
                   </button>
                 </div>
 
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-center">
-                  <div className="p-3 rounded bg-[#18211d] border border-[#303b34]">
-                    <div className="font-display text-xl font-bold text-[#89d5d5]">
+                  <div className="p-3 rounded bg-card border border-border">
+                    <div className="font-display text-xl font-bold text-primary">
                       {lbPreviewData.newCount}
                     </div>
-                    <div className="text-[10px] uppercase tracking-wider text-[#8fa095]">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                       New to Library
                     </div>
                   </div>
-                  <div className="p-3 rounded bg-[#18211d] border border-[#303b34]">
-                    <div className="font-display text-xl font-bold text-[#f1f0e9]">
+                  <div className="p-3 rounded bg-card border border-border">
+                    <div className="font-display text-xl font-bold text-foreground">
                       {lbPreviewData.existingCount}
                     </div>
-                    <div className="text-[10px] uppercase tracking-wider text-[#8fa095]">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                       Existing / Updated
                     </div>
                   </div>
-                  <div className="p-3 rounded bg-[#18211d] border border-[#303b34] col-span-2 sm:col-span-1">
-                    <div className="font-display text-xl font-bold text-[#f1f0e9]">
+                  <div className="p-3 rounded bg-card border border-border col-span-2 sm:col-span-1">
+                    <div className="font-display text-xl font-bold text-foreground">
                       {lbPreviewData.totalReviews}
                     </div>
-                    <div className="text-[10px] uppercase tracking-wider text-[#8fa095]">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                       Reviews to Sync
                     </div>
                   </div>
@@ -1603,19 +1611,19 @@ export default function SettingsPage() {
                 {/* Sample items */}
                 {lbPreviewData.sampleFilms?.length > 0 && (
                   <div className="space-y-1.5 pt-2">
-                    <div className="text-[10px] uppercase tracking-wider text-[#6c7d73]">
+                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
                       Sample Archive Items:
                     </div>
                     <div className="space-y-1">
                       {lbPreviewData.sampleFilms.slice(0, 5).map((f: any, idx: number) => (
                         <div
                           key={idx}
-                          className="flex items-center justify-between text-xs py-1 px-2 rounded bg-[#141b18]"
+                          className="flex items-center justify-between text-xs py-1 px-2 rounded bg-card border border-border"
                         >
-                          <span className="text-[#f1f0e9] font-medium">
+                          <span className="text-foreground font-medium">
                             {f.title} {f.year ? `(${f.year})` : ""}
                           </span>
-                          <span className="text-[#89d5d5] font-mono text-[11px]">
+                          <span className="text-primary font-mono text-[11px]">
                             {f.rating ? `★ ${f.rating.toFixed(1)}/5` : "Watched"}
                           </span>
                         </div>
@@ -1629,7 +1637,7 @@ export default function SettingsPage() {
                     type="button"
                     onClick={handleLbExecuteImport}
                     disabled={lbImporting}
-                    className="px-5 py-2.5 rounded-lg bg-[#89d5d5] hover:bg-[#a0dede] text-[#111514] font-display text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+                    className="px-5 py-2.5 rounded-lg bg-primary hover:bg-primary-hover text-primary-foreground font-display text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shadow-sm"
                   >
                     {lbImporting ? "Importing Archive..." : "Confirm & Sync into Library"}
                   </button>
@@ -1639,32 +1647,32 @@ export default function SettingsPage() {
           </div>
 
           {/* SECTION 2: AUBREY'S BLACK MIRROR SPREADSHEET IMPORTER */}
-          <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-4">
+          <div className="p-6 rounded-xl border border-border bg-card space-y-4">
             <div className="flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-[#1b2520] border border-[#3b4c40] flex items-center justify-center text-[#89d5d5]">
+              <div className="h-9 w-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
                 <FileSpreadsheet size={18} />
               </div>
               <div>
-                <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+                <h3 className="font-display text-xl uppercase font-bold text-foreground">
                   Aubrey&apos;s Black Mirror Importer
                 </h3>
-                <p className="text-xs text-[#8fa095]">
+                <p className="text-xs text-muted-foreground">
                   Import ratings and weights directly from Aubrey&apos;s Spreadsheet format.
                 </p>
               </div>
             </div>
 
-            <div className="p-4 rounded-lg border border-dashed border-[#303b34] bg-[#111613] text-center space-y-3">
-              <p className="text-xs text-[#8fa095]">
+            <div className="p-4 rounded-lg border border-dashed border-border bg-surface text-center space-y-3">
+              <p className="text-xs text-muted-foreground">
                 Paste CSV or JSON export from the original spreadsheet:
               </p>
               <textarea
                 rows={4}
                 placeholder="Episode, Season, Music, Acting, Cinematography, Writing, Vibes, Notes..."
-                className="w-full rounded-lg border border-[#303b34] bg-[#18211d] p-3 text-xs text-[#f1f0e9] placeholder:text-[#6d7e74] focus:outline-none focus:border-[#89d5d5] font-mono resize-none"
+                className="w-full rounded-lg border border-input-border bg-card p-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary font-mono resize-none"
               />
               <div className="flex justify-end">
-                <button className="px-4 py-2 rounded bg-[#d8e2d8] hover:bg-[#edf5ed] text-[#102523] text-xs font-semibold cursor-pointer">
+                <button className="px-4 py-2 rounded bg-secondary hover:bg-surface text-foreground border border-border text-xs font-semibold cursor-pointer">
                   Import Spreadsheet Ratings
                 </button>
               </div>
@@ -1672,14 +1680,14 @@ export default function SettingsPage() {
           </div>
 
           {/* SECTION 3: EXPORT */}
-          <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-3">
-            <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+          <div className="p-6 rounded-xl border border-border bg-card space-y-3">
+            <h3 className="font-display text-xl uppercase font-bold text-foreground">
               Export Your Data
             </h3>
-            <p className="text-xs text-[#8fa095]">
+            <p className="text-xs text-muted-foreground">
               Download your complete library, rating histories, and reviews in JSON format.
             </p>
-            <button className="inline-flex items-center gap-1.5 px-4 py-2 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold transition-colors cursor-pointer">
+            <button className="inline-flex items-center gap-1.5 px-4 py-2 rounded bg-secondary hover:bg-surface text-foreground border border-border text-xs font-semibold transition-colors cursor-pointer">
               <Download size={14} />
               <span>Export JSON</span>
             </button>
@@ -1690,16 +1698,16 @@ export default function SettingsPage() {
       {/* Delete Rating System Confirmation Modal */}
       {systemToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl bg-[#141a17] border border-red-500/30 p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-md rounded-xl bg-card border border-red-500/30 p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3 text-red-400">
               <AlertTriangle className="h-6 w-6 shrink-0" />
-              <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+              <h3 className="font-display text-xl uppercase font-bold text-foreground">
                 Delete Rating System
               </h3>
             </div>
-            <p className="text-xs text-[#9aa79e] leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               Are you sure you want to permanently delete{" "}
-              <strong className="text-[#f1f0e9]">{systemToDelete.name}</strong>?
+              <strong className="text-foreground">{systemToDelete.name}</strong>?
               Any collections or entries currently using this rubric will automatically be reassigned to your default rating system. This action cannot be undone.
             </p>
             <div className="flex items-center justify-end gap-3 pt-2">
@@ -1707,7 +1715,7 @@ export default function SettingsPage() {
                 type="button"
                 onClick={() => setSystemToDelete(null)}
                 disabled={deletingSystemLoading}
-                className="px-4 py-2 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#f1f0e9] text-xs font-semibold transition-colors cursor-pointer"
+                className="px-4 py-2 rounded bg-secondary hover:bg-surface text-foreground border border-border text-xs font-semibold transition-colors cursor-pointer"
               >
                 Cancel
               </button>

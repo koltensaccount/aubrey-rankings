@@ -46,9 +46,30 @@ const themeInitScript = `
       var hover = '#' + hr + hg + hb;
 
       var fullHex = '#' + hex.toUpperCase();
+      var primaryText = fullHex;
+      if (resolved === 'light') {
+        var lightBgLum = 0.94;
+        var textContrast = (lightBgLum + 0.05) / (lum + 0.05);
+        if (textContrast < 4.5) {
+          var tfactor = 0.85;
+          for (var i = 0; i < 15; i++) {
+            var tr = Math.max(0, Math.round(r * tfactor));
+            var tg = Math.max(0, Math.round(g * tfactor));
+            var tb = Math.max(0, Math.round(b * tfactor));
+            var tlum = 0.2126 * toLinear(tr) + 0.7152 * toLinear(tg) + 0.0722 * toLinear(tb);
+            if ((lightBgLum + 0.05) / (tlum + 0.05) >= 4.5) {
+              primaryText = '#' + tr.toString(16).padStart(2, '0') + tg.toString(16).padStart(2, '0') + tb.toString(16).padStart(2, '0');
+              break;
+            }
+            tfactor -= 0.05;
+          }
+        }
+      }
+
       root.style.setProperty('--primary', fullHex);
       root.style.setProperty('--primary-foreground', fg);
       root.style.setProperty('--primary-hover', hover);
+      root.style.setProperty('--primary-text', primaryText);
       root.style.setProperty('--ring', fullHex);
       root.style.setProperty('--feature-accent', fullHex);
     }

@@ -165,17 +165,63 @@ export function getHoverShade(hex: string): string {
 }
 
 /**
+ * Computes an accessible accent color to be used as text/foreground on page surfaces.
+ * In Dark mode, bright accents contrast well against #111514 (e.g. #89D5D5 has 11:1).
+ * In Light mode (#F7F6F0), bright accents like teal (#89D5D5) have poor contrast (~1.5:1).
+ * This function darkens the color while preserving the hue to guarantee WCAG AA >= 4.5:1.
+ */
+export function getAccessiblePrimaryText(accentHex: string, mode: "light" | "dark" = "dark"): string {
+  const norm = normalizeHexColor(accentHex);
+  const [r, g, b] = hexToRgb(norm);
+  const bg = mode === "light" ? "#F7F6F0" : "#111514";
+
+  if (getContrastRatio(norm, bg) >= 4.5) {
+    return norm;
+  }
+
+  if (mode === "light") {
+    let factor = 0.85;
+    for (let i = 0; i < 15; i++) {
+      const nr = Math.max(0, Math.round(r * factor));
+      const ng = Math.max(0, Math.round(g * factor));
+      const nb = Math.max(0, Math.round(b * factor));
+      const darkened = `#${nr.toString(16).padStart(2, "0")}${ng.toString(16).padStart(2, "0")}${nb.toString(16).padStart(2, "0")}`.toUpperCase();
+      if (getContrastRatio(darkened, bg) >= 4.5) {
+        return darkened;
+      }
+      factor -= 0.05;
+    }
+  } else {
+    let factor = 1.15;
+    for (let i = 0; i < 15; i++) {
+      const nr = Math.min(255, Math.round(r * factor));
+      const ng = Math.min(255, Math.round(g * factor));
+      const nb = Math.min(255, Math.round(b * factor));
+      const lightened = `#${nr.toString(16).padStart(2, "0")}${ng.toString(16).padStart(2, "0")}${nb.toString(16).padStart(2, "0")}`.toUpperCase();
+      if (getContrastRatio(lightened, bg) >= 4.5) {
+        return lightened;
+      }
+      factor += 0.05;
+    }
+  }
+
+  return norm;
+}
+
+/**
  * Returns complete CSS token definitions for a given accent color.
  */
-export function getAccentTokens(accentHex: string) {
+export function getAccentTokens(accentHex: string, mode: "light" | "dark" = "dark") {
   const normalized = normalizeHexColor(accentHex);
   const fg = getAccessibleForeground(normalized);
   const hover = getHoverShade(normalized);
+  const primaryText = getAccessiblePrimaryText(normalized, mode);
 
   return {
     primary: normalized,
     primaryForeground: fg,
     primaryHover: hover,
+    primaryText: primaryText,
     ring: normalized,
   };
 }
@@ -187,23 +233,30 @@ export function getThemeTokens(accentHex: string, mode: "light" | "dark" = "dark
   const normalized = normalizeHexColor(accentHex);
   const fg = getAccessibleForeground(normalized);
   const hover = getHoverShade(normalized);
+  const primaryText = getAccessiblePrimaryText(normalized, mode);
 
   if (mode === "light") {
     return {
       "--background": "#F5F3EF",
       "--foreground": "#191C1B",
       "--card": "#FFFFFF",
+      "--card-foreground": "#191C1B",
       "--surface": "#EEEBE5",
+      "--surface-elevated": "#FFFFFF",
       "--popover": "#FFFFFF",
+      "--popover-foreground": "#191C1B",
       "--primary": normalized,
       "--primary-foreground": fg,
       "--primary-hover": hover,
+      "--primary-text": primaryText,
       "--secondary": "#E4E1DB",
       "--secondary-foreground": "#191C1B",
       "--muted": "#E8E5DF",
       "--muted-foreground": "#656A66",
       "--border": "#DCD8D0",
-      "--input": "#DCD8D0",
+      "--border-subtle": "#E8E5DF",
+      "--input": "#FFFFFF",
+      "--input-border": "#DCD8D0",
       "--ring": normalized,
     };
   }
@@ -212,17 +265,23 @@ export function getThemeTokens(accentHex: string, mode: "light" | "dark" = "dark
     "--background": "#111514",
     "--foreground": "#F1F0E9",
     "--card": "#18211D",
+    "--card-foreground": "#F1F0E9",
     "--surface": "#1E2A25",
+    "--surface-elevated": "#23302B",
     "--popover": "#141A17",
+    "--popover-foreground": "#F1F0E9",
     "--primary": normalized,
     "--primary-foreground": fg,
     "--primary-hover": hover,
+    "--primary-text": primaryText,
     "--secondary": "#22312A",
     "--secondary-foreground": "#F1F0E9",
     "--muted": "#1E2A25",
     "--muted-foreground": "#8FA095",
     "--border": "#303B34",
+    "--border-subtle": "#25332B",
     "--input": "#25332B",
+    "--input-border": "#303B34",
     "--ring": normalized,
   };
 }

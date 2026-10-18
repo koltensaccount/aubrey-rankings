@@ -32,6 +32,7 @@ import { CommentsSection } from "@/components/social/comments-section";
 import { calibrateOklchTheme } from "@/lib/palette";
 import { CinematicArtworkBanner } from "@/components/cinematic-artwork-banner";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
+import { CinematicSlider } from "@/components/cinematic-slider";
 import { getItemRatingStatus } from "@/lib/scoring";
 
 type SortOption = "score_desc" | "score_asc" | "order" | "title";
@@ -607,8 +608,8 @@ export default function CollectionDetailPage({
     return (
       <div className="min-h-[60vh] flex items-center justify-center">
         <div className="space-y-3 text-center">
-          <div className="w-10 h-10 mx-auto rounded-full border-2 border-[#89d5d5] border-t-transparent animate-spin" />
-          <p className="text-xs text-[#8fa095]">Loading cinematic ranking...</p>
+          <div className="w-10 h-10 mx-auto rounded-full border-2 border-primary border-t-transparent animate-spin" />
+          <p className="text-xs text-muted-foreground">Loading cinematic ranking...</p>
         </div>
       </div>
     );
@@ -617,11 +618,11 @@ export default function CollectionDetailPage({
   if (error || !collection) {
     return (
       <div className="max-w-4xl mx-auto px-4 py-20 text-center space-y-4">
-        <h2 className="font-display text-4xl uppercase text-[#f1f0e9]">Ranking Not Found</h2>
-        <p className="text-sm text-[#9aa79e]">{error || "The requested collection could not be loaded."}</p>
+        <h2 className="font-display text-4xl uppercase text-foreground">Ranking Not Found</h2>
+        <p className="text-sm text-muted-foreground">{error || "The requested collection could not be loaded."}</p>
         <Link
           href="/"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded bg-[#1c2721] text-[#89d5d5] border border-[#303b34] text-xs font-semibold"
+          className="inline-flex items-center gap-2 px-4 py-2 rounded bg-secondary hover:bg-surface text-foreground border border-border text-xs font-semibold transition-colors"
         >
           <ArrowLeft size={14} />
           <span>Back to Library</span>
@@ -643,14 +644,14 @@ export default function CollectionDetailPage({
         posterPath={collection.customCoverImage || collection.posterPath}
         clearLogoUrl={collection.clearLogoUrl}
         title={collectionTitle}
-        className="border-b border-[#303b34]"
+        className="border-b border-border"
       >
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 space-y-6">
           {/* Breadcrumb & Visibility row */}
-          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[#8fa095]">
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
             <Link
               href="/"
-              className="inline-flex items-center gap-1.5 text-[#8fa095] hover:text-[#f1f0e9] transition-colors"
+              className="inline-flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors"
             >
               <ArrowLeft size={13} />
               <span>Back to Library</span>
@@ -658,15 +659,15 @@ export default function CollectionDetailPage({
 
             <div className="flex items-center gap-3">
               {isOwner && (
-                <div className="flex items-center gap-1 p-1 rounded-md bg-[#18211d] border border-[#303b34]">
+                <div className="flex items-center gap-1 p-1 rounded-md bg-card/90 border border-border">
                   <button
                     type="button"
                     onClick={() => handleVisibilityChange("private")}
                     disabled={visibilityUpdating}
                     className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer ${
                       visibility === "private"
-                        ? "bg-[#303b34] text-[#f1f0e9]"
-                        : "text-[#6c7d73] hover:text-[#9aa79e]"
+                        ? "bg-surface text-foreground"
+                        : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     <Lock size={10} />
@@ -678,8 +679,8 @@ export default function CollectionDetailPage({
                     disabled={visibilityUpdating}
                     className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer ${
                       visibility === "unlisted"
-                        ? "bg-[#303b34] text-[#89d5d5]"
-                        : "text-[#6c7d73] hover:text-[#9aa79e]"
+                        ? "bg-surface text-primary"
+                        : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     <Share2 size={10} />
@@ -691,8 +692,8 @@ export default function CollectionDetailPage({
                     disabled={visibilityUpdating}
                     className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer ${
                       visibility === "public"
-                        ? "bg-[#89d5d5] text-[#111514]"
-                        : "text-[#6c7d73] hover:text-[#9aa79e]"
+                        ? "bg-primary text-primary-foreground"
+                        : "text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     <Globe size={10} />
@@ -703,10 +704,10 @@ export default function CollectionDetailPage({
               <LikeButton collectionId={collection.id} />
               <Link
                 href={`/compare?left=${collection.id}`}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#17201c] hover:bg-[#1f2b26] text-[#8fa095] hover:text-[#89d5d5] border border-[#3b4c40] transition-colors"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-card/80 hover:bg-card text-muted-foreground hover:text-primary border border-border transition-colors"
                 title="Compare with another ranking"
               >
-                <GitCompare size={12} className="text-[#89d5d5]" />
+                <GitCompare size={12} className="text-primary" />
                 <span>Compare</span>
               </Link>
               {isOwner && (
@@ -717,10 +718,10 @@ export default function CollectionDetailPage({
                       setBannerUrlInput(collection.backdropImage || "");
                       setShowBannerModal(true);
                     }}
-                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#17201c] hover:bg-[#1f2b26] text-[#8fa095] hover:text-[#89d5d5] border border-[#3b4c40] transition-colors cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-card/80 hover:bg-card text-muted-foreground hover:text-primary border border-border transition-colors cursor-pointer"
                     title="Customize ranking banner artwork"
                   >
-                    <ImageIcon size={12} className="text-[#89d5d5]" />
+                    <ImageIcon size={12} className="text-primary" />
                     <span>Banner</span>
                   </button>
                   <button
@@ -734,7 +735,7 @@ export default function CollectionDetailPage({
                   </button>
                 </>
               )}
-              <span className="text-[11px] font-mono text-[#89d5d5]">
+              <span className="text-[11px] font-mono text-primary font-semibold">
                 {collection.collectionType === "tv_show"
                   ? "TV Series"
                   : collection.collectionType === "movie_franchise"
@@ -747,61 +748,62 @@ export default function CollectionDetailPage({
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-end">
             <div className="lg:col-span-8 space-y-4">
-              {/* Transparent ClearLOGO */}
-              {collection.clearLogoUrl && (
+              {/* Transparent ClearLOGO or Primary Typographic Heading (Never both) */}
+              {collection.clearLogoUrl ? (
                 <div className="py-1">
                   <img
                     src={collection.clearLogoUrl}
                     alt={collectionTitle}
                     className="h-16 sm:h-20 w-auto object-contain filter drop-shadow-[0_10px_24px_rgba(0,0,0,0.95)]"
                   />
+                  <h1 className="sr-only">{collectionTitle}</h1>
                 </div>
+              ) : (
+                <h1 className="font-display text-4xl sm:text-6xl lg:text-7xl tracking-tight text-foreground leading-[0.95] uppercase">
+                  {collectionTitle}
+                </h1>
               )}
 
-              <h1 className="font-display text-4xl sm:text-6xl lg:text-7xl tracking-tight text-[#f1f0e9] leading-[0.95] uppercase">
-                {collectionTitle}
-              </h1>
-
               {collection.description && (
-                <p className="text-sm sm:text-base text-[#b1bfb7] max-w-2xl leading-relaxed">
+                <p className="text-sm sm:text-base text-muted-foreground max-w-2xl leading-relaxed">
                   {collection.description}
                 </p>
               )}
 
-              {/* Requirement 6: Clear, elegant Ranking Progress indicator */}
-              <div className="p-4 sm:p-5 rounded-xl bg-[#141a17]/95 border border-[#303b34] space-y-3 backdrop-blur-sm max-w-xl">
+              {/* Clear, elegant Ranking Progress indicator */}
+              <div className="p-4 sm:p-5 rounded-xl bg-card/95 border border-border space-y-3 backdrop-blur-sm max-w-xl">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-[#8fa095] block">
+                    <span className="text-[10px] uppercase font-bold tracking-wider text-muted-foreground block">
                       Rating Progress
                     </span>
-                    <div className="font-display text-xl sm:text-2xl font-bold text-[#f1f0e9] uppercase tracking-tight">
+                    <div className="font-display text-xl sm:text-2xl font-bold text-foreground uppercase tracking-tight">
                       {completedCount} of {totalEntries} Rated ({completionPercentage}%)
                     </div>
                   </div>
-                  <div className="flex flex-wrap items-center gap-2.5 text-xs text-[#8fa095]">
+                  <div className="flex flex-wrap items-center gap-2.5 text-xs text-muted-foreground">
                     <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-[#89d5d5]" />
-                      <strong className="text-[#f1f0e9]">{completedCount}</strong> rated
+                      <span className="w-2 h-2 rounded-full bg-primary" />
+                      <strong className="text-foreground">{completedCount}</strong> rated
                     </span>
                     <span>·</span>
                     <span className="flex items-center gap-1.5">
                       <span className="w-2 h-2 rounded-full bg-amber-400" />
-                      <strong className="text-[#f1f0e9]">{inProgressCount}</strong> in progress
+                      <strong className="text-foreground">{inProgressCount}</strong> in progress
                     </span>
                     <span>·</span>
                     <span className="flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-[#3b4c40]" />
-                      <strong className="text-[#f1f0e9]">{unratedCount}</strong> unrated
+                      <span className="w-2 h-2 rounded-full bg-muted" />
+                      <strong className="text-foreground">{unratedCount}</strong> unrated
                     </span>
                   </div>
                 </div>
 
-                {/* Dual-color Progress Track */}
-                <div className="h-2 w-full rounded-full bg-[#18211d] overflow-hidden flex border border-[#2b3730]">
+                {/* Progress Track */}
+                <div className="h-2 w-full rounded-full bg-surface overflow-hidden flex border border-border">
                   <div
                     style={{ width: `${(completedCount / Math.max(1, totalEntries)) * 100}%` }}
-                    className="h-full bg-gradient-to-r from-[#214b43] to-[#89d5d5] transition-all duration-300"
+                    className="h-full bg-primary transition-all duration-300"
                     title={`${completedCount} rated`}
                   />
                   <div
@@ -814,46 +816,46 @@ export default function CollectionDetailPage({
             </div>
 
             {/* Rubric Breakdown Panel */}
-            <div className="lg:col-span-4 p-5 rounded-xl bg-[#141a17]/95 border border-[#303b34] space-y-2.5 text-xs backdrop-blur-sm">
-              <div className="flex justify-between items-center pb-2 border-b border-[#28342d] font-semibold">
-                <span className="font-display uppercase tracking-wider text-sm text-[#f1f0e9]">
+            <div className="lg:col-span-4 p-5 rounded-xl bg-card/95 border border-border space-y-2.5 text-xs backdrop-blur-sm">
+              <div className="flex justify-between items-center pb-2 border-b border-border font-semibold">
+                <span className="font-display uppercase tracking-wider text-sm text-foreground">
                   {collection.defaultRatingSystem?.name || "Weighted Rubric"}
                 </span>
-                <span className="text-[#89d5d5]">
+                <span className="text-primary font-mono">
                   Scale 1–{collection.defaultRatingSystem?.scale || 10}
                 </span>
               </div>
 
               {rubricCategories.length > 0 ? (
                 rubricCategories.map((cat: any) => (
-                  <div key={cat.id} className="flex justify-between text-[#9aa79e]">
+                  <div key={cat.id} className="flex justify-between text-muted-foreground">
                     <span>{cat.name}</span>
-                    <span className="text-[#f1f0e9] font-bold">{cat.weight}x</span>
+                    <span className="text-foreground font-bold">{cat.weight}x</span>
                   </div>
                 ))
               ) : (
                 <>
-                  <div className="flex justify-between text-[#9aa79e]"><span>Writing & Story</span><span className="text-[#f1f0e9] font-bold">8x</span></div>
-                  <div className="flex justify-between text-[#9aa79e]"><span>Acting & Performance</span><span className="text-[#f1f0e9] font-bold">8x</span></div>
-                  <div className="flex justify-between text-[#9aa79e]"><span>Cinematography</span><span className="text-[#f1f0e9] font-bold">7x</span></div>
-                  <div className="flex justify-between text-[#9aa79e]"><span>Music & Sound Design</span><span className="text-[#f1f0e9] font-bold">3x</span></div>
-                  <div className="flex justify-between text-[#9aa79e]"><span>Overall Impact</span><span className="text-[#89d5d5] font-bold">8x</span></div>
+                  <div className="flex justify-between text-muted-foreground"><span>Writing & Story</span><span className="text-foreground font-bold">8x</span></div>
+                  <div className="flex justify-between text-muted-foreground"><span>Acting & Performance</span><span className="text-foreground font-bold">8x</span></div>
+                  <div className="flex justify-between text-muted-foreground"><span>Cinematography</span><span className="text-foreground font-bold">7x</span></div>
+                  <div className="flex justify-between text-muted-foreground"><span>Music & Sound Design</span><span className="text-foreground font-bold">3x</span></div>
+                  <div className="flex justify-between text-muted-foreground"><span>Overall Impact</span><span className="text-primary font-bold">8x</span></div>
                 </>
               )}
 
               {isOwner && collection.defaultRatingSystem && (
-                <div className="pt-2 border-t border-[#28342d] flex items-center justify-between">
+                <div className="pt-2 border-t border-border flex items-center justify-between">
                   <button
                     type="button"
                     onClick={handleOpenRubricModal}
-                    className="text-[11px] text-[#89d5d5] hover:text-[#b2e8e8] flex items-center gap-1 font-semibold cursor-pointer"
+                    className="text-[11px] text-primary hover:underline flex items-center gap-1 font-semibold cursor-pointer"
                   >
                     <Sliders size={12} />
                     <span>Adjust Rubric Weights</span>
                   </button>
                   <Link
                     href="/settings"
-                    className="text-[11px] text-[#6c7d73] hover:text-[#9aa79e] transition-colors"
+                    className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
                   >
                     Manage in Settings
                   </Link>
@@ -867,7 +869,7 @@ export default function CollectionDetailPage({
       {/* =========================================================================
           CONTROLS BAR (Season Filter, Rating Status Filter, View Modes, Sort)
           ========================================================================= */}
-      <div className="sticky top-20 z-30 bg-[#111514]/95 backdrop-blur-md border-b border-[#303b34]">
+      <div className="sticky top-20 z-30 bg-background/95 backdrop-blur-md border-b border-border">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 text-xs">
           {/* Left: Action, Status Filters, & Season Filters */}
           <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
@@ -875,14 +877,14 @@ export default function CollectionDetailPage({
               <button
                 type="button"
                 onClick={() => setShowAddModal(true)}
-                className="px-3 py-1.5 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                className="px-3 py-1.5 rounded bg-secondary hover:bg-surface text-foreground border border-border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
               >
                 <Plus size={13} />
                 <span>Add Item</span>
               </button>
             )}
 
-            {/* Requirement 6: Rating Status Filters */}
+            {/* Rating Status Filters */}
             <div className="flex items-center gap-1 bg-card p-1 rounded-lg border border-border shrink-0">
               <button
                 type="button"
@@ -931,13 +933,13 @@ export default function CollectionDetailPage({
             </div>
 
             {availableSeasons.length > 0 && (
-              <div className="flex items-center gap-1.5 shrink-0 pl-1 border-l border-[#303b34]">
+              <div className="flex items-center gap-1.5 shrink-0 pl-1 border-l border-border">
                 <button
                   onClick={() => setSelectedSeason("all")}
                   className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
                     selectedSeason === "all"
-                      ? "bg-[#89d5d5] text-[#102523] font-semibold"
-                      : "text-[#8fa095] hover:text-[#f1f0e9] hover:bg-[#1a221e]"
+                      ? "bg-primary text-primary-foreground font-semibold"
+                      : "text-muted-foreground hover:text-foreground hover:bg-surface"
                   }`}
                 >
                   All seasons
@@ -948,8 +950,8 @@ export default function CollectionDetailPage({
                     onClick={() => setSelectedSeason(s.toString())}
                     className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
                       selectedSeason === s.toString()
-                        ? "bg-[#89d5d5] text-[#102523] font-semibold"
-                        : "text-[#8fa095] hover:text-[#f1f0e9] hover:bg-[#1a221e]"
+                        ? "bg-primary text-primary-foreground font-semibold"
+                        : "text-muted-foreground hover:text-foreground hover:bg-surface"
                     }`}
                   >
                     Season {s}
@@ -964,7 +966,7 @@ export default function CollectionDetailPage({
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="bg-[#18211d] text-xs text-[#f1f0e9] border border-[#303b34] rounded px-3 py-1.5 focus:outline-none focus:border-[#89d5d5]"
+              className="bg-surface text-xs text-foreground border border-input-border rounded px-3 py-1.5 focus:outline-none focus:border-primary"
             >
               <option value="score_desc">Sort: Highest Score</option>
               <option value="order">Sort: Chronological</option>
@@ -972,14 +974,14 @@ export default function CollectionDetailPage({
             </select>
 
             {/* View Mode Toggle */}
-            <div className="flex items-center gap-1 bg-[#141a17] p-1 rounded border border-[#303b34]">
+            <div className="flex items-center gap-1 bg-card p-1 rounded border border-border">
               <button
                 onClick={() => setViewMode("list")}
                 title="List view"
                 className={`p-1.5 rounded text-xs transition-colors ${
                   viewMode === "list"
-                    ? "bg-[#25322a] text-[#89d5d5]"
-                    : "text-[#8fa095] hover:text-[#f1f0e9]"
+                    ? "bg-surface text-primary"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <List size={16} />
@@ -989,8 +991,8 @@ export default function CollectionDetailPage({
                 title="Grid view"
                 className={`p-1.5 rounded text-xs transition-colors ${
                   viewMode === "editorial"
-                    ? "bg-[#25322a] text-[#89d5d5]"
-                    : "text-[#8fa095] hover:text-[#f1f0e9]"
+                    ? "bg-surface text-primary"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <Grid size={16} />
@@ -1005,13 +1007,13 @@ export default function CollectionDetailPage({
           ========================================================================= */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-4">
         {processedEntries.length === 0 ? (
-          <div className="text-center py-20 border border-dashed border-[#303b34] rounded-xl space-y-3">
-            <p className="text-sm text-[#9aa79e]">No items in this ranking collection.</p>
+          <div className="text-center py-20 border border-dashed border-border rounded-xl space-y-3">
+            <p className="text-sm text-muted-foreground">No items in this ranking collection.</p>
             {isOwner && (
               <button
                 type="button"
                 onClick={() => setShowAddModal(true)}
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded bg-[#89d5d5] hover:bg-[#a5e2e2] text-[#102523] text-xs font-semibold transition-all cursor-pointer"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold transition-all cursor-pointer shadow-sm"
               >
                 <Plus size={14} />
                 <span>Add Your First Item</span>
@@ -1033,14 +1035,14 @@ export default function CollectionDetailPage({
                   key={entry.id}
                   className={`flex items-center gap-4 sm:gap-6 p-4 rounded-xl border transition-colors group ${
                     state === "rated"
-                      ? "border-[#303b34] bg-[#141a17] hover:border-[#425247]"
+                      ? "border-border bg-card hover:border-primary/50 shadow-sm"
                       : state === "in_progress"
-                        ? "border-amber-500/25 bg-[#171a16] hover:border-amber-500/40"
-                        : "border-[#253229] bg-[#121614] hover:border-[#303b34]"
+                        ? "border-amber-500/30 bg-surface hover:border-amber-500/50"
+                        : "border-border bg-surface/50 hover:border-border"
                   }`}
                 >
                   {/* Rank Numeral */}
-                  <span className="w-8 sm:w-10 text-center font-display text-2xl sm:text-3xl font-bold text-[#8fa095] group-hover:text-[#89d5d5] transition-colors">
+                  <span className="w-8 sm:w-10 text-center font-display text-2xl sm:text-3xl font-bold text-muted-foreground group-hover:text-primary transition-colors">
                     {index < 9 ? `0${index + 1}` : index + 1}
                   </span>
 
@@ -1056,7 +1058,7 @@ export default function CollectionDetailPage({
 
                   {/* Title & Metadata */}
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 text-[11px] text-[#8fa095]">
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                       {media.seasonNumber && media.episodeNumber && (
                         <span>
                           S{media.seasonNumber}, Ep {media.episodeNumber}
@@ -1064,11 +1066,11 @@ export default function CollectionDetailPage({
                       )}
                       {media.releaseDate && <span>· {media.releaseDate.split("-")[0]}</span>}
                     </div>
-                    <h3 className="font-display text-xl sm:text-2xl font-bold text-[#f1f0e9] uppercase tracking-tight truncate mt-0.5">
+                    <h3 className="font-display text-xl sm:text-2xl font-bold text-foreground uppercase tracking-tight truncate mt-0.5">
                       {media.title}
                     </h3>
                     {entry.userRating?.reviewText && (
-                      <p className="text-xs text-[#9aa79e] line-clamp-1 italic mt-1">
+                      <p className="text-xs text-muted-foreground line-clamp-1 italic mt-1">
                         &ldquo;{entry.userRating.reviewText}&rdquo;
                       </p>
                     )}
@@ -1078,9 +1080,9 @@ export default function CollectionDetailPage({
                   <div className="flex items-center gap-3 sm:gap-4 shrink-0">
                     <div className="text-right">
                       {state === "rated" && score !== null ? (
-                        <div className="font-display text-2xl sm:text-3xl font-bold text-[#89d5d5]">
+                        <div className="font-display text-2xl sm:text-3xl font-bold text-primary">
                           {score.toFixed(1)}
-                          <span className="text-xs text-[#8fa095] ml-1 font-sans">/ 10</span>
+                          <span className="text-xs text-muted-foreground ml-1 font-sans">/ 10</span>
                         </div>
                       ) : state === "in_progress" ? (
                         <div className="text-right">
@@ -1094,7 +1096,7 @@ export default function CollectionDetailPage({
                           )}
                         </div>
                       ) : (
-                        <span className="text-xs text-[#6d7e74] font-medium">— Unrated</span>
+                        <span className="text-xs text-muted-foreground font-medium">— Unrated</span>
                       )}
                     </div>
 
@@ -1102,10 +1104,10 @@ export default function CollectionDetailPage({
                       onClick={() => setSelectedItemForRating(media)}
                       className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
                         state === "rated"
-                          ? "bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40]"
+                          ? "bg-secondary hover:bg-surface text-foreground border border-border"
                           : state === "in_progress"
                             ? "bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/40"
-                            : "bg-[#161d19] hover:bg-[#202a24] text-[#8fa095] hover:text-[#f1f0e9] border border-[#2b3730]"
+                            : "bg-primary hover:bg-primary-hover text-primary-foreground shadow-sm"
                       }`}
                     >
                       <Sliders size={13} />
@@ -1117,7 +1119,7 @@ export default function CollectionDetailPage({
                       <button
                         type="button"
                         onClick={() => setEntryToDelete(entry)}
-                        className="p-1.5 rounded text-[#6c7d73] hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-colors cursor-pointer"
+                        className="p-1.5 rounded text-muted-foreground hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-colors cursor-pointer"
                         title="Remove from this ranking"
                       >
                         <Trash2 size={13} />
@@ -1144,10 +1146,10 @@ export default function CollectionDetailPage({
                   key={entry.id}
                   className={`rounded-xl border overflow-hidden flex flex-col justify-between group transition-colors ${
                     state === "rated"
-                      ? "border-[#303b34] bg-[#141a17] hover:border-[#425247]"
+                      ? "border-border bg-card hover:border-primary/50 shadow-sm"
                       : state === "in_progress"
-                        ? "border-amber-500/30 bg-[#171a16] hover:border-amber-500/45"
-                        : "border-[#253229] bg-[#121614] hover:border-[#303b34]"
+                        ? "border-amber-500/30 bg-surface hover:border-amber-500/50"
+                        : "border-border bg-surface/50 hover:border-border"
                   }`}
                 >
                   <div className="relative overflow-hidden">
@@ -1157,13 +1159,13 @@ export default function CollectionDetailPage({
                       title={media.title}
                       aspect={isMovie ? "poster" : "video"}
                     />
-                    <div className="absolute top-3 left-3 px-2 py-0.5 rounded bg-black/85 backdrop-blur-md font-display text-lg text-[#f1f0e9] border border-white/10">
+                    <div className="absolute top-3 left-3 px-2 py-0.5 rounded bg-black/85 backdrop-blur-md font-display text-lg text-white border border-white/10">
                       #{index < 9 ? `0${index + 1}` : index + 1}
                     </div>
 
                     {/* State Badge Top Right */}
                     {state === "rated" && score !== null ? (
-                      <div className="absolute top-3 right-3 px-2 py-0.5 rounded bg-black/85 backdrop-blur-md border border-[#89d5d5]/40 text-[#89d5d5] font-display text-base shadow-lg">
+                      <div className="absolute top-3 right-3 px-2 py-0.5 rounded bg-black/85 backdrop-blur-md border border-primary/40 text-primary font-display text-base shadow-lg">
                         ★ {score.toFixed(1)}
                       </div>
                     ) : state === "in_progress" ? (
@@ -1171,7 +1173,7 @@ export default function CollectionDetailPage({
                         {scoredCount}/{totalCategories} Rated
                       </div>
                     ) : (
-                      <div className="absolute top-3 right-3 px-2 py-0.5 rounded bg-black/85 backdrop-blur-md border border-[#303b34] text-[#6c7d73] text-[10px] uppercase font-semibold">
+                      <div className="absolute top-3 right-3 px-2 py-0.5 rounded bg-black/85 backdrop-blur-md border border-border text-muted-foreground text-[10px] uppercase font-semibold">
                         Unrated
                       </div>
                     )}
@@ -1179,10 +1181,10 @@ export default function CollectionDetailPage({
 
                   <div className="p-4 space-y-2 flex-1 flex flex-col justify-between">
                     <div>
-                      <span className="text-[10px] text-[#8fa095] block">
+                      <span className="text-[10px] text-muted-foreground block">
                         {media.seasonNumber ? `Season ${media.seasonNumber}, Ep ${media.episodeNumber}` : "Movie"}
                       </span>
-                      <h3 className="font-display text-xl font-bold text-[#f1f0e9] uppercase tracking-tight mt-0.5 truncate">
+                      <h3 className="font-display text-xl font-bold text-foreground uppercase tracking-tight mt-0.5 truncate">
                         {media.title}
                       </h3>
                     </div>
@@ -1192,10 +1194,10 @@ export default function CollectionDetailPage({
                         onClick={() => setSelectedItemForRating(media)}
                         className={`flex-1 py-2 rounded text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
                           state === "rated"
-                            ? "bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40]"
+                            ? "bg-secondary hover:bg-surface text-foreground border border-border"
                             : state === "in_progress"
                               ? "bg-amber-400/15 hover:bg-amber-400/25 text-amber-300 border border-amber-400/40"
-                              : "bg-[#161d19] hover:bg-[#202a24] text-[#8fa095] hover:text-[#f1f0e9] border border-[#2b3730]"
+                              : "bg-primary hover:bg-primary-hover text-primary-foreground shadow-sm"
                         }`}
                       >
                         <Sliders size={13} />
@@ -1205,7 +1207,7 @@ export default function CollectionDetailPage({
                         <button
                           type="button"
                           onClick={() => setEntryToDelete(entry)}
-                          className="p-2 rounded text-[#6c7d73] hover:text-red-400 hover:bg-red-500/10 border border-[#303b34] hover:border-red-500/30 transition-colors cursor-pointer"
+                          className="p-2 rounded text-muted-foreground hover:text-red-400 hover:bg-red-500/10 border border-border hover:border-red-500/30 transition-colors cursor-pointer"
                           title="Remove from this ranking"
                         >
                           <Trash2 size={13} />
@@ -1226,16 +1228,16 @@ export default function CollectionDetailPage({
       {/* Delete Collection Confirmation Modal */}
       {showDeleteModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl bg-[#141a17] border border-red-500/30 p-6 shadow-2xl space-y-4">
+          <div className="w-full max-w-md rounded-xl bg-card border border-red-500/30 p-6 shadow-2xl space-y-4">
             <div className="flex items-center gap-3 text-red-400">
               <AlertTriangle className="h-6 w-6 shrink-0" />
-              <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+              <h3 className="font-display text-xl uppercase font-bold text-foreground">
                 Delete Entire Ranking
               </h3>
             </div>
-            <p className="text-xs text-[#9aa79e] leading-relaxed">
+            <p className="text-xs text-muted-foreground leading-relaxed">
               Are you sure you want to permanently delete{" "}
-              <strong className="text-[#f1f0e9]">{collectionTitle}</strong>?
+              <strong className="text-foreground">{collectionTitle}</strong>?
               This will remove all ranked entries and scores associated with this collection. This action cannot be undone.
             </p>
             <div className="flex items-center justify-end gap-3 pt-2">
@@ -1243,7 +1245,7 @@ export default function CollectionDetailPage({
                 type="button"
                 onClick={() => setShowDeleteModal(false)}
                 disabled={deletingCollection}
-                className="px-4 py-2 text-xs text-[#9aa79e] hover:text-[#f1f0e9] transition-colors cursor-pointer"
+                className="px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -1251,7 +1253,7 @@ export default function CollectionDetailPage({
                 type="button"
                 onClick={handleDeleteCollection}
                 disabled={deletingCollection}
-                className="px-5 py-2.5 rounded bg-red-600 hover:bg-red-500 text-[#f1f0e9] text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                className="px-5 py-2.5 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
               >
                 {deletingCollection ? (
                   <>
@@ -1273,15 +1275,15 @@ export default function CollectionDetailPage({
       {/* Remove Entry Confirmation Modal */}
       {entryToDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-xl bg-[#141a17] border border-[#303b34] p-6 shadow-2xl space-y-4">
-            <div className="flex items-center gap-3 text-[#89d5d5]">
+          <div className="w-full max-w-md rounded-xl bg-card border border-border p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-primary">
               <Trash2 className="h-5 w-5 shrink-0" />
-              <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+              <h3 className="font-display text-xl uppercase font-bold text-foreground">
                 Remove Entry
               </h3>
             </div>
-            <p className="text-xs text-[#9aa79e] leading-relaxed">
-              Remove <strong className="text-[#f1f0e9]">{entryToDelete.mediaItem?.title}</strong> from this ranking?
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Remove <strong className="text-foreground">{entryToDelete.mediaItem?.title}</strong> from this ranking?
               The item will be removed from this list, but your rating and TMDB metadata are preserved.
             </p>
             <div className="flex items-center justify-end gap-3 pt-2">
@@ -1289,7 +1291,7 @@ export default function CollectionDetailPage({
                 type="button"
                 onClick={() => setEntryToDelete(null)}
                 disabled={deletingEntry}
-                className="px-4 py-2 text-xs text-[#9aa79e] hover:text-[#f1f0e9] transition-colors cursor-pointer"
+                className="px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -1297,11 +1299,11 @@ export default function CollectionDetailPage({
                 type="button"
                 onClick={handleRemoveEntry}
                 disabled={deletingEntry}
-                className="px-5 py-2.5 rounded bg-red-600 hover:bg-red-500 text-[#f1f0e9] text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                className="px-5 py-2.5 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
               >
                 {deletingEntry ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 size={13} className="animate-spin" />
                     <span>Removing...</span>
                   </>
                 ) : (
@@ -1316,20 +1318,20 @@ export default function CollectionDetailPage({
       {/* Rubric Adjustment Modal */}
       {showRubricModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl bg-[#141a17] border border-[#303b34] p-6 shadow-2xl space-y-5">
-            <div className="flex items-center justify-between pb-3 border-b border-[#28342d]">
+          <div className="w-full max-w-lg rounded-xl bg-card border border-border p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
               <div>
-                <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+                <h3 className="font-display text-xl uppercase font-bold text-foreground">
                   Adjust Rubric Weights
                 </h3>
-                <p className="text-xs text-[#8fa095] mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Calibrate the multiplier weights for each evaluation category.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowRubricModal(false)}
-                className="text-[#8fa095] hover:text-[#f1f0e9] p-1 cursor-pointer"
+                className="text-muted-foreground hover:text-foreground p-1 cursor-pointer"
               >
                 <X size={18} />
               </button>
@@ -1339,60 +1341,59 @@ export default function CollectionDetailPage({
               {editingRubricCategories.map((cat, idx) => (
                 <div
                   key={cat.id || idx}
-                  className="p-3 rounded-lg border border-[#2b3730] bg-[#111613] flex items-center justify-between gap-4"
+                  className="p-3.5 rounded-lg border border-border bg-surface flex items-center justify-between gap-4"
                 >
-                  <span className="font-semibold text-xs text-[#f1f0e9] flex-1">
+                  <span className="font-semibold text-xs text-foreground flex-1">
                     {cat.name}
                   </span>
-                  <div className="flex items-center gap-3">
-                    <input
-                      type="range"
-                      min="0"
-                      max="10"
-                      step="0.5"
+                  <div className="w-44">
+                    <CinematicSlider
+                      min={0}
+                      max={10}
+                      step={0.5}
                       value={cat.weight}
-                      onChange={(e) => {
-                        const val = parseFloat(e.target.value);
+                      onChange={(val) => {
                         setEditingRubricCategories((prev) =>
-                          prev.map((c, i) => (i === idx ? { ...c, weight: val } : c))
+                          prev.map((c, i) => (i === idx ? { ...c, weight: val ?? 1 } : c))
                         );
                       }}
-                      className="w-28 accent-[#89d5d5] cursor-pointer"
+                      allowUnset={false}
+                      showValue={true}
+                      valueSuffix="x"
+                      size="sm"
+                      ariaLabel={`Weight for ${cat.name}`}
                     />
-                    <span className="text-xs font-bold text-[#89d5d5] font-display w-8 text-right">
-                      {cat.weight}x
-                    </span>
                   </div>
                 </div>
               ))}
             </div>
 
             {/* Scope Option */}
-            <div className="p-3 rounded-lg bg-[#18211d] border border-[#303b34] space-y-1.5">
+            <div className="p-3 rounded-lg bg-surface border border-border space-y-1.5">
               <label className="flex items-center gap-2.5 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={customizeForCollectionOnly}
                   onChange={(e) => setCustomizeForCollectionOnly(e.target.checked)}
-                  className="rounded border-[#303b34] text-[#89d5d5] focus:ring-0 accent-[#89d5d5]"
+                  className="rounded border-border text-primary focus:ring-0 accent-primary"
                 />
-                <span className="text-xs font-semibold text-[#f1f0e9]">
+                <span className="text-xs font-semibold text-foreground">
                   Customize for this ranking only
                 </span>
               </label>
-              <p className="text-[11px] text-[#8fa095] pl-6 leading-relaxed">
+              <p className="text-[11px] text-muted-foreground pl-6 leading-relaxed">
                 {customizeForCollectionOnly
                   ? "Creates a dedicated rubric for this ranking so your other collections remain untouched."
                   : "Updates this rating system globally across all rankings that share it."}
               </p>
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#28342d]">
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
               <button
                 type="button"
                 onClick={() => setShowRubricModal(false)}
                 disabled={savingRubric}
-                className="px-4 py-2 text-xs text-[#9aa79e] hover:text-[#f1f0e9] transition-colors cursor-pointer"
+                className="px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -1400,7 +1401,7 @@ export default function CollectionDetailPage({
                 type="button"
                 onClick={handleSaveRubric}
                 disabled={savingRubric}
-                className="px-5 py-2.5 rounded bg-[#89d5d5] hover:bg-[#a5e2e2] text-[#102523] text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                className="px-5 py-2.5 rounded bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50 shadow-sm"
               >
                 {savingRubric ? (
                   <>
@@ -1422,17 +1423,17 @@ export default function CollectionDetailPage({
       {/* Add Items Modal */}
       {showAddModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-xl rounded-xl bg-[#141a17] border border-[#303b34] p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#28342d]">
+          <div className="w-full max-w-xl rounded-xl bg-card border border-border p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
               <div>
-                <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+                <h3 className="font-display text-xl uppercase font-bold text-foreground">
                   {drilldownSeason
                     ? `${selectedTvShow?.name || "TV Show"} · ${drilldownSeason.name}`
                     : selectedTvShow
                       ? `${selectedTvShow.name || "TV Show"} · Seasons`
                       : "Add Entry to Ranking"}
                 </h3>
-                <p className="text-xs text-[#8fa095] mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   {drilldownSeason
                     ? "Select individual episodes to add to your ranking."
                     : selectedTvShow
@@ -1449,7 +1450,7 @@ export default function CollectionDetailPage({
                   setSelectedTvShow(null);
                   setDrilldownSeason(null);
                 }}
-                className="text-[#8fa095] hover:text-[#f1f0e9] p-1 cursor-pointer"
+                className="text-muted-foreground hover:text-foreground p-1 cursor-pointer"
               >
                 <X size={18} />
               </button>
@@ -1464,15 +1465,15 @@ export default function CollectionDetailPage({
                     setDrilldownSeason(null);
                     setTvSeasonData(null);
                   }}
-                  className="inline-flex items-center gap-1.5 text-xs text-[#89d5d5] hover:underline cursor-pointer"
+                  className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline cursor-pointer"
                 >
                   <ArrowLeft size={13} />
                   <span>Back to Seasons</span>
                 </button>
 
                 {loadingSeasonData ? (
-                  <div className="py-12 flex flex-col items-center justify-center gap-2 text-xs text-[#8fa095]">
-                    <Loader2 size={20} className="animate-spin text-[#89d5d5]" />
+                  <div className="py-12 flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 size={20} className="animate-spin text-primary" />
                     <span>Loading episodes...</span>
                   </div>
                 ) : (
@@ -1489,10 +1490,10 @@ export default function CollectionDetailPage({
                       return (
                         <div
                           key={ep.id}
-                          className="p-3 rounded-lg border border-[#28342d] bg-[#111613] flex items-center justify-between gap-3 hover:border-[#3b4c40] transition-colors"
+                          className="p-3 rounded-lg border border-border bg-surface flex items-center justify-between gap-3 hover:border-primary/40 transition-colors"
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-16 h-10 bg-black rounded overflow-hidden shrink-0 border border-[#28342d]">
+                            <div className="w-16 h-10 bg-black/30 rounded overflow-hidden shrink-0 border border-border">
                               {ep.still_path ? (
                                 <img
                                   src={getTmdbImageUrl(ep.still_path, "w300")}
@@ -1500,17 +1501,17 @@ export default function CollectionDetailPage({
                                   className="w-full h-full object-cover"
                                 />
                               ) : (
-                                <div className="w-full h-full flex items-center justify-center text-[10px] text-[#6c7d73]">
+                                <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
                                   Ep {ep.episode_number}
                                 </div>
                               )}
                             </div>
                             <div className="min-w-0">
-                              <h4 className="font-semibold text-xs text-[#f1f0e9] truncate">
+                              <h4 className="font-semibold text-xs text-foreground truncate">
                                 Ep {ep.episode_number}: {ep.name}
                               </h4>
                               {ep.air_date && (
-                                <span className="text-[10px] text-[#8fa095] block mt-0.5">
+                                <span className="text-[10px] text-muted-foreground block mt-0.5">
                                   {ep.air_date.split("-")[0]}
                                 </span>
                               )}
@@ -1523,8 +1524,8 @@ export default function CollectionDetailPage({
                             disabled={isAlreadyIn || isAdding}
                             className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
                               isAlreadyIn
-                                ? "bg-[#18211d] text-[#6c7d73] border border-[#2b3730] cursor-not-allowed"
-                                : "bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40]"
+                                ? "bg-surface text-muted-foreground border border-border cursor-not-allowed"
+                                : "bg-secondary hover:bg-surface text-foreground border border-border"
                             }`}
                           >
                             {isAdding ? (
@@ -1558,15 +1559,15 @@ export default function CollectionDetailPage({
                   onClick={() => {
                     setSelectedTvShow(null);
                   }}
-                  className="inline-flex items-center gap-1.5 text-xs text-[#89d5d5] hover:underline cursor-pointer"
+                  className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline cursor-pointer"
                 >
                   <ArrowLeft size={13} />
                   <span>Back to Search</span>
                 </button>
 
                 {loadingTvDetails ? (
-                  <div className="py-12 flex flex-col items-center justify-center gap-2 text-xs text-[#8fa095]">
-                    <Loader2 size={20} className="animate-spin text-[#89d5d5]" />
+                  <div className="py-12 flex flex-col items-center justify-center gap-2 text-xs text-muted-foreground">
+                    <Loader2 size={20} className="animate-spin text-primary" />
                     <span>Loading seasons...</span>
                   </div>
                 ) : (
@@ -1576,10 +1577,10 @@ export default function CollectionDetailPage({
                       .map((season: any) => (
                         <div
                           key={season.id}
-                          className="p-3 rounded-lg border border-[#28342d] bg-[#111613] flex items-center justify-between gap-3 hover:border-[#3b4c40] transition-colors"
+                          className="p-3 rounded-lg border border-border bg-surface flex items-center justify-between gap-3 hover:border-primary/40 transition-colors"
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-10 h-14 bg-black rounded overflow-hidden shrink-0 border border-[#28342d]">
+                            <div className="w-10 h-14 bg-black/30 rounded overflow-hidden shrink-0 border border-border">
                               {season.poster_path ? (
                                 <img
                                   src={getTmdbImageUrl(season.poster_path, "w185")}
@@ -1587,16 +1588,16 @@ export default function CollectionDetailPage({
                                   className="w-full h-full object-cover"
                                 />
                               ) : (
-                                <div className="w-full h-full flex items-center justify-center text-[10px] text-[#6c7d73]">
+                                <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
                                   S{season.season_number}
                                 </div>
                               )}
                             </div>
                             <div className="min-w-0">
-                              <h4 className="font-semibold text-xs text-[#f1f0e9] truncate">
+                              <h4 className="font-semibold text-xs text-foreground truncate">
                                 {season.name}
                               </h4>
-                              <span className="text-[10px] text-[#8fa095] block mt-0.5">
+                              <span className="text-[10px] text-muted-foreground block mt-0.5">
                                 {season.episode_count} Episodes
                               </span>
                             </div>
@@ -1605,7 +1606,7 @@ export default function CollectionDetailPage({
                           <button
                             type="button"
                             onClick={() => handleSelectSeason(season)}
-                            className="px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] transition-all cursor-pointer shrink-0"
+                            className="px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 bg-secondary hover:bg-surface text-foreground border border-border transition-all cursor-pointer shrink-0"
                           >
                             <span>View Episodes</span>
                             <ChevronRight size={13} />
@@ -1621,7 +1622,7 @@ export default function CollectionDetailPage({
                 <div className="relative">
                   <Search
                     size={16}
-                    className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8fa095]"
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground"
                   />
                   <input
                     type="text"
@@ -1629,19 +1630,19 @@ export default function CollectionDetailPage({
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Search movies or TV shows (e.g. Alien, Severance)..."
                     autoFocus
-                    className="w-full h-11 pl-9 pr-4 rounded-lg bg-[#18211d] border border-[#303b34] text-xs text-[#f1f0e9] placeholder-[#6c7d73] focus:outline-none focus:border-[#89d5d5] transition-colors"
+                    className="w-full h-11 pl-9 pr-4 rounded-lg bg-surface border border-input-border text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary transition-colors"
                   />
                   {isSearchingTmdb && (
                     <Loader2
                       size={16}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#89d5d5] animate-spin"
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-primary animate-spin"
                     />
                   )}
                 </div>
 
                 <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
                   {searchResults.length === 0 && searchQuery.trim().length >= 2 && !isSearchingTmdb && (
-                    <div className="py-8 text-center text-xs text-[#8fa095]">
+                    <div className="py-8 text-center text-xs text-muted-foreground">
                       No matching titles found on TMDB.
                     </div>
                   )}
@@ -1658,10 +1659,10 @@ export default function CollectionDetailPage({
                     return (
                       <div
                         key={item.id}
-                        className="p-3 rounded-lg border border-[#28342d] bg-[#111613] flex items-center justify-between gap-3 hover:border-[#3b4c40] transition-colors"
+                        className="p-3 rounded-lg border border-border bg-surface flex items-center justify-between gap-3 hover:border-primary/40 transition-colors"
                       >
                         <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-14 bg-black rounded overflow-hidden shrink-0 border border-[#28342d]">
+                          <div className="w-10 h-14 bg-black/30 rounded overflow-hidden shrink-0 border border-border">
                             {item.poster_path ? (
                               <img
                                 src={getTmdbImageUrl(item.poster_path, "w185")}
@@ -1669,16 +1670,16 @@ export default function CollectionDetailPage({
                                 className="w-full h-full object-cover"
                               />
                             ) : (
-                              <div className="w-full h-full flex items-center justify-center text-[10px] text-[#6c7d73]">
+                              <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
                                 —
                               </div>
                             )}
                           </div>
                           <div className="min-w-0">
-                            <h4 className="font-semibold text-xs text-[#f1f0e9] truncate">
+                            <h4 className="font-semibold text-xs text-foreground truncate">
                               {title}
                             </h4>
-                            <span className="text-[10px] text-[#8fa095] block mt-0.5">
+                            <span className="text-[10px] text-muted-foreground block mt-0.5">
                               {year ? `${year} · ` : ""}{isTv ? "TV Series" : "Movie"}
                             </span>
                           </div>
@@ -1688,7 +1689,7 @@ export default function CollectionDetailPage({
                           <button
                             type="button"
                             onClick={() => handleSelectTvShow(item)}
-                            className="px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] transition-all cursor-pointer shrink-0"
+                            className="px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 bg-secondary hover:bg-surface text-foreground border border-border transition-all cursor-pointer shrink-0"
                           >
                             <span>Select Episodes</span>
                             <ChevronRight size={13} />
@@ -1700,8 +1701,8 @@ export default function CollectionDetailPage({
                             disabled={isAlreadyIn || isAdding}
                             className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
                               isAlreadyIn
-                                ? "bg-[#18211d] text-[#6c7d73] border border-[#2b3730] cursor-not-allowed"
-                                : "bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40]"
+                                ? "bg-surface text-muted-foreground border border-border cursor-not-allowed"
+                                : "bg-secondary hover:bg-surface text-foreground border border-border"
                             }`}
                           >
                             {isAdding ? (
@@ -1735,20 +1736,20 @@ export default function CollectionDetailPage({
       {/* Banner Customization Modal */}
       {showBannerModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl bg-[#141a17] border border-[#303b34] p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#28342d]">
+          <div className="w-full max-w-lg rounded-xl bg-card border border-border p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
               <div>
-                <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+                <h3 className="font-display text-xl uppercase font-bold text-foreground">
                   Ranking Header Banner
                 </h3>
-                <p className="text-xs text-[#8fa095] mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Upload a custom backdrop image or specify an image URL.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowBannerModal(false)}
-                className="text-[#8fa095] hover:text-[#f1f0e9] p-1 cursor-pointer"
+                className="text-muted-foreground hover:text-foreground p-1 cursor-pointer"
               >
                 <X size={18} />
               </button>
@@ -1756,10 +1757,10 @@ export default function CollectionDetailPage({
 
             {/* Current Banner Preview */}
             <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
                 Preview
               </label>
-              <div className="aspect-[21/9] rounded-lg overflow-hidden bg-black border border-[#303b34] relative">
+              <div className="aspect-[21/9] rounded-lg overflow-hidden bg-black/40 border border-border relative">
                 {bannerUrlInput ? (
                   <img
                     src={bannerUrlInput}
@@ -1767,8 +1768,8 @@ export default function CollectionDetailPage({
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center text-xs text-[#6c7d73] gap-1">
-                    <ImageIcon size={20} className="text-[#3b4c40]" />
+                  <div className="w-full h-full flex flex-col items-center justify-center text-xs text-muted-foreground gap-1">
+                    <ImageIcon size={20} className="text-muted-foreground/60" />
                     <span>No custom banner set (using default)</span>
                   </div>
                 )}
@@ -1777,7 +1778,7 @@ export default function CollectionDetailPage({
 
             {/* Upload File */}
             <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
                 Upload Custom Image
               </label>
               <input
@@ -1792,7 +1793,7 @@ export default function CollectionDetailPage({
                   type="button"
                   onClick={() => bannerFileRef.current?.click()}
                   disabled={bannerUploading}
-                  className="px-4 py-2 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                  className="px-4 py-2 rounded bg-secondary hover:bg-surface text-foreground border border-border text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   {bannerUploading ? (
                     <>
@@ -1810,7 +1811,7 @@ export default function CollectionDetailPage({
                   <button
                     type="button"
                     onClick={() => setBannerUrlInput("")}
-                    className="px-3 py-2 text-xs text-[#8fa095] hover:text-red-400 transition-colors cursor-pointer"
+                    className="px-3 py-2 text-xs text-muted-foreground hover:text-red-400 transition-colors cursor-pointer"
                   >
                     Clear Banner
                   </button>
@@ -1820,7 +1821,7 @@ export default function CollectionDetailPage({
 
             {/* Or Paste URL */}
             <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
                 Or Image URL
               </label>
               <input
@@ -1828,16 +1829,16 @@ export default function CollectionDetailPage({
                 value={bannerUrlInput}
                 onChange={(e) => setBannerUrlInput(e.target.value)}
                 placeholder="https://..."
-                className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-surface border border-input-border text-foreground focus:outline-none focus:border-primary"
               />
             </div>
 
-            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#28342d]">
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
               <button
                 type="button"
                 onClick={() => setShowBannerModal(false)}
                 disabled={savingBanner}
-                className="px-4 py-2 text-xs text-[#9aa79e] hover:text-[#f1f0e9] transition-colors cursor-pointer"
+                className="px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -1845,7 +1846,7 @@ export default function CollectionDetailPage({
                 type="button"
                 onClick={handleSaveBanner}
                 disabled={savingBanner || bannerUploading}
-                className="px-5 py-2.5 rounded bg-[#89d5d5] hover:bg-[#a5e2e2] text-[#102523] text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+                className="px-5 py-2.5 rounded bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 shadow-sm"
               >
                 {savingBanner ? (
                   <>

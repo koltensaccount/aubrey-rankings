@@ -64,29 +64,29 @@ export default function AdminBugReportsPage() {
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#303b34] pb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-6">
         <div>
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-xs text-[#8fa095] hover:text-[#f1f0e9] transition-colors mb-2"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"
           >
             <ArrowLeft size={13} />
             <span>Back to Application</span>
           </Link>
           <div className="flex items-center gap-2.5">
-            <Bug size={24} className="text-[#89d5d5]" />
-            <h1 className="font-display text-3xl sm:text-4xl font-bold uppercase tracking-tight text-[#f1f0e9]">
+            <Bug size={24} className="text-primary" />
+            <h1 className="font-display text-3xl sm:text-4xl font-bold uppercase tracking-tight text-foreground">
               Issue Tracker & Bug Reports
             </h1>
           </div>
-          <p className="text-xs text-[#9aa79e] mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             Review user-submitted defect reports, page contexts, and screenshot attachments.
           </p>
         </div>
 
         <button
           onClick={fetchReports}
-          className="self-start sm:self-auto px-4 py-2 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold transition-colors cursor-pointer"
+          className="self-start sm:self-auto px-4 py-2 rounded bg-surface hover:bg-surface-elevated text-primary border border-border text-xs font-semibold transition-colors cursor-pointer"
         >
           Refresh Reports
         </button>
@@ -98,8 +98,8 @@ export default function AdminBugReportsPage() {
           onClick={() => setStatusFilter("all")}
           className={`px-3 py-1.5 rounded-full font-semibold transition-colors cursor-pointer ${
             statusFilter === "all"
-              ? "bg-[#89d5d5] text-[#102523]"
-              : "bg-[#18211d] text-[#8fa095] hover:text-[#f1f0e9] border border-[#303b34]"
+              ? "bg-primary text-primary-foreground"
+              : "bg-surface text-muted-foreground hover:text-foreground border border-border"
           }`}
         >
           All ({reports.length})
@@ -109,7 +109,7 @@ export default function AdminBugReportsPage() {
           className={`px-3 py-1.5 rounded-full font-semibold transition-colors cursor-pointer ${
             statusFilter === "open"
               ? "bg-red-500 text-white"
-              : "bg-[#18211d] text-[#8fa095] hover:text-[#f1f0e9] border border-[#303b34]"
+              : "bg-surface text-muted-foreground hover:text-foreground border border-border"
           }`}
         >
           Open ({reports.filter((r) => r.status === "open").length})
@@ -119,7 +119,7 @@ export default function AdminBugReportsPage() {
           className={`px-3 py-1.5 rounded-full font-semibold transition-colors cursor-pointer ${
             statusFilter === "investigating"
               ? "bg-amber-500 text-black"
-              : "bg-[#18211d] text-[#8fa095] hover:text-[#f1f0e9] border border-[#303b34]"
+              : "bg-surface text-muted-foreground hover:text-foreground border border-border"
           }`}
         >
           Investigating ({reports.filter((r) => r.status === "investigating").length})
@@ -129,7 +129,7 @@ export default function AdminBugReportsPage() {
           className={`px-3 py-1.5 rounded-full font-semibold transition-colors cursor-pointer ${
             statusFilter === "resolved"
               ? "bg-emerald-600 text-white"
-              : "bg-[#18211d] text-[#8fa095] hover:text-[#f1f0e9] border border-[#303b34]"
+              : "bg-surface text-muted-foreground hover:text-foreground border border-border"
           }`}
         >
           Resolved ({reports.filter((r) => r.status === "resolved").length})
@@ -139,17 +139,17 @@ export default function AdminBugReportsPage() {
       {/* Content */}
       {loading ? (
         <div className="py-20 text-center space-y-3">
-          <Loader2 size={24} className="mx-auto text-[#89d5d5] animate-spin" />
-          <p className="text-xs text-[#8fa095]">Loading reports...</p>
+          <Loader2 size={24} className="mx-auto text-primary animate-spin" />
+          <p className="text-xs text-muted-foreground">Loading reports...</p>
         </div>
       ) : error ? (
         <div className="p-6 rounded-xl border border-red-500/20 bg-red-500/5 text-center max-w-md mx-auto space-y-3">
           <AlertCircle size={24} className="mx-auto text-red-400" />
-          <h3 className="font-display text-lg uppercase text-[#f1f0e9]">Access Restricted</h3>
-          <p className="text-xs text-[#9aa79e]">{error}</p>
+          <h3 className="font-display text-lg uppercase text-foreground">Access Restricted</h3>
+          <p className="text-xs text-muted-foreground">{error}</p>
         </div>
       ) : filteredReports.length === 0 ? (
-        <div className="py-20 text-center border border-dashed border-[#303b34] rounded-xl text-xs text-[#8fa095]">
+        <div className="py-20 text-center border border-dashed border-border rounded-xl text-xs text-muted-foreground">
           No {statusFilter === "all" ? "" : statusFilter} bug reports found.
         </div>
       ) : (
@@ -161,7 +161,7 @@ export default function AdminBugReportsPage() {
             return (
               <div
                 key={report.id}
-                className="p-5 rounded-xl border border-[#303b34] bg-[#141a17] space-y-4 hover:border-[#425247] transition-colors"
+                className="p-5 rounded-xl border border-border bg-card space-y-4 hover:border-primary/40 transition-colors"
               >
                 <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
                   <div className="flex items-center gap-2.5">
@@ -176,19 +176,19 @@ export default function AdminBugReportsPage() {
                     >
                       {report.status}
                     </span>
-                    <span className="font-semibold text-[#f1f0e9]">{submitter}</span>
-                    <span className="text-[#6c7d73]">·</span>
-                    <span className="text-[#8fa095]">{dateStr}</span>
+                    <span className="font-semibold text-foreground">{submitter}</span>
+                    <span className="text-muted-foreground">·</span>
+                    <span className="text-muted-foreground">{dateStr}</span>
                   </div>
 
                   {/* Status Changer */}
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] text-[#8fa095] uppercase">Status:</span>
+                    <span className="text-[10px] text-muted-foreground uppercase">Status:</span>
                     <select
                       value={report.status}
                       disabled={updatingId === report.id}
                       onChange={(e) => handleUpdateStatus(report.id, e.target.value)}
-                      className="bg-[#18211d] text-xs text-[#f1f0e9] border border-[#303b34] rounded px-2 py-1 focus:outline-none focus:border-[#89d5d5]"
+                      className="bg-surface text-xs text-foreground border border-border rounded px-2 py-1 focus:outline-none focus:border-primary"
                     >
                       <option value="open">Open</option>
                       <option value="investigating">Investigating</option>
@@ -198,19 +198,19 @@ export default function AdminBugReportsPage() {
                 </div>
 
                 {/* Description */}
-                <p className="text-sm text-[#e4ede5] leading-relaxed whitespace-pre-wrap">
+                <p className="text-sm text-foreground leading-relaxed whitespace-pre-wrap">
                   {report.description}
                 </p>
 
                 {/* Metadata & Page URL */}
-                <div className="flex flex-wrap items-center gap-4 text-xs pt-1 border-t border-[#232d26] text-[#8fa095]">
+                <div className="flex flex-wrap items-center gap-4 text-xs pt-1 border-t border-border text-muted-foreground">
                   <div className="flex items-center gap-1.5 truncate max-w-md">
-                    <span className="text-[10px] uppercase font-semibold text-[#6c7d73]">URL:</span>
+                    <span className="text-[10px] uppercase font-semibold text-muted-foreground">URL:</span>
                     <a
                       href={report.pageUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[#89d5d5] hover:underline flex items-center gap-1 truncate"
+                      className="text-primary hover:underline flex items-center gap-1 truncate"
                     >
                       <span className="truncate">{report.pageUrl}</span>
                       <ExternalLink size={11} className="shrink-0" />
@@ -221,7 +221,7 @@ export default function AdminBugReportsPage() {
                     <button
                       type="button"
                       onClick={() => setViewingScreenshot(report.screenshotUrl)}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold transition-colors cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded bg-surface hover:bg-surface-elevated text-primary border border-border text-xs font-semibold transition-colors cursor-pointer"
                     >
                       <ImageIcon size={13} />
                       <span>View Screenshot</span>
@@ -237,13 +237,13 @@ export default function AdminBugReportsPage() {
       {/* Screenshot Modal */}
       {viewingScreenshot && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-md">
-          <div className="relative max-w-5xl max-h-[90vh] rounded-xl overflow-hidden bg-[#101513] border border-[#303b34] shadow-2xl flex flex-col">
-            <div className="flex items-center justify-between p-3 border-b border-[#28342d] bg-[#141a17]">
-              <span className="text-xs font-semibold text-[#f1f0e9]">Screenshot Attachment</span>
+          <div className="relative max-w-5xl max-h-[90vh] rounded-xl overflow-hidden bg-card border border-border shadow-2xl flex flex-col">
+            <div className="flex items-center justify-between p-3 border-b border-border bg-surface">
+              <span className="text-xs font-semibold text-foreground">Screenshot Attachment</span>
               <button
                 type="button"
                 onClick={() => setViewingScreenshot(null)}
-                className="text-[#8fa095] hover:text-[#f1f0e9] p-1 cursor-pointer"
+                className="text-muted-foreground hover:text-foreground p-1 cursor-pointer"
               >
                 <X size={18} />
               </button>

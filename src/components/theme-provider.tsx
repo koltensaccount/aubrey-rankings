@@ -11,6 +11,8 @@ import {
   isValidThemeMode,
 } from "@/lib/theme";
 
+export type SaveStatus = "idle" | "saving" | "saved" | "error";
+
 interface ThemeContextType {
   theme: ThemeMode;
   resolvedTheme: "light" | "dark";
@@ -19,6 +21,8 @@ interface ThemeContextType {
   setAccentColor: (hex: string) => void;
   resetToDefaults: () => void;
   isSaving: boolean;
+  saveStatus: SaveStatus;
+  saveError: string | null;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
@@ -36,10 +40,11 @@ function applyThemeToDOM(resolvedTheme: "light" | "dark", accent: string) {
   root.setAttribute("data-theme", resolvedTheme);
 
   // Apply accent tokens
-  const tokens = getAccentTokens(accent);
+  const tokens = getAccentTokens(accent, resolvedTheme);
   root.style.setProperty("--primary", tokens.primary);
   root.style.setProperty("--primary-foreground", tokens.primaryForeground);
   root.style.setProperty("--primary-hover", tokens.primaryHover);
+  root.style.setProperty("--primary-text", tokens.primaryText);
   root.style.setProperty("--ring", tokens.ring);
   root.style.setProperty("--feature-accent", tokens.primary);
 }
@@ -71,6 +76,8 @@ export function ThemeProvider({
 
   const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("dark");
   const [isSaving, setIsSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Calculate resolved theme (light or dark)
   const computeResolved = useCallback((mode: ThemeMode): "light" | "dark" => {
@@ -110,18 +117,33 @@ export function ThemeProvider({
     async (newTheme?: ThemeMode, newAccent?: string) => {
       try {
         setIsSaving(true);
+        setSaveStatus("saving");
+        setSaveError(null);
         const body: Record<string, string> = {};
         if (newTheme) body.preferredTheme = newTheme;
         if (newAccent) body.accentColor = newAccent;
 
-        await fetch("/api/user/profile", {
+        const res = await fetch("/api/user/profile", {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body),
         });
-      } catch (err) {
-        // Silently fail network error; local state & localStorage remain preserved
+
+        if (!res.ok) {
+          if (res.status === 401) {
+            // Unauthenticated: localStorage is the source of truth, treat as saved
+            setSaveStatus("saved");
+            return;
+          }
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `Server responded with ${res.status}`);
+        }
+
+        setSaveStatus("saved");
+      } catch (err: any) {
         console.warn("[Theme] Could not sync appearance with server:", err);
+        setSaveStatus("error");
+        setSaveError(err?.message || "Failed to save appearance settings");
       } finally {
         setIsSaving(false);
       }
@@ -203,6 +225,8 @@ export function ThemeProvider({
         setAccentColor,
         resetToDefaults,
         isSaving,
+        saveStatus,
+        saveError,
       }}
     >
       {children}

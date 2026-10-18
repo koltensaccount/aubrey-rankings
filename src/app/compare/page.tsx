@@ -95,40 +95,40 @@ function ComparePageContent() {
   // If no params or incomplete params, show selector
   if (!leftId || !rightId) {
     return (
-      <div className="min-h-screen bg-[#111514] text-[#f1f0e9] py-12 px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-background text-foreground py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-3xl mx-auto space-y-8">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 text-xs text-[#8fa095] hover:text-[#f1f0e9] transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft size={13} />
             <span>Back to Feed</span>
           </Link>
 
           <header className="space-y-2">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1b2520] border border-[#3b4c40] text-xs font-semibold text-[#89d5d5] uppercase tracking-wider">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary uppercase tracking-wider">
               <GitCompare size={12} />
               <span>Canon Disagreement Engine</span>
             </div>
-            <h1 className="font-display text-4xl sm:text-5xl uppercase tracking-tight text-[#f1f0e9]">
+            <h1 className="font-display text-4xl sm:text-5xl uppercase tracking-tight text-foreground">
               Compare Two Critical Canons
             </h1>
-            <p className="text-sm text-[#9aa79e] leading-relaxed">
+            <p className="text-sm text-muted-foreground leading-relaxed">
               Select any two movie or television rankings to compute Spearman rank correlation,
               uncover sharp critical disputes, and see where two viewpoints diverge.
             </p>
           </header>
 
-          <div className="p-6 rounded-2xl border border-[#303b34] bg-[#141a17] space-y-6">
+          <div className="p-6 rounded-2xl border border-border bg-card space-y-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-[#8fa095] block">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block">
                   Primary Canon (Left)
                 </label>
                 <select
                   value={selectedLeft}
                   onChange={(e) => setSelectedLeft(e.target.value)}
-                  className="w-full rounded-lg bg-[#18211d] border border-[#303b34] p-3 text-sm text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                  className="w-full rounded-lg bg-surface border border-input-border p-3 text-sm text-foreground focus:outline-none focus:border-primary"
                 >
                   <option value="">Select a canon...</option>
                   {availableCanons.map((c) => (
@@ -140,13 +140,13 @@ function ComparePageContent() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-xs font-semibold uppercase tracking-wider text-[#8fa095] block">
+                <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block">
                   Comparing Against (Right)
                 </label>
                 <select
                   value={selectedRight}
                   onChange={(e) => setSelectedRight(e.target.value)}
-                  className="w-full rounded-lg bg-[#18211d] border border-[#303b34] p-3 text-sm text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                  className="w-full rounded-lg bg-surface border border-input-border p-3 text-sm text-foreground focus:outline-none focus:border-primary"
                 >
                   <option value="">Select a canon...</option>
                   {availableCanons.map((c) => (
@@ -167,8 +167,8 @@ function ComparePageContent() {
                 }
                 className={`w-full py-3.5 rounded-lg flex items-center justify-center gap-2 font-display text-sm uppercase tracking-wider font-bold transition-all ${
                   selectedLeft && selectedRight && selectedLeft !== selectedRight
-                    ? "bg-[#89d5d5] hover:bg-[#a2e5e5] text-[#102523] shadow-md shadow-[#89d5d5]/20 cursor-pointer"
-                    : "bg-[#232d27] text-[#5a6a61] cursor-not-allowed pointer-events-none"
+                    ? "bg-primary hover:bg-primary-hover text-primary-foreground shadow-md cursor-pointer"
+                    : "bg-surface text-muted-foreground cursor-not-allowed pointer-events-none border border-border"
                 }`}
               >
                 <span>Run Disagreement Analysis</span>
@@ -183,9 +183,9 @@ function ComparePageContent() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#111514] flex flex-col items-center justify-center gap-3 text-[#89d5d5]">
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-3 text-primary">
         <Loader2 className="h-8 w-8 animate-spin" />
-        <span className="text-xs font-mono tracking-widest uppercase text-[#8fa095]">
+        <span className="text-xs font-mono tracking-widest uppercase text-muted-foreground">
           Calculating Spearman alignment...
         </span>
       </div>
@@ -194,12 +194,12 @@ function ComparePageContent() {
 
   if (error || !metrics || !leftCollection || !rightCollection) {
     return (
-      <div className="min-h-screen bg-[#111514] text-[#f1f0e9] py-16 px-4">
+      <div className="min-h-screen bg-background text-foreground py-16 px-4">
         <div className="max-w-md mx-auto text-center space-y-4">
-          <p className="text-sm text-[#f87171]">{error || "Could not load comparison"}</p>
+          <p className="text-sm text-red-400">{error || "Could not load comparison"}</p>
           <Link
             href="/compare"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#18211d] border border-[#303b34] text-xs font-semibold text-[#89d5d5]"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary hover:bg-surface border border-border text-xs font-semibold text-foreground transition-colors"
           >
             <ArrowLeft size={13} />
             <span>Select different canons</span>
@@ -211,32 +211,32 @@ function ComparePageContent() {
 
   // Alignment rating styling
   const ratingColors = {
-    Identical: "text-[#4ade80] border-[#166534] bg-[#052e16]",
-    "Strong Alignment": "text-[#89d5d5] border-[#115e59] bg-[#042f2e]",
-    "Moderate Divergence": "text-[#fcd34d] border-[#78350f] bg-[#451a03]",
-    "Sharp Dispute": "text-[#f87171] border-[#7f1d1d] bg-[#450a0a]",
-    "Polar Opposites": "text-[#f43f5e] border-[#881337] bg-[#4c0519]",
-    "Insufficient Data": "text-[#94a3b8] border-[#334155] bg-[#0f172a]",
+    Identical: "text-emerald-400 border-emerald-500/30 bg-emerald-500/10",
+    "Strong Alignment": "text-primary border-primary/30 bg-primary/10",
+    "Moderate Divergence": "text-amber-400 border-amber-500/30 bg-amber-500/10",
+    "Sharp Dispute": "text-red-400 border-red-500/30 bg-red-500/10",
+    "Polar Opposites": "text-rose-400 border-rose-500/30 bg-rose-500/10",
+    "Insufficient Data": "text-muted-foreground border-border bg-surface",
   };
 
   const badgeStyle = ratingColors[metrics.alignmentRating] || ratingColors["Moderate Divergence"];
 
   return (
-    <div className="min-h-screen bg-[#111514] text-[#f1f0e9] pb-24">
+    <div className="min-h-screen bg-background text-foreground pb-24">
       {/* Editorial Compare Header */}
-      <header className="border-b border-[#232d27] bg-[#141a17] pt-8 pb-10 px-4 sm:px-6 lg:px-8">
+      <header className="border-b border-border bg-card pt-8 pb-10 px-4 sm:px-6 lg:px-8">
         <div className="max-w-6xl mx-auto space-y-6">
-          <div className="flex items-center justify-between text-xs text-[#8fa095]">
+          <div className="flex items-center justify-between text-xs text-muted-foreground">
             <Link
               href="/"
-              className="inline-flex items-center gap-1.5 hover:text-[#f1f0e9] transition-colors"
+              className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
             >
               <ArrowLeft size={13} />
               <span>Back to Feed</span>
             </Link>
             <Link
               href="/compare"
-              className="hover:text-[#89d5d5] transition-colors font-medium"
+              className="hover:text-primary transition-colors font-medium"
             >
               Change Canons
             </Link>
@@ -244,14 +244,14 @@ function ComparePageContent() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
             {/* Left Canon */}
-            <div className="space-y-2 p-5 rounded-xl border border-[#2b3830] bg-[#17201c]/90">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-[#89d5d5]">
+            <div className="space-y-2 p-5 rounded-xl border border-border bg-surface">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-primary font-semibold">
                 Primary Canon
               </span>
-              <h2 className="font-display text-2xl uppercase tracking-tight text-[#f1f0e9]">
+              <h2 className="font-display text-2xl uppercase tracking-tight text-foreground">
                 {leftCollection.title}
               </h2>
-              <div className="flex items-center gap-2 text-xs text-[#8fa095]">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>By {leftCollection.user.name || `@${leftCollection.user.username}`}</span>
                 <span>·</span>
                 <span>{leftCollection.totalEntries} items</span>
@@ -259,14 +259,14 @@ function ComparePageContent() {
             </div>
 
             {/* Right Canon */}
-            <div className="space-y-2 p-5 rounded-xl border border-[#2b3830] bg-[#17201c]/90">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-[#89d5d5]">
+            <div className="space-y-2 p-5 rounded-xl border border-border bg-surface">
+              <span className="text-[10px] font-mono uppercase tracking-wider text-primary font-semibold">
                 Comparative Canon
               </span>
-              <h2 className="font-display text-2xl uppercase tracking-tight text-[#f1f0e9]">
+              <h2 className="font-display text-2xl uppercase tracking-tight text-foreground">
                 {rightCollection.title}
               </h2>
-              <div className="flex items-center gap-2 text-xs text-[#8fa095]">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <span>By {rightCollection.user.name || `@${rightCollection.user.username}`}</span>
                 <span>·</span>
                 <span>{rightCollection.totalEntries} items</span>
@@ -279,16 +279,16 @@ function ComparePageContent() {
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-12">
         {/* Metric Cards Row */}
         <section className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-6 rounded-xl border border-[#2b3830] bg-[#141a17] space-y-2">
-            <span className="text-xs uppercase tracking-wider text-[#8fa095] block">
+          <div className="p-6 rounded-xl border border-border bg-card space-y-2">
+            <span className="text-xs uppercase tracking-wider text-muted-foreground block">
               Alignment Status
             </span>
             <div className={`inline-block px-3 py-1 rounded-full text-xs font-bold border ${badgeStyle}`}>
               {metrics.alignmentRating}
             </div>
-            <p className="text-[11px] text-[#6c7d73] pt-1">
+            <p className="text-[11px] text-muted-foreground pt-1">
               Spearman Rank Correlation (ρ):{" "}
-              <strong className="text-[#f1f0e9]">
+              <strong className="text-foreground">
                 {metrics.spearmanCorrelation !== null
                   ? `${metrics.spearmanCorrelation > 0 ? "+" : ""}${metrics.spearmanCorrelation.toFixed(2)}`
                   : "N/A"}
@@ -296,26 +296,26 @@ function ComparePageContent() {
             </p>
           </div>
 
-          <div className="p-6 rounded-xl border border-[#2b3830] bg-[#141a17] space-y-2">
-            <span className="text-xs uppercase tracking-wider text-[#8fa095] block">
+          <div className="p-6 rounded-xl border border-border bg-card space-y-2">
+            <span className="text-xs uppercase tracking-wider text-muted-foreground block">
               Pairwise Order Concordance
             </span>
-            <div className="font-display text-4xl text-[#f1f0e9]">
+            <div className="font-display text-4xl text-foreground">
               {metrics.concordancePercentage !== null ? `${metrics.concordancePercentage}%` : "—"}
             </div>
-            <p className="text-[11px] text-[#6c7d73]">
+            <p className="text-[11px] text-muted-foreground">
               Of comparable pairs agree in relative preference ranking.
             </p>
           </div>
 
-          <div className="p-6 rounded-xl border border-[#2b3830] bg-[#141a17] space-y-2">
-            <span className="text-xs uppercase tracking-wider text-[#8fa095] block">
+          <div className="p-6 rounded-xl border border-border bg-card space-y-2">
+            <span className="text-xs uppercase tracking-wider text-muted-foreground block">
               Mean Score Gap
             </span>
-            <div className="font-display text-4xl text-[#89d5d5]">
+            <div className="font-display text-4xl text-primary">
               {metrics.meanScoreDifference !== null ? `${metrics.meanScoreDifference} pts` : "—"}
             </div>
-            <p className="text-[11px] text-[#6c7d73]">
+            <p className="text-[11px] text-muted-foreground">
               Average sensory score disparity across {metrics.overlappingCount} shared titles.
             </p>
           </div>
@@ -324,11 +324,11 @@ function ComparePageContent() {
         {/* Sharpest Disagreements Spotlight */}
         {metrics.divergentItems.length > 0 && (
           <section className="space-y-4">
-            <div className="flex items-center justify-between border-b border-[#232d27] pb-2">
-              <h3 className="font-display text-2xl uppercase tracking-tight text-[#f1f0e9]">
+            <div className="flex items-center justify-between border-b border-border pb-2">
+              <h3 className="font-display text-2xl uppercase tracking-tight text-foreground">
                 Sharpest Critical Disputes
               </h3>
-              <span className="text-xs text-[#8fa095]">
+              <span className="text-xs text-muted-foreground">
                 Ranked by maximum positional displacement
               </span>
             </div>
@@ -341,19 +341,19 @@ function ComparePageContent() {
                 return (
                   <div
                     key={item.mediaItemId}
-                    className="p-5 rounded-xl border border-[#2b3830] bg-[#141a17] space-y-3"
+                    className="p-5 rounded-xl border border-border bg-card space-y-3"
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <h4 className="font-display text-lg uppercase text-[#f1f0e9] leading-tight">
+                      <h4 className="font-display text-lg uppercase text-foreground leading-tight">
                         {item.title}
                       </h4>
                       <div
                         className={`inline-flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-bold shrink-0 ${
                           isTied
-                            ? "bg-[#232d27] text-[#8fa095]"
+                            ? "bg-surface text-muted-foreground border border-border"
                             : Math.abs(item.rankDelta) >= 3
-                              ? "bg-[#450a0a] text-[#f87171] border border-[#7f1d1d]"
-                              : "bg-[#1b2520] text-[#89d5d5] border border-[#3b4c40]"
+                              ? "bg-red-500/10 text-red-400 border border-red-500/30"
+                              : "bg-primary/10 text-primary border border-primary/30"
                         }`}
                       >
                         {isLeftHigher ? (
@@ -375,26 +375,26 @@ function ComparePageContent() {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-[#232d27] text-xs">
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border text-xs">
                       <div className="space-y-0.5">
-                        <span className="text-[10px] text-[#6c7d73] block">
+                        <span className="text-[10px] text-muted-foreground block">
                           {leftCollection.user.name || "Left"}&apos;s Rank
                         </span>
-                        <div className="font-display text-lg text-[#f1f0e9]">
+                        <div className="font-display text-lg text-foreground">
                           #{item.leftRank}{" "}
-                          <span className="text-xs font-sans text-[#89d5d5]">
+                          <span className="text-xs font-sans text-primary">
                             ({item.leftScore !== null ? item.leftScore.toFixed(1) : "—"})
                           </span>
                         </div>
                       </div>
 
                       <div className="space-y-0.5">
-                        <span className="text-[10px] text-[#6c7d73] block">
+                        <span className="text-[10px] text-muted-foreground block">
                           {rightCollection.user.name || "Right"}&apos;s Rank
                         </span>
-                        <div className="font-display text-lg text-[#f1f0e9]">
+                        <div className="font-display text-lg text-foreground">
                           #{item.rightRank}{" "}
-                          <span className="text-xs font-sans text-[#89d5d5]">
+                          <span className="text-xs font-sans text-primary">
                             ({item.rightScore !== null ? item.rightScore.toFixed(1) : "—"})
                           </span>
                         </div>
@@ -409,18 +409,18 @@ function ComparePageContent() {
 
         {/* Full Comparative Breakdown */}
         <section className="space-y-4">
-          <div className="flex items-center justify-between border-b border-[#232d27] pb-2">
-            <h3 className="font-display text-2xl uppercase tracking-tight text-[#f1f0e9]">
+          <div className="flex items-center justify-between border-b border-border pb-2">
+            <h3 className="font-display text-2xl uppercase tracking-tight text-foreground">
               Side-by-Side Canon Calibration
             </h3>
-            <span className="text-xs text-[#8fa095]">
+            <span className="text-xs text-muted-foreground">
               {metrics.overlappingCount} Shared Titles
             </span>
           </div>
 
-          <div className="overflow-x-auto rounded-xl border border-[#2b3830] bg-[#141a17]">
+          <div className="overflow-x-auto rounded-xl border border-border bg-card">
             <table className="w-full text-left text-xs">
-              <thead className="bg-[#18211d] text-[#8fa095] uppercase font-semibold text-[10px] tracking-wider border-b border-[#2b3830]">
+              <thead className="bg-surface text-muted-foreground uppercase font-semibold text-[10px] tracking-wider border-b border-border">
                 <tr>
                   <th className="py-3 px-4">Title</th>
                   <th className="py-3 px-4 text-center">
@@ -434,31 +434,31 @@ function ComparePageContent() {
                   <th className="py-3 px-4 text-right">Right Score</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#232d27]">
+              <tbody className="divide-y divide-border">
                 {metrics.concordantItems.map((item) => (
-                  <tr key={item.mediaItemId} className="hover:bg-[#1a241f] transition-colors">
-                    <td className="py-3 px-4 font-medium text-[#f1f0e9]">
+                  <tr key={item.mediaItemId} className="hover:bg-surface transition-colors">
+                    <td className="py-3 px-4 font-medium text-foreground">
                       {item.title}
                     </td>
-                    <td className="py-3 px-4 text-center font-display text-base text-[#89d5d5]">
+                    <td className="py-3 px-4 text-center font-display text-base text-primary">
                       #{item.leftRank}
                     </td>
-                    <td className="py-3 px-4 text-center font-display text-base text-[#89d5d5]">
+                    <td className="py-3 px-4 text-center font-display text-base text-primary">
                       #{item.rightRank}
                     </td>
                     <td className="py-3 px-4 text-center font-mono">
                       {item.leftRank === item.rightRank ? (
-                        <span className="text-[#6c7d73]">0</span>
+                        <span className="text-muted-foreground">0</span>
                       ) : item.leftRank < item.rightRank ? (
-                        <span className="text-[#4ade80]">+{item.rightRank - item.leftRank}</span>
+                        <span className="text-emerald-400">+{item.rightRank - item.leftRank}</span>
                       ) : (
-                        <span className="text-[#f87171]">-{item.leftRank - item.rightRank}</span>
+                        <span className="text-red-400">-{item.leftRank - item.rightRank}</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-right font-medium text-[#e5ece5]">
+                    <td className="py-3 px-4 text-right font-medium text-foreground">
                       {item.leftScore !== null ? item.leftScore.toFixed(1) : "—"}
                     </td>
-                    <td className="py-3 px-4 text-right font-medium text-[#e5ece5]">
+                    <td className="py-3 px-4 text-right font-medium text-foreground">
                       {item.rightScore !== null ? item.rightScore.toFixed(1) : "—"}
                     </td>
                   </tr>
@@ -476,7 +476,7 @@ export default function ComparePage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen bg-[#111514] flex flex-col items-center justify-center gap-3 text-[#89d5d5]">
+        <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-3 text-primary">
           <Loader2 className="h-8 w-8 animate-spin" />
         </div>
       }
