@@ -308,6 +308,94 @@ export const artworkOverrides = pgTable(
 );
 
 // ==========================================
+// SOCIAL TABLES (STAGE 5)
+// ==========================================
+
+export const follows = pgTable(
+  "follows",
+  {
+    id: text("id").primaryKey(),
+    followerId: text("follower_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    followingId: text("following_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uniq_follower_following").on(
+      table.followerId,
+      table.followingId
+    ),
+    index("idx_follows_follower").on(table.followerId),
+    index("idx_follows_following").on(table.followingId),
+  ]
+);
+
+export const likes = pgTable(
+  "likes",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    collectionId: text("collection_id")
+      .notNull()
+      .references(() => collections.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uniq_user_collection_like").on(
+      table.userId,
+      table.collectionId
+    ),
+    index("idx_likes_collection").on(table.collectionId),
+    index("idx_likes_user").on(table.userId),
+  ]
+);
+
+export const comments = pgTable(
+  "comments",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    collectionId: text("collection_id")
+      .notNull()
+      .references(() => collections.id, { onDelete: "cascade" }),
+    content: text("content").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_comments_collection").on(table.collectionId, table.createdAt),
+    index("idx_comments_user").on(table.userId),
+  ]
+);
+
+export const feedActivities = pgTable(
+  "feed_activities",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    activityType: text("activity_type").notNull(), // 'published_collection' | 'rated_entry' | 'liked_collection'
+    collectionId: text("collection_id").references(() => collections.id, {
+      onDelete: "cascade",
+    }),
+    metadata: text("metadata"), // JSON string
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_feed_activities_user_created").on(table.userId, table.createdAt),
+    index("idx_feed_activities_collection").on(table.collectionId),
+  ]
+);
+
+// ==========================================
 // RELATIONS
 // ==========================================
 
@@ -318,6 +406,11 @@ export const userRelations = relations(user, ({ many }) => ({
   ratings: many(ratings),
   ratingSystems: many(ratingSystems),
   artworkOverrides: many(artworkOverrides),
+  followsGiven: many(follows, { relationName: "follower" }),
+  followsReceived: many(follows, { relationName: "following" }),
+  likes: many(likes),
+  comments: many(comments),
+  feedActivities: many(feedActivities),
 }));
 
 export const mediaItemsRelations = relations(mediaItems, ({ many, one }) => ({
@@ -341,6 +434,9 @@ export const collectionsRelations = relations(collections, ({ one, many }) => ({
   }),
   entries: many(collectionEntries),
   ratings: many(ratings),
+  likes: many(likes),
+  comments: many(comments),
+  feedActivities: many(feedActivities),
 }));
 
 export const collectionEntriesRelations = relations(
@@ -435,4 +531,51 @@ export const accountRelations = relations(account, ({ one }) => ({
     references: [user.id],
   }),
 }));
+
+export const followsRelations = relations(follows, ({ one }) => ({
+  follower: one(user, {
+    fields: [follows.followerId],
+    references: [user.id],
+    relationName: "follower",
+  }),
+  following: one(user, {
+    fields: [follows.followingId],
+    references: [user.id],
+    relationName: "following",
+  }),
+}));
+
+export const likesRelations = relations(likes, ({ one }) => ({
+  user: one(user, {
+    fields: [likes.userId],
+    references: [user.id],
+  }),
+  collection: one(collections, {
+    fields: [likes.collectionId],
+    references: [collections.id],
+  }),
+}));
+
+export const commentsRelations = relations(comments, ({ one }) => ({
+  user: one(user, {
+    fields: [comments.userId],
+    references: [user.id],
+  }),
+  collection: one(collections, {
+    fields: [comments.collectionId],
+    references: [collections.id],
+  }),
+}));
+
+export const feedActivitiesRelations = relations(feedActivities, ({ one }) => ({
+  user: one(user, {
+    fields: [feedActivities.userId],
+    references: [user.id],
+  }),
+  collection: one(collections, {
+    fields: [feedActivities.collectionId],
+    references: [collections.id],
+  }),
+}));
+
 

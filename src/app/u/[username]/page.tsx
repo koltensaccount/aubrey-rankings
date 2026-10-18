@@ -1,11 +1,12 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/db";
-import { user, collections, ratings } from "@/db/schema";
+import { user, collections, ratings, follows } from "@/db/schema";
 import { eq, and, desc, sql, isNotNull } from "drizzle-orm";
 import { getServerSession } from "@/lib/server-session";
 import { normalizeUsername } from "@/lib/username";
 import { getTmdbImageUrl } from "@/lib/tmdb";
+import { FollowButton } from "@/components/social/follow-button";
 import {
   ArrowRight,
   Calendar,
@@ -74,6 +75,28 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
     },
   });
 
+  // 5. Fetch follow stats
+  const followersCountRes = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(follows)
+    .where(eq(follows.followingId, targetUser.id));
+  const followersCount = Number(followersCountRes[0]?.count || 0);
+
+  const followingCountRes = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(follows)
+    .where(eq(follows.followerId, targetUser.id));
+  const followingCount = Number(followingCountRes[0]?.count || 0);
+
+  let isFollowing = false;
+  if (session && !isOwnProfile) {
+    const followRecord = await db.query.follows.findFirst({
+      where: (f, { and, eq }) =>
+        and(eq(f.followerId, session.user.id), eq(f.followingId, targetUser.id)),
+    });
+    isFollowing = !!followRecord;
+  }
+
   // Identify pinned collection
   const pinnedCollection =
     publicCollections.find((c) => c.isPinned) || publicCollections[0];
@@ -138,23 +161,16 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
               </div>
             </div>
 
-            {/* Actions */}
+            {/* Actions: Interactive Follow Button & Stats */}
             <div className="flex items-center gap-2 self-stretch sm:self-auto justify-end">
-              {isOwnProfile ? (
-                <Link
-                  href="/settings?tab=account"
-                  className="px-4 py-2 rounded-lg border border-[#303b34] bg-[#18211d] hover:bg-[#202c26] text-xs font-semibold text-[#f1f0e9] transition-all"
-                >
-                  Edit Profile
-                </Link>
-              ) : (
-                <button
-                  type="button"
-                  className="px-5 py-2 rounded-lg bg-[#89d5d5] hover:bg-[#a0dede] text-[#111514] font-display text-xs font-bold uppercase tracking-wider transition-all cursor-pointer"
-                >
-                  Follow
-                </button>
-              )}
+              <FollowButton
+                targetUserId={targetUser.id}
+                targetUsername={targetUser.username || ""}
+                initialIsFollowing={isFollowing}
+                initialFollowersCount={followersCount}
+                initialFollowingCount={followingCount}
+                isOwnProfile={isOwnProfile}
+              />
             </div>
           </div>
         </div>

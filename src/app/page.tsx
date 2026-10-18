@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { collections, ratings } from "@/db/schema";
-import { desc, eq, sql } from "drizzle-orm";
-import { Plus, ArrowRight, Tv, Film, ListPlus, ArrowUpRight } from "lucide-react";
+import { collections, ratings, follows } from "@/db/schema";
+import { desc, eq, sql, and, ne, or } from "drizzle-orm";
+import { Plus, ArrowRight, Tv, Film, ListPlus, ArrowUpRight, Globe, Users } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 
 export default async function HomePage() {
@@ -145,6 +145,32 @@ export default async function HomePage() {
 
   const pinnedCollection = userCollections.find((c) => c.isPinned) || userCollections[0];
   const otherCollections = userCollections.filter((c) => c.id !== pinnedCollection?.id);
+
+  // Community discovery canons
+  const communityCanons = await db.query.collections.findMany({
+    where: (c, { and, ne, or, eq }) =>
+      and(
+        ne(c.userId, session.user.id),
+        or(eq(c.visibility, "public"), eq(c.isPublic, true))
+      ),
+    orderBy: [desc(collections.updatedAt)],
+    limit: 6,
+    with: {
+      user: {
+        columns: {
+          id: true,
+          name: true,
+          username: true,
+          image: true,
+        },
+      },
+      entries: {
+        limit: 4,
+        with: { mediaItem: true },
+      },
+      ratings: true,
+    },
+  });
 
   return (
     <div className="ar-homeContent ar-communityHome">
@@ -373,6 +399,103 @@ export default async function HomePage() {
                           </div>
                           <ArrowRight size={18} className="text-[#8fa597] shrink-0" />
                         </Link>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
+
+            {/* COMMUNITY DISPATCH & DISCOVERY */}
+            {communityCanons.length > 0 && (
+              <section className="space-y-4 pt-6">
+                <div className="flex items-center justify-between pb-2 border-b border-[#28342d]">
+                  <div className="flex items-center gap-2">
+                    <Globe size={16} className="text-[#89d5d5]" />
+                    <h2 className="font-display text-2xl uppercase text-[#f1f0e9]">
+                      Community Dispatches & Canons
+                    </h2>
+                  </div>
+                  <span className="text-xs text-[#8fa095]">
+                    {communityCanons.length} public canons
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {communityCanons.map((col) => {
+                    const creatorInitial = (
+                      col.user.name ||
+                      col.user.username ||
+                      "U"
+                    )
+                      .charAt(0)
+                      .toUpperCase();
+
+                    return (
+                      <article
+                        key={col.id}
+                        className="rounded-xl border border-[#303b34] bg-[#141a17] p-5 space-y-4 hover:border-[#89d5d5]/40 transition-colors"
+                      >
+                        <div className="flex items-center justify-between">
+                          <Link
+                            href={
+                              col.user.username ? `/u/${col.user.username}` : "#"
+                            }
+                            className="flex items-center gap-2.5 text-xs group"
+                          >
+                            <div className="h-6 w-6 rounded-full bg-[#1b2520] border border-[#3b4c40] flex items-center justify-center font-bold text-[#89d5d5] overflow-hidden">
+                              {col.user.image ? (
+                                <img
+                                  src={col.user.image}
+                                  alt={col.user.name || "User"}
+                                  className="h-full w-full object-cover"
+                                />
+                              ) : (
+                                creatorInitial
+                              )}
+                            </div>
+                            <div>
+                              <span className="font-medium text-[#f1f0e9] group-hover:text-[#89d5d5] transition-colors block leading-tight">
+                                {col.user.name || `@${col.user.username}`}
+                              </span>
+                              {col.user.username && (
+                                <span className="text-[10px] text-[#5a6a61] font-mono">
+                                  @{col.user.username}
+                                </span>
+                              )}
+                            </div>
+                          </Link>
+                          <span className="text-[10px] font-mono uppercase tracking-wider text-[#89d5d5] px-2 py-0.5 rounded bg-[#1b2520] border border-[#3b4c40]">
+                            {col.collectionType === "tv_show"
+                              ? "TV Series"
+                              : "Canon"}
+                          </span>
+                        </div>
+
+                        <Link
+                          href={`/collection/${col.id}`}
+                          className="block space-y-1.5 group"
+                        >
+                          <h3 className="font-display text-xl uppercase text-[#f1f0e9] group-hover:text-[#89d5d5] transition-colors">
+                            {col.title}
+                          </h3>
+                          {col.description && (
+                            <p className="text-xs text-[#9aa79e] line-clamp-2 leading-relaxed">
+                              {col.description}
+                            </p>
+                          )}
+                        </Link>
+
+                        <div className="flex items-center justify-between pt-2 border-t border-[#232d27] text-xs text-[#6e7f74]">
+                          <span>{col.entries.length} items</span>
+                          <Link
+                            href={`/collection/${col.id}`}
+                            className="inline-flex items-center gap-1 text-[#89d5d5] hover:text-[#cef6f0] text-xs font-semibold"
+                          >
+                            <span>Explore canon</span>
+                            <ArrowRight size={13} />
+                          </Link>
+                        </div>
                       </article>
                     );
                   })}

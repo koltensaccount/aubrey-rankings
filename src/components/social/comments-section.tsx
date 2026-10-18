@@ -1,0 +1,282 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { MessageSquare, Send, Trash2, Loader2, User } from "lucide-react";
+
+interface CommentItem {
+  id: string;
+  content: string;
+  createdAt: string;
+  isAuthor: boolean;
+  isCollectionOwner: boolean;
+  author: {
+    id: string;
+    name: string | null;
+    username: string | null;
+    image: string | null;
+  };
+}
+
+interface CommentsSectionProps {
+  collectionId: string;
+  isOwner?: boolean;
+}
+
+export function CommentsSection({
+  collectionId,
+  isOwner = false,
+}: CommentsSectionProps) {
+  const [comments, setComments] = useState<CommentItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [newContent, setNewContent] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    async function loadComments() {
+      try {
+        setLoading(true);
+        const res = await fetch(`/api/social/comments?collectionId=${collectionId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (active) {
+            setComments(data.comments || []);
+          }
+        }
+      } catch (err) {
+        // Silently ignore initial fetch errors
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    loadComments();
+    return () => {
+      active = false;
+    };
+  }, [collectionId]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const content = newContent.trim();
+    if (!content || submitting) return;
+
+    setSubmitting(true);
+    setError(null);
+
+    try {
+      const res = await fetch("/api/social/comments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ collectionId, content }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to post comment");
+      }
+
+      const data = await res.json();
+      setComments((prev) => [...prev, data.comment]);
+      setNewContent("");
+    } catch (err: any) {
+      setError(err?.message || "Failed to post comment");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (commentId: string) => {
+    if (deletingId) return;
+    setDeletingId(commentId);
+
+    try {
+      const res = await fetch(`/api/social/comments/${commentId}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        setComments((prev) => prev.filter((c) => c.id !== commentId));
+      }
+    } catch (err) {
+      console.error("Failed to delete comment", err);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const formatCommentDate = (dateStr: string) => {
+    try {
+      const date = new Date(dateStr);
+      const now = new Date();
+      const diffMs = now.getTime() - date.getTime();
+      const diffMins = Math.floor(diffMs / (1000 * 60));
+      const diffHours = Math.floor(diffMins / 60);
+      const diffDays = Math.floor(diffHours / 24);
+
+      if (diffMins < 1) return "Just now";
+      if (diffMins < 60) return `${diffMins}m ago`;
+      if (diffHours < 24) return `${diffHours}h ago`;
+      if (diffDays < 7) return `${diffDays}d ago`;
+
+      return date.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      });
+    } catch {
+      return "Recently";
+    }
+  };
+
+  return (
+    <section className="mt-14 pt-10 border-t border-[#232d27] space-y-8">
+      {/* Section Header */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <MessageSquare className="h-5 w-5 text-[#89d5d5]" />
+          <h2 className="font-display text-2xl uppercase tracking-tight text-[#f1f0e9]">
+            Critical Notes & Discussion
+          </h2>
+          <span className="px-2 py-0.5 rounded-full bg-[#1b2520] border border-[#3b4c40] text-xs font-semibold text-[#89d5d5]">
+            {comments.length}
+          </span>
+        </div>
+      </div>
+
+      {/* Post Comment Input */}
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div className="relative rounded-xl border border-[#303b34] bg-[#141a17] focus-within:border-[#89d5d5]/60 transition-colors">
+          <textarea
+            value={newContent}
+            onChange={(e) => setNewContent(e.target.value)}
+            maxLength={2000}
+            rows={3}
+            placeholder="Add a note, debate category scores, or comment on this ranking..."
+            className="w-full bg-transparent p-4 text-sm text-[#f1f0e9] placeholder-[#5a6a61] resize-none focus:outline-none"
+          />
+          <div className="flex items-center justify-between px-4 pb-3 pt-1 border-t border-[#232d27]/60 text-xs text-[#5a6a61]">
+            <span>{newContent.length}/2,000 characters</span>
+            <button
+              type="submit"
+              disabled={submitting || !newContent.trim() || newContent.length > 2000}
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-[#89d5d5] hover:bg-[#a2e5e5] disabled:opacity-40 disabled:hover:bg-[#89d5d5] text-[#102523] font-semibold text-xs transition-colors shadow-sm shadow-[#89d5d5]/15"
+            >
+              {submitting ? (
+                <Loader2 size={13} className="animate-spin" />
+              ) : (
+                <Send size={12} />
+              )}
+              <span>Post Note</span>
+            </button>
+          </div>
+        </div>
+        {error && <p className="text-xs text-[#f87171]">{error}</p>}
+      </form>
+
+      {/* Comments List */}
+      {loading ? (
+        <div className="flex items-center justify-center py-10 text-[#5a6a61]">
+          <Loader2 className="h-5 w-5 animate-spin" />
+        </div>
+      ) : comments.length === 0 ? (
+        <div className="py-8 text-center text-xs text-[#6e7f74] border border-dashed border-[#232d27] rounded-xl">
+          No critical notes yet. Be the first to comment on this canon.
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {comments.map((item) => {
+            const authorInitial = (
+              item.author.name ||
+              item.author.username ||
+              "U"
+            )
+              .charAt(0)
+              .toUpperCase();
+
+            const profileHref = item.author.username
+              ? `/u/${item.author.username}`
+              : null;
+
+            return (
+              <div
+                key={item.id}
+                className="group relative rounded-xl border border-[#27332c] bg-[#141a17]/80 hover:bg-[#141a17] p-4 transition-colors space-y-2.5"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    {profileHref ? (
+                      <Link
+                        href={profileHref}
+                        className="h-7 w-7 rounded-full bg-[#1b2520] border border-[#3b4c40] flex items-center justify-center text-xs font-semibold text-[#89d5d5] hover:border-[#89d5d5] transition-colors shrink-0 overflow-hidden"
+                      >
+                        {item.author.image ? (
+                          <img
+                            src={item.author.image}
+                            alt={item.author.name || "User"}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          authorInitial
+                        )}
+                      </Link>
+                    ) : (
+                      <div className="h-7 w-7 rounded-full bg-[#1b2520] border border-[#3b4c40] flex items-center justify-center text-xs font-semibold text-[#89d5d5] shrink-0">
+                        {authorInitial}
+                      </div>
+                    )}
+
+                    <div className="flex items-center gap-2 text-xs">
+                      {profileHref ? (
+                        <Link
+                          href={profileHref}
+                          className="font-medium text-[#f1f0e9] hover:text-[#89d5d5] transition-colors"
+                        >
+                          {item.author.name || `@${item.author.username}`}
+                        </Link>
+                      ) : (
+                        <span className="font-medium text-[#f1f0e9]">
+                          {item.author.name || "Anonymous Critic"}
+                        </span>
+                      )}
+
+                      {item.author.username && (
+                        <span className="text-[#5a6a61]">@{item.author.username}</span>
+                      )}
+
+                      <span className="text-[#3b4c40]">·</span>
+                      <span className="text-[#5a6a61]">
+                        {formatCommentDate(item.createdAt)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {(item.isAuthor || item.isCollectionOwner || isOwner) && (
+                    <button
+                      onClick={() => handleDelete(item.id)}
+                      disabled={deletingId === item.id}
+                      className="opacity-0 group-hover:opacity-100 p-1 text-[#6e7f74] hover:text-[#f87171] transition-opacity"
+                      title={item.isAuthor ? "Delete your note" : "Moderate note"}
+                      aria-label="Delete comment"
+                    >
+                      {deletingId === item.id ? (
+                        <Loader2 size={13} className="animate-spin" />
+                      ) : (
+                        <Trash2 size={13} />
+                      )}
+                    </button>
+                  )}
+                </div>
+
+                <p className="text-xs sm:text-sm text-[#c8d4cd] leading-relaxed pl-9 whitespace-pre-line">
+                  {item.content}
+                </p>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
+  );
+}

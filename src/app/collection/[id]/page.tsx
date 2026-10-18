@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { RatingDialog } from "@/components/rating-dialog";
+import { LikeButton } from "@/components/social/like-button";
+import { CommentsSection } from "@/components/social/comments-section";
 
 type SortOption = "score_desc" | "score_asc" | "order" | "title";
 type FilterOption = "all" | "rated" | "unrated";
@@ -287,6 +289,7 @@ export default function CollectionDetailPage({
                   </button>
                 </div>
               )}
+              <LikeButton collectionId={collection.id} />
               <span className="text-[11px] font-mono text-[#89d5d5]">
                 {collection.collectionType === "tv_show" ? "TV Anthology" : "Canon"} · {totalEntries} Entries
               </span>
@@ -557,6 +560,9 @@ export default function CollectionDetailPage({
             })}
           </div>
         )}
+
+        {/* Stage 5: Critical Notes & Discussion */}
+        <CommentsSection collectionId={collection.id} isOwner={isOwner} />
       </main>
 
       {/* Interactive Rating Dialog */}
