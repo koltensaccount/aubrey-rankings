@@ -48,7 +48,7 @@ export function FollowButton({
           </div>
         )}
         <Link
-          href="/settings"
+          href="/settings?tab=account"
           className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-border bg-surface hover:bg-surface-elevated text-xs font-semibold text-foreground transition-colors"
         >
           <Settings size={13} className="text-primary" />

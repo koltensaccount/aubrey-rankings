@@ -343,12 +343,19 @@ export function CollectionHeader({
 
                 {isOwner && (
                   <div className="pt-2 border-t border-border flex items-center justify-between">
-                    <Link
-                      href="/settings"
-                      className="text-[11px] text-primary-text hover:underline flex items-center gap-1 font-semibold"
+                    <button
+                      type="button"
+                      onClick={onOpenRubricModal}
+                      className="text-[11px] text-primary-text hover:underline flex items-center gap-1 font-semibold cursor-pointer"
                     >
                       <Layers size={12} />
-                      <span>Manage Tiers in Settings</span>
+                      <span>Customize Tiers</span>
+                    </button>
+                    <Link
+                      href={`/settings?tab=rating_systems${collection.defaultRatingSystem?.id ? `&systemId=${collection.defaultRatingSystem.id}` : ""}`}
+                      className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Manage in Settings
                     </Link>
                   </div>
                 )}
@@ -392,7 +399,7 @@ export function CollectionHeader({
                       <span>Adjust Rubric Weights</span>
                     </button>
                     <Link
-                      href="/settings"
+                      href={`/settings?tab=rating_systems&systemId=${collection.defaultRatingSystem.id}`}
                       className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
                     >
                       Manage in Settings

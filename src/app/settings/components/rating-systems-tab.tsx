@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Plus,
   Star,
@@ -31,10 +31,11 @@ const COLOR_SWATCHES = [
   "#64748B", // Slate
 ];
 
-export function RatingSystemsTab() {
+export function RatingSystemsTab({ initialSystemId }: { initialSystemId?: string } = {}) {
   const [ratingSystems, setRatingSystems] = useState<any[]>([]);
   const [loadingSystems, setLoadingSystems] = useState(false);
   const [editingSystem, setEditingSystem] = useState<any | null>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryWeight, setNewCategoryWeight] = useState("5");
   const [saveSuccess, setSaveSuccess] = useState(false);
@@ -45,8 +46,8 @@ export function RatingSystemsTab() {
   const [showCreateDropdown, setShowCreateDropdown] = useState(false);
 
   useEffect(() => {
-    fetchRatingSystems();
-  }, []);
+    fetchRatingSystems(initialSystemId);
+  }, [initialSystemId]);
 
   const fetchRatingSystems = async (selectedId?: string) => {
     setLoadingSystems(true);
@@ -59,6 +60,9 @@ export function RatingSystemsTab() {
           if (selectedId) {
             const found = data.find((s: any) => s.id === selectedId);
             setEditingSystem(found || data[0]);
+            setTimeout(() => {
+              editorRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+            }, 50);
           } else if (!editingSystem || !data.some((s: any) => s.id === editingSystem.id)) {
             setEditingSystem(data[0]);
           } else {
@@ -486,7 +490,7 @@ export function RatingSystemsTab() {
       </div>
 
       {/* Right Column: Active System Editor */}
-      <div className="lg:col-span-8">
+      <div ref={editorRef} className="lg:col-span-8 scroll-mt-6">
         {editingSystem ? (
           <div className="p-6 rounded-card border border-border-card bg-card space-y-6 shadow-card">
             {/* System Template Read-Only Notice */}

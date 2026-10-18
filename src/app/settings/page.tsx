@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   Palette,
   Bell,
   Sliders,
   User,
   FileSpreadsheet,
+  Shield,
 } from "lucide-react";
 import { AppearanceTab } from "./components/appearance-tab";
 import { NotificationsTab } from "./components/notifications-tab";
@@ -14,7 +16,6 @@ import { RatingSystemsTab } from "./components/rating-systems-tab";
 import { AccountTab } from "./components/account-tab";
 import { DataTab } from "./components/data-tab";
 import { PrivacyTab } from "./components/privacy-tab";
-import { Shield } from "lucide-react";
 
 type SettingsTab =
   | "appearance"
@@ -24,8 +25,32 @@ type SettingsTab =
   | "account"
   | "data";
 
-export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<SettingsTab>("appearance");
+const VALID_TABS: SettingsTab[] = [
+  "appearance",
+  "notifications",
+  "privacy_safety",
+  "rating_systems",
+  "account",
+  "data",
+];
+
+function SettingsContent() {
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab") as SettingsTab | null;
+  const systemIdParam = searchParams.get("systemId") || undefined;
+
+  const [activeTab, setActiveTab] = useState<SettingsTab>(() => {
+    if (tabParam && VALID_TABS.includes(tabParam)) {
+      return tabParam;
+    }
+    return "appearance";
+  });
+
+  useEffect(() => {
+    if (tabParam && VALID_TABS.includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
@@ -127,9 +152,17 @@ export default function SettingsPage() {
       {activeTab === "appearance" && <AppearanceTab />}
       {activeTab === "notifications" && <NotificationsTab />}
       {activeTab === "privacy_safety" && <PrivacyTab />}
-      {activeTab === "rating_systems" && <RatingSystemsTab />}
+      {activeTab === "rating_systems" && <RatingSystemsTab initialSystemId={systemIdParam} />}
       {activeTab === "account" && <AccountTab />}
       {activeTab === "data" && <DataTab />}
     </div>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={<div className="max-w-5xl mx-auto px-4 py-10 text-muted-foreground text-xs">Loading settings...</div>}>
+      <SettingsContent />
+    </Suspense>
   );
 }

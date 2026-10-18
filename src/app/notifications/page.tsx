@@ -217,7 +217,7 @@ export default function NotificationsPage() {
               </button>
             )}
             <Link
-              href="/settings"
+              href="/settings?tab=notifications"
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border/60 hover:border-border text-xs text-muted-foreground hover:text-foreground transition-colors"
             >
               Preferences

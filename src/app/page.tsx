@@ -221,7 +221,9 @@ export default async function HomePage() {
             <strong className="text-primary font-semibold">{meanScore}</strong> mean /10
           </span>
           <span className="text-muted-foreground/60">·</span>
-          <span className="text-primary ml-auto font-medium">Weighted Rubric</span>
+          <Link href="/settings?tab=rating_systems" className="text-primary ml-auto font-medium hover:underline">
+            Weighted Rubric
+          </Link>
         </div>
 
         {/* =========================================================================
@@ -240,7 +242,7 @@ export default async function HomePage() {
             </div>
             <div className="flex flex-wrap justify-center gap-3 pt-2">
               <Link
-                href="/create?type=tv_show&suggest=Black+Mirror"
+                href="/create?type=tv_show"
                 className="px-4 py-2.5 rounded-lg bg-secondary hover:bg-muted text-secondary-foreground border border-border text-xs font-semibold flex items-center gap-2 transition-colors"
               >
                 <Tv className="h-4 w-4 text-primary" />
