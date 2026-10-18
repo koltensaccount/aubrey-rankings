@@ -3,7 +3,7 @@ import { execSync } from "node:child_process";
 import { chromium } from "playwright";
 
 const PROD_URL = "https://aubrey.koltensserver.com";
-const EXPECTED_REV = "aadad9b3ae1ea85383f7238a02c8e4b48e4ddb60";
+const EXPECTED_REV = "7076253017385377e48ee942eedd09627c7b9e44";
 const ARTIFACT_DIR = "/Users/koltenbendickson/.gemini/antigravity/brain/8591bb2b-8368-419b-9f66-7b4f133406f9";
 
 function sshPsql(sql: string): string {
