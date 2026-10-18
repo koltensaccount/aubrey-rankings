@@ -8,6 +8,7 @@ export function NotificationsTab() {
     notifyFollows: true,
     notifyLikes: true,
     notifyComments: true,
+    notifyReplies: true,
     notifyTvReleases: true,
     notifyMovieReleases: true,
   });
@@ -134,7 +135,7 @@ export function NotificationsTab() {
             <div>
               <h4 className="text-sm font-semibold text-foreground">Comments</h4>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Receive an alert when another user leaves a comment or note on your rankings.
+                Receive an alert when another user leaves a comment on your rankings.
               </p>
             </div>
             <button
@@ -147,6 +148,28 @@ export function NotificationsTab() {
               <span
                 className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow-lg ring-0 transition duration-200 ease-in-out ${
                   notifPrefs.notifyComments ? "translate-x-5" : "translate-x-0"
+                }`}
+              />
+            </button>
+          </div>
+
+          <div className="py-4 flex items-center justify-between gap-4">
+            <div>
+              <h4 className="text-sm font-semibold text-foreground">Comment Replies</h4>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Receive an alert when someone replies to a comment you wrote.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => handleTogglePref("notifyReplies")}
+              className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${
+                notifPrefs.notifyReplies ? "bg-primary" : "bg-muted"
+              }`}
+            >
+              <span
+                className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-background shadow-lg ring-0 transition duration-200 ease-in-out ${
+                  notifPrefs.notifyReplies ? "translate-x-5" : "translate-x-0"
                 }`}
               />
             </button>

@@ -8,7 +8,7 @@ import { randomUUID } from "crypto";
 import { createNotification } from "@/lib/notifications";
 
 export async function GET(request: NextRequest) {
-  const session = await getServerSession();
+  const session = await getServerSession(request);
   const collectionId = request.nextUrl.searchParams.get("collectionId");
 
   if (!collectionId) {
@@ -50,7 +50,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession();
+  const session = await getServerSession(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -77,6 +77,12 @@ export async function POST(request: NextRequest) {
   const isPrivate = col.visibility === "private" || (!col.isPublic && col.visibility !== "unlisted");
   if (isPrivate && !isOwner) {
     return NextResponse.json({ error: "Collection not found" }, { status: 404 });
+  }
+
+  // Enforce authoritative blocking policy
+  const { canInteract } = await import("@/lib/safety");
+  if (!(await canInteract({ actorId: session.user.id, ownerId: col.userId }))) {
+    return NextResponse.json({ error: "Cannot interact with this content" }, { status: 403 });
   }
 
   const existing = await db.query.likes.findFirst({
@@ -142,7 +148,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const session = await getServerSession();
+  const session = await getServerSession(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

@@ -27,6 +27,9 @@ export const user = pgTable(
     bio: text("bio"),
     preferredTheme: text("preferred_theme").default("dark"),
     accentColor: text("accent_color").default("#89D5D5"),
+    commentPermission: text("comment_permission").notNull().default("everyone"),
+    defaultReviewVisibility: text("default_review_visibility").notNull().default("private"),
+    defaultReviewSpoiler: boolean("default_review_spoiler").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -179,6 +182,7 @@ export const collections = pgTable(
     customCoverImage: text("custom_cover_image"),
     backdropImage: text("backdrop_image"),
     isPinned: boolean("is_pinned").notNull().default(false),
+    allowComments: boolean("allow_comments").notNull().default(true),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -425,6 +429,54 @@ export const feedActivities = pgTable(
   ]
 );
 
+export const userBlocks = pgTable(
+  "user_blocks",
+  {
+    id: text("id").primaryKey(),
+    blockerId: text("blocker_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    blockedId: text("blocked_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uniq_user_blocks_pair").on(table.blockerId, table.blockedId),
+    index("idx_user_blocks_blocker").on(table.blockerId),
+    index("idx_user_blocks_blocked").on(table.blockedId),
+  ]
+);
+
+export const contentReports = pgTable(
+  "content_reports",
+  {
+    id: text("id").primaryKey(),
+    reporterId: text("reporter_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    targetType: text("target_type").notNull(), // 'comment' | 'review' | 'ranking' | 'user'
+    targetId: text("target_id").notNull(),
+    reason: text("reason").notNull(), // 'harassment' | 'spam' | 'spoiler' | 'hate_speech' | 'inappropriate' | 'other'
+    details: text("details"),
+    status: text("status").notNull().default("open"), // 'open' | 'investigating' | 'resolved' | 'dismissed'
+    adminNotes: text("admin_notes"),
+    resolvedById: text("resolved_by_id").references(() => user.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uniq_content_reports_open")
+      .on(table.reporterId, table.targetType, table.targetId)
+      .where(sql`"status" = 'open'`),
+    index("idx_content_reports_target").on(table.targetType, table.targetId),
+    index("idx_content_reports_status").on(table.status),
+    index("idx_content_reports_reporter").on(table.reporterId),
+  ]
+);
+
 // ==========================================
 // RELATIONS
 // ==========================================
@@ -444,6 +496,9 @@ export const userRelations = relations(user, ({ many }) => ({
   notifications: many(notifications, { relationName: "recipient" }),
   releaseTrackingSubscriptions: many(releaseTrackingSubscriptions),
   savedRankings: many(savedRankings),
+  blocksGiven: many(userBlocks, { relationName: "blocker" }),
+  blocksReceived: many(userBlocks, { relationName: "blocked" }),
+  reportsSubmitted: many(contentReports, { relationName: "reporter" }),
 }));
 
 export const mediaItemsRelations = relations(mediaItems, ({ many, one }) => ({
@@ -701,6 +756,7 @@ export const notificationPreferences = pgTable("notification_preferences", {
   notifyFollows: boolean("notify_follows").notNull().default(true),
   notifyLikes: boolean("notify_likes").notNull().default(true),
   notifyComments: boolean("notify_comments").notNull().default(true),
+  notifyReplies: boolean("notify_replies").notNull().default(true),
   notifyTvReleases: boolean("notify_tv_releases").notNull().default(true),
   notifyMovieReleases: boolean("notify_movie_releases").notNull().default(true),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -790,6 +846,32 @@ export const releaseTrackingSubscriptionsRelations = relations(
     }),
   })
 );
+
+export const userBlocksRelations = relations(userBlocks, ({ one }) => ({
+  blocker: one(user, {
+    fields: [userBlocks.blockerId],
+    references: [user.id],
+    relationName: "blocker",
+  }),
+  blocked: one(user, {
+    fields: [userBlocks.blockedId],
+    references: [user.id],
+    relationName: "blocked",
+  }),
+}));
+
+export const contentReportsRelations = relations(contentReports, ({ one }) => ({
+  reporter: one(user, {
+    fields: [contentReports.reporterId],
+    references: [user.id],
+    relationName: "reporter",
+  }),
+  resolvedBy: one(user, {
+    fields: [contentReports.resolvedById],
+    references: [user.id],
+    relationName: "resolvedBy",
+  }),
+}));
 
 
 

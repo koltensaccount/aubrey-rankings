@@ -27,7 +27,7 @@ async function resolveTargetUserId(
 }
 
 export async function GET(request: NextRequest) {
-  const session = await getServerSession();
+  const session = await getServerSession(request);
   const targetUserId = await resolveTargetUserId(request);
 
   if (!targetUserId) {
@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession();
+  const session = await getServerSession(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -90,6 +90,12 @@ export async function POST(request: NextRequest) {
   });
   if (!targetUserExists) {
     return NextResponse.json({ error: "User not found" }, { status: 404 });
+  }
+
+  // Enforce authoritative blocking policy
+  const { canInteract } = await import("@/lib/safety");
+  if (!(await canInteract({ actorId: session.user.id, ownerId: targetUserId }))) {
+    return NextResponse.json({ error: "Cannot follow this user" }, { status: 403 });
   }
 
   // Insert follow record idempotently
@@ -147,7 +153,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const session = await getServerSession();
+  const session = await getServerSession(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

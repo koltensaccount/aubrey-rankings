@@ -5,7 +5,7 @@ import { collections, follows, likes, savedRankings, comments, ratings, user } f
 import { desc, eq, inArray, and, or, sql, isNotNull, ne } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
-  const session = await getServerSession();
+  const session = await getServerSession(request);
   const mode = request.nextUrl.searchParams.get("mode") || "discover";
   const filter = request.nextUrl.searchParams.get("filter") || "all"; // 'all' | 'rankings' | 'reviews'
   const requestedLimit = Number(request.nextUrl.searchParams.get("limit") || 25);
@@ -14,6 +14,8 @@ export async function GET(request: NextRequest) {
     : 25;
 
   let followingIds: string[] | null = null;
+  const { getBlockedUserIds } = await import("@/lib/safety");
+  const blockedUserIds = session ? await getBlockedUserIds(session.user.id) : new Set<string>();
 
   if (mode === "following") {
     if (!session) {
@@ -29,7 +31,9 @@ export async function GET(request: NextRequest) {
       .from(follows)
       .where(eq(follows.followerId, session.user.id));
 
-    followingIds = followingRows.map((r) => r.followingId);
+    followingIds = followingRows
+      .map((r) => r.followingId)
+      .filter((id) => !blockedUserIds.has(id));
 
     if (followingIds.length === 0) {
       return NextResponse.json({
@@ -43,14 +47,14 @@ export async function GET(request: NextRequest) {
   // 1. Fetch Public Rankings (if filter allows)
   let rankingItems: any[] = [];
   if (filter === "all" || filter === "rankings") {
-    const rawCollections = await db.query.collections.findMany({
+    const rawCollectionsData = await db.query.collections.findMany({
       where: (c, { and, inArray, eq }) =>
         and(
           followingIds ? inArray(c.userId, followingIds) : undefined,
           eq(c.visibility, "public") // Unlisted and private are strictly excluded
         ),
       orderBy: [desc(collections.updatedAt)],
-      limit,
+      limit: limit * 2,
       with: {
         user: {
           columns: {
@@ -74,6 +78,10 @@ export async function GET(request: NextRequest) {
         },
       },
     });
+
+    const rawCollections = rawCollectionsData
+      .filter((col) => !blockedUserIds.has(col.userId))
+      .slice(0, limit);
 
     const colIds = rawCollections.map((c) => c.id);
 
@@ -240,9 +248,12 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // Ensure associated collection is public
+    // Ensure associated collection is public and author is not blocked
     const publicRatings = rawRatings.filter(
-      (r) => r.collection && r.collection.visibility === "public"
+      (r) =>
+        r.collection &&
+        r.collection.visibility === "public" &&
+        !blockedUserIds.has(r.userId)
     );
 
     reviewItems = publicRatings.slice(0, limit).map((r) => ({

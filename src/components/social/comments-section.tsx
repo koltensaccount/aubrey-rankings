@@ -17,7 +17,9 @@ import {
   CornerDownRight,
   X,
   Check,
+  Flag,
 } from "lucide-react";
+import { ReportDialog } from "./report-dialog";
 import {
   Dialog,
   DialogContent,
@@ -101,6 +103,14 @@ export function CommentsSection({
   // Active popover menu ID tracking to close on action
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
 
+  // Community Safety & Comment Eligibility states
+  const [allowComments, setAllowComments] = useState(true);
+  const [canCommentUser, setCanCommentUser] = useState(true);
+  const [reportingTarget, setReportingTarget] = useState<{
+    id: string;
+    title?: string;
+  } | null>(null);
+
   const loadComments = useCallback(async () => {
     try {
       setLoading(true);
@@ -108,6 +118,8 @@ export function CommentsSection({
       if (res.ok) {
         const data = await res.json();
         setComments(data.comments || []);
+        if (data.allowComments !== undefined) setAllowComments(data.allowComments);
+        if (data.canComment !== undefined) setCanCommentUser(data.canComment);
       }
     } catch {
       // Silently ignore fetch errors
@@ -391,51 +403,58 @@ export function CommentsSection({
       </div>
 
       {/* Top-Level Post Note Composer */}
-      <form onSubmit={handleSubmitTopLevel} className="space-y-3">
-        <div className="relative rounded-input border border-border-input bg-card focus-within:border-primary/60 transition-colors">
-          <textarea
-            value={newContent}
-            onChange={(e) => setNewContent(e.target.value)}
-            maxLength={2000}
-            rows={3}
-            placeholder="Add a note, debate category scores, or comment on this ranking..."
-            className="w-full bg-transparent p-4 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none"
-          />
-          <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-3 pt-2 border-t border-border/60 text-xs text-muted-foreground">
-            <div className="flex items-center gap-4">
-              <span>{newContent.length}/2,000 characters</span>
-
-              {/* Spoiler Toggle */}
-              <label className="inline-flex items-center gap-1.5 cursor-pointer select-none text-muted-foreground hover:text-foreground transition-colors">
-                <input
-                  type="checkbox"
-                  checked={newIsSpoiler}
-                  onChange={(e) => setNewIsSpoiler(e.target.checked)}
-                  className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5"
-                />
-                <span className="inline-flex items-center gap-1">
-                  <AlertTriangle size={12} className={newIsSpoiler ? "text-amber-500" : ""} />
-                  Mark as spoiler
-                </span>
-              </label>
-            </div>
-
-            <button
-              type="submit"
-              disabled={submitting || !newContent.trim() || newContent.length > 2000}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-button bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:hover:bg-primary text-primary-foreground font-semibold text-xs transition-colors shadow-sm shadow-primary/15 cursor-pointer"
-            >
-              {submitting ? (
-                <Loader2 size={13} className="animate-spin" />
-              ) : (
-                <Send size={12} />
-              )}
-              <span>Post Note</span>
-            </button>
-          </div>
+      {!allowComments && !isOwner ? (
+        <div className="p-4 rounded-xl border border-border bg-surface/50 text-xs text-muted-foreground flex items-center gap-2.5">
+          <MessageSquare size={15} className="text-muted-foreground shrink-0" />
+          <span>Comments have been disabled for this ranking by the curator.</span>
         </div>
-        {error && <p className="text-xs text-destructive">{error}</p>}
-      </form>
+      ) : (
+        <form onSubmit={handleSubmitTopLevel} className="space-y-3">
+          <div className="relative rounded-input border border-border-input bg-card focus-within:border-primary/60 transition-colors">
+            <textarea
+              value={newContent}
+              onChange={(e) => setNewContent(e.target.value)}
+              maxLength={2000}
+              rows={3}
+              placeholder="Add a note, debate category scores, or comment on this ranking..."
+              className="w-full bg-transparent p-4 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none"
+            />
+            <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-3 pt-2 border-t border-border/60 text-xs text-muted-foreground">
+              <div className="flex items-center gap-4">
+                <span>{newContent.length}/2,000 characters</span>
+
+                {/* Spoiler Toggle */}
+                <label className="inline-flex items-center gap-1.5 cursor-pointer select-none text-muted-foreground hover:text-foreground transition-colors">
+                  <input
+                    type="checkbox"
+                    checked={newIsSpoiler}
+                    onChange={(e) => setNewIsSpoiler(e.target.checked)}
+                    className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5"
+                  />
+                  <span className="inline-flex items-center gap-1">
+                    <AlertTriangle size={12} className={newIsSpoiler ? "text-amber-500" : ""} />
+                    Mark as spoiler
+                  </span>
+                </label>
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting || !newContent.trim() || newContent.length > 2000}
+                className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-button bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:hover:bg-primary text-primary-foreground font-semibold text-xs transition-colors shadow-sm shadow-primary/15 cursor-pointer"
+              >
+                {submitting ? (
+                  <Loader2 size={13} className="animate-spin" />
+                ) : (
+                  <Send size={12} />
+                )}
+                <span>Post Note</span>
+              </button>
+            </div>
+          </div>
+          {error && <p className="text-xs text-destructive">{error}</p>}
+        </form>
+      )}
 
       {/* Comments List */}
       {loading ? (
@@ -590,6 +609,21 @@ export function CommentsSection({
                               <span>
                                 {item.isAuthor ? "Delete note" : "Moderate note"}
                               </span>
+                            </button>
+                          )}
+
+                          {/* Report Action (Non-author) */}
+                          {!item.isAuthor && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setActiveMenuId(null);
+                                setReportingTarget({ id: item.id, title: item.content.slice(0, 40) });
+                              }}
+                              className="w-full text-left px-2.5 py-1.5 rounded-sm hover:bg-surface flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                            >
+                              <Flag size={13} className="text-muted-foreground" />
+                              <span>Report note</span>
                             </button>
                           )}
                         </div>
@@ -904,6 +938,21 @@ export function CommentsSection({
                                         {reply.isAuthor ? "Delete reply" : "Moderate reply"}
                                       </span>
                                     </button>
+
+                                    {/* Report Action (Non-author) */}
+                                    {!reply.isAuthor && (
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setActiveMenuId(null);
+                                          setReportingTarget({ id: reply.id, title: reply.content.slice(0, 40) });
+                                        }}
+                                        className="w-full text-left px-2.5 py-1.5 rounded-sm hover:bg-surface flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+                                      >
+                                        <Flag size={13} className="text-muted-foreground" />
+                                        <span>Report reply</span>
+                                      </button>
+                                    )}
                                   </div>
                                 </PopoverContent>
                               </Popover>
@@ -1050,6 +1099,17 @@ export function CommentsSection({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Report Modal */}
+      {reportingTarget && (
+        <ReportDialog
+          isOpen={Boolean(reportingTarget)}
+          onClose={() => setReportingTarget(null)}
+          targetType="comment"
+          targetId={reportingTarget.id}
+          targetTitle={reportingTarget.title}
+        />
+      )}
     </section>
   );
 }

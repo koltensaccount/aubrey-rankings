@@ -66,9 +66,18 @@ export async function GET(
     },
   });
 
-  // Filter to reviews in public collections only (excluding unlisted and private)
+  const session = await (await import("@/lib/server-session")).getServerSession();
+  const { getBlockedUserIds } = await import("@/lib/safety");
+  const blockedUserIds = session ? await getBlockedUserIds(session.user.id) : new Set<string>();
+
+  // Filter to reviews in public collections only (excluding unlisted and private) and not blocked
   const publicReviews = rawReviews
-    .filter((r) => r.collection && r.collection.visibility === "public")
+    .filter(
+      (r) =>
+        r.collection &&
+        r.collection.visibility === "public" &&
+        !blockedUserIds.has(r.userId)
+    )
     .map((r) => ({
       id: r.id,
       reviewText: r.reviewText,

@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/db";
 import { getPublicReviews } from "@/lib/public-reviews";
-import { user, collections, ratings, follows } from "@/db/schema";
+import { user, collections, ratings, follows, userBlocks } from "@/db/schema";
 import { eq, and, desc, sql, isNotNull } from "drizzle-orm";
 import { getServerSession } from "@/lib/server-session";
 import { normalizeUsername } from "@/lib/username";
@@ -10,6 +10,7 @@ import { getTmdbImageUrl } from "@/lib/tmdb";
 import { getTopRankedEntries, getRatingSummary } from "@/lib/scoring";
 import { FollowButton } from "@/components/social/follow-button";
 import { ProfileSocialStats } from "@/components/social/profile-social-stats";
+import { ProfileActions } from "@/components/social/profile-actions";
 import { getAccentTokens } from "@/lib/theme";
 import {
   ArrowRight,
@@ -21,6 +22,7 @@ import {
   Lock,
   Globe,
   Star,
+  UserX,
 } from "lucide-react";
 
 interface PublicProfileProps {
@@ -94,6 +96,22 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
     isFollowing = !!followRecord;
   }
 
+  let isBlockedByMe = false;
+  let isBlockedByTarget = false;
+  if (session && !isOwnProfile) {
+    const blocks = await db.query.userBlocks.findMany({
+      where: (b, { or, and, eq }) =>
+        or(
+          and(eq(b.blockerId, session.user.id), eq(b.blockedId, targetUser.id)),
+          and(eq(b.blockerId, targetUser.id), eq(b.blockedId, session.user.id))
+        ),
+    });
+    for (const b of blocks) {
+      if (b.blockerId === session.user.id) isBlockedByMe = true;
+      if (b.blockerId === targetUser.id) isBlockedByTarget = true;
+    }
+  }
+
   // Identify pinned collection
   const pinnedCollection =
     publicCollections.find((c) => c.isPinned) || publicCollections[0];
@@ -161,18 +179,27 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
               />
             </div>
 
-            <div className="ar-profileActions">
-              <FollowButton
-                targetUserId={targetUser.id}
-                targetUsername={targetUser.username || ""}
-                initialIsFollowing={isFollowing}
-                initialFollowersCount={followersCount}
-                initialFollowingCount={followingCount}
-                isOwnProfile={isOwnProfile}
-                accentColor={profileAccentTokens.primary}
-                accentFg={profileAccentTokens.primaryForeground}
-                showStats={false}
-              />
+            <div className="ar-profileActions flex items-center gap-2">
+              {!isBlockedByMe && !isBlockedByTarget && (
+                <FollowButton
+                  targetUserId={targetUser.id}
+                  targetUsername={targetUser.username || ""}
+                  initialIsFollowing={isFollowing}
+                  initialFollowersCount={followersCount}
+                  initialFollowingCount={followingCount}
+                  isOwnProfile={isOwnProfile}
+                  accentColor={profileAccentTokens.primary}
+                  accentFg={profileAccentTokens.primaryForeground}
+                  showStats={false}
+                />
+              )}
+              {!isOwnProfile && session && (
+                <ProfileActions
+                  targetUserId={targetUser.id}
+                  targetUsername={targetUser.username || ""}
+                  initialIsBlocked={isBlockedByMe}
+                />
+              )}
             </div>
           </div>
 
@@ -194,7 +221,40 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
           </div>
         </header>
 
-      <main className="pt-8 space-y-12">
+      {isBlockedByMe ? (
+        <div className="pt-12">
+          <div className="p-8 rounded-xl border border-border bg-card text-center space-y-3 shadow-sm max-w-lg mx-auto">
+            <div className="mx-auto w-10 h-10 rounded-full bg-destructive/10 border border-destructive/20 flex items-center justify-center text-destructive">
+              <UserX size={18} />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-display text-xl uppercase font-bold text-foreground">
+                You have blocked @{targetUser.username}
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                You will not see their activity in your feeds or receive notifications from them. Unblock this account using the actions menu to restore public ranking access.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : isBlockedByTarget ? (
+        <div className="pt-12">
+          <div className="p-8 rounded-xl border border-border bg-card text-center space-y-3 shadow-sm max-w-lg mx-auto">
+            <div className="mx-auto w-10 h-10 rounded-full bg-muted border border-border flex items-center justify-center text-muted-foreground">
+              <Lock size={18} />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-display text-xl uppercase font-bold text-foreground">
+                Restricted Profile
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                @{targetUser.username} has restricted access to their public profile and rankings.
+              </p>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <main className="pt-8 space-y-12">
         {/* Pinned Ranking Feature Card */}
         {pinnedCollection && (
           <section className="space-y-3">
@@ -407,6 +467,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
           </section>
         )}
       </main>
+      )}
       </div>
     </div>
   );

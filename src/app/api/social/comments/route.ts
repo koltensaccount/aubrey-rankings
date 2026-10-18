@@ -8,7 +8,7 @@ import { randomUUID } from "crypto";
 import { createNotification } from "@/lib/notifications";
 
 export async function GET(request: NextRequest) {
-  const session = await getServerSession();
+  const session = await getServerSession(request);
   const collectionId = request.nextUrl.searchParams.get("collectionId");
 
   if (!collectionId) {
@@ -17,7 +17,7 @@ export async function GET(request: NextRequest) {
 
   const col = await db.query.collections.findFirst({
     where: (c, { eq }) => eq(c.id, collectionId),
-    columns: { id: true, userId: true, visibility: true, isPublic: true },
+    columns: { id: true, userId: true, visibility: true, isPublic: true, allowComments: true },
   });
 
   if (!col) {
@@ -31,7 +31,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Collection not found" }, { status: 404 });
   }
 
-  const list = await db.query.comments.findMany({
+  const { getBlockedUserIds } = await import("@/lib/safety");
+  const blockedIds = session ? await getBlockedUserIds(session.user.id) : new Set<string>();
+
+  const rawList = await db.query.comments.findMany({
     where: (c, { eq }) => eq(c.collectionId, collectionId),
     orderBy: [asc(comments.createdAt)],
     with: {
@@ -45,6 +48,9 @@ export async function GET(request: NextRequest) {
       },
     },
   });
+
+  // Filter out any comments from accounts blocked by or blocking the current viewer
+  const list = rawList.filter((item) => !blockedIds.has(item.userId));
 
   const formatComment = (item: (typeof list)[0]) => ({
     id: item.id,
@@ -91,7 +97,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession();
+  const session = await getServerSession(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -127,7 +133,7 @@ export async function POST(request: NextRequest) {
 
   const col = await db.query.collections.findFirst({
     where: (c, { eq }) => eq(c.id, collectionId),
-    columns: { id: true, userId: true, visibility: true, isPublic: true, title: true },
+    columns: { id: true, userId: true, visibility: true, isPublic: true, title: true, allowComments: true },
   });
 
   if (!col) {
@@ -138,6 +144,18 @@ export async function POST(request: NextRequest) {
   const isPrivate = col.visibility === "private" || (!col.isPublic && col.visibility !== "unlisted");
   if (isPrivate && !isOwner) {
     return NextResponse.json({ error: "Cannot comment on a private collection" }, { status: 403 });
+  }
+
+  // Enforce authoritative comment eligibility (collection allowComments, block check, user permission)
+  const { canComment, isBlocked } = await import("@/lib/safety");
+  const commentCheck = await canComment({
+    authorId: col.userId,
+    commenterId: session.user.id,
+    collectionAllowComments: col.allowComments ?? true,
+  });
+
+  if (!commentCheck.allowed) {
+    return NextResponse.json({ error: commentCheck.reason || "Forbidden" }, { status: 403 });
   }
 
   let validParentId: string | null = null;
@@ -163,6 +181,11 @@ export async function POST(request: NextRequest) {
 
     if (!parentComment || parentComment.collectionId !== collectionId) {
       return NextResponse.json({ error: "Parent comment not found in this collection" }, { status: 400 });
+    }
+
+    // Blocking check: Cannot reply to a user you have blocked or who blocked you
+    if (await isBlocked(parentComment.userId, session.user.id)) {
+      return NextResponse.json({ error: "Cannot reply to this comment" }, { status: 403 });
     }
 
     // Enforce 1-level threading: cannot reply to a reply
@@ -217,7 +240,7 @@ export async function POST(request: NextRequest) {
       await createNotification({
         recipientUserId: parentComment.userId,
         actorUserId: session.user.id,
-        notificationType: "comment",
+        notificationType: "reply",
         collectionId: col.id,
         metadata: {
           actorName,

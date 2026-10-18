@@ -13,10 +13,13 @@ import { NotificationsTab } from "./components/notifications-tab";
 import { RatingSystemsTab } from "./components/rating-systems-tab";
 import { AccountTab } from "./components/account-tab";
 import { DataTab } from "./components/data-tab";
+import { PrivacyTab } from "./components/privacy-tab";
+import { Shield } from "lucide-react";
 
 type SettingsTab =
   | "appearance"
   | "notifications"
+  | "privacy_safety"
   | "rating_systems"
   | "account"
   | "data";
@@ -69,6 +72,19 @@ export default function SettingsPage() {
 
         <button
           type="button"
+          onClick={() => setActiveTab("privacy_safety")}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer shrink-0 ${
+            activeTab === "privacy_safety"
+              ? "border-primary text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Shield size={14} className={activeTab === "privacy_safety" ? "text-primary" : ""} />
+          <span>Privacy & Safety</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => setActiveTab("rating_systems")}
           className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer shrink-0 ${
             activeTab === "rating_systems"
@@ -110,6 +126,7 @@ export default function SettingsPage() {
       {/* Tab Panels */}
       {activeTab === "appearance" && <AppearanceTab />}
       {activeTab === "notifications" && <NotificationsTab />}
+      {activeTab === "privacy_safety" && <PrivacyTab />}
       {activeTab === "rating_systems" && <RatingSystemsTab />}
       {activeTab === "account" && <AccountTab />}
       {activeTab === "data" && <DataTab />}

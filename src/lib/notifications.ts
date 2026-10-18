@@ -2,11 +2,13 @@ import { db } from "@/db";
 import { notifications, notificationPreferences, user } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
+import { isBlocked } from "@/lib/safety";
 
 export type NotificationType =
   | "follow"
   | "like"
   | "comment"
+  | "reply"
   | "tv_release"
   | "movie_release";
 
@@ -30,6 +32,7 @@ export async function getUserNotificationPreferences(userId: string) {
     notifyFollows: prefs ? prefs.notifyFollows : true,
     notifyLikes: prefs ? prefs.notifyLikes : true,
     notifyComments: prefs ? prefs.notifyComments : true,
+    notifyReplies: prefs ? prefs.notifyReplies : true,
     notifyTvReleases: prefs ? prefs.notifyTvReleases : true,
     notifyMovieReleases: prefs ? prefs.notifyMovieReleases : true,
   };
@@ -50,11 +53,17 @@ export async function createNotification({
     return null;
   }
 
-  // 2. Check recipient preferences
+  // 2. Block check: Blocked users can never generate interaction notifications
+  if (actorUserId && (await isBlocked(recipientUserId, actorUserId))) {
+    return null;
+  }
+
+  // 3. Check recipient preferences
   const prefs = await getUserNotificationPreferences(recipientUserId);
   if (notificationType === "follow" && !prefs.notifyFollows) return null;
   if (notificationType === "like" && !prefs.notifyLikes) return null;
   if (notificationType === "comment" && !prefs.notifyComments) return null;
+  if (notificationType === "reply" && !prefs.notifyReplies) return null;
   if (notificationType === "tv_release" && !prefs.notifyTvReleases) return null;
   if (notificationType === "movie_release" && !prefs.notifyMovieReleases) return null;
 

@@ -5,8 +5,8 @@ import { notificationPreferences } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { getUserNotificationPreferences } from "@/lib/notifications";
 
-export async function GET() {
-  const session = await getServerSession();
+export async function GET(request: NextRequest) {
+  const session = await getServerSession(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -16,7 +16,7 @@ export async function GET() {
 }
 
 export async function PATCH(request: NextRequest) {
-  const session = await getServerSession();
+  const session = await getServerSession(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -38,6 +38,10 @@ export async function PATCH(request: NextRequest) {
       typeof body.notifyComments === "boolean"
         ? body.notifyComments
         : current.notifyComments,
+    notifyReplies:
+      typeof body.notifyReplies === "boolean"
+        ? body.notifyReplies
+        : current.notifyReplies,
     notifyTvReleases:
       typeof body.notifyTvReleases === "boolean"
         ? body.notifyTvReleases
