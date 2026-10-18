@@ -136,6 +136,8 @@ export const auth = betterAuth({
     "http://100.73.94.105:3200",
     "http://127.0.0.1:3200",
     "http://localhost:3000",
+    "http://localhost:3100",
+    "http://127.0.0.1:3100",
   ],
   secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
