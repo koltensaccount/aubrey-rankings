@@ -2,12 +2,15 @@ import { db } from "@/db";
 import {
   ratingSystems,
   ratingCategories,
+  ratingTiers,
   ratings,
   categoryScores,
   collections,
 } from "@/db/schema";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
+import { validateTierList } from "./tier-system";
+
 export class RubricError extends Error {
   constructor(
     message: string,
@@ -16,6 +19,7 @@ export class RubricError extends Error {
     super(message);
   }
 }
+
 export function validateRubric(body: any, create = false) {
   if (!body || typeof body !== "object" || Array.isArray(body))
     throw new RubricError("A JSON object is required");
@@ -31,6 +35,8 @@ export function validateRubric(body: any, create = false) {
     (typeof body.description !== "string" || body.description.length > 2000)
   )
     throw new RubricError("Invalid description");
+  if (body.type !== undefined && body.type !== "numerical" && body.type !== "tier")
+    throw new RubricError("Rubric type must be 'numerical' or 'tier'");
   if (
     body.scale !== undefined &&
     (!Number.isInteger(body.scale) || body.scale < 1 || body.scale > 100)
@@ -38,38 +44,54 @@ export function validateRubric(body: any, create = false) {
     throw new RubricError("Scale must be an integer between 1 and 100");
   if (body.isDefault !== undefined && typeof body.isDefault !== "boolean")
     throw new RubricError("isDefault must be boolean");
-  if (create || body.categories !== undefined) {
-    if (
-      !Array.isArray(body.categories) ||
-      body.categories.length < 1 ||
-      body.categories.length > 50
-    )
-      throw new RubricError("Provide 1–50 categories");
-    const ids = new Set<string>();
-    for (const c of body.categories) {
-      if (
-        !c ||
-        typeof c.name !== "string" ||
-        !c.name.trim() ||
-        c.name.length > 200 ||
-        (c.weight !== undefined &&
-          (typeof c.weight !== "number" ||
-            !Number.isFinite(c.weight) ||
-            c.weight < 0 ||
-            c.weight > 100)) ||
-        (c.isRequired !== undefined && typeof c.isRequired !== "boolean") ||
-        (c.description != null &&
-          (typeof c.description !== "string" || c.description.length > 2000))
-      )
-        throw new RubricError("Invalid category");
-      if (c.id != null && (typeof c.id !== "string" || ids.has(c.id)))
-        throw new RubricError("Invalid or duplicate category ID");
-      if (c.id) ids.add(c.id);
+
+  const isTier = body.type === "tier";
+  if (isTier) {
+    if (create || body.tiers !== undefined) {
+      if (!Array.isArray(body.tiers) || body.tiers.length < 1 || body.tiers.length > 20) {
+        throw new RubricError("Provide 1–20 tiers");
+      }
+      try {
+        validateTierList(body.tiers);
+      } catch (err: any) {
+        throw new RubricError(err.message);
+      }
     }
-    if (!body.categories.some((c: any) => (c.weight ?? 1) > 0))
-      throw new RubricError("At least one category must have positive weight");
+  } else {
+    if (create || body.categories !== undefined) {
+      if (
+        !Array.isArray(body.categories) ||
+        body.categories.length < 1 ||
+        body.categories.length > 50
+      )
+        throw new RubricError("Provide 1–50 categories");
+      const ids = new Set<string>();
+      for (const c of body.categories) {
+        if (
+          !c ||
+          typeof c.name !== "string" ||
+          !c.name.trim() ||
+          c.name.length > 200 ||
+          (c.weight !== undefined &&
+            (typeof c.weight !== "number" ||
+              !Number.isFinite(c.weight) ||
+              c.weight < 0 ||
+              c.weight > 100)) ||
+          (c.isRequired !== undefined && typeof c.isRequired !== "boolean") ||
+          (c.description != null &&
+            (typeof c.description !== "string" || c.description.length > 2000))
+        )
+          throw new RubricError("Invalid category");
+        if (c.id != null && (typeof c.id !== "string" || ids.has(c.id)))
+          throw new RubricError("Invalid or duplicate category ID");
+        if (c.id) ids.add(c.id);
+      }
+      if (!body.categories.some((c: any) => (c.weight ?? 1) > 0))
+        throw new RubricError("At least one category must have positive weight");
+    }
   }
 }
+
 export async function mutateRubric(
   userId: string,
   id: string,
@@ -87,15 +109,27 @@ export async function mutateRubric(
       .where(and(eq(ratingSystems.id, id), eq(ratingSystems.userId, userId)))
       .for("update");
     if (!system) throw new RubricError("Rating system not found", 404);
-    const cats = await tx
-      .select()
-      .from(ratingCategories)
-      .where(eq(ratingCategories.ratingSystemId, id));
+
+    const isTier = system.type === "tier";
+    const cats = !isTier
+      ? await tx
+          .select()
+          .from(ratingCategories)
+          .where(eq(ratingCategories.ratingSystemId, id))
+      : [];
+    const existingTiers = isTier
+      ? await tx
+          .select()
+          .from(ratingTiers)
+          .where(eq(ratingTiers.ratingSystemId, id))
+      : [];
+
     const used = await tx
       .select({ id: ratings.id })
       .from(ratings)
       .where(eq(ratings.ratingSystemId, id))
       .limit(1);
+
     const scores = cats.length
       ? await tx
           .select({ id: categoryScores.id })
@@ -108,7 +142,21 @@ export async function mutateRubric(
           )
           .limit(1)
       : [];
-    const inUse = used.length > 0 || scores.length > 0;
+
+    const tierRatings = isTier && existingTiers.length
+      ? await tx
+          .select({ id: ratings.id, tierId: ratings.tierId })
+          .from(ratings)
+          .where(
+            inArray(
+              ratings.tierId,
+              existingTiers.map((t) => t.id),
+            ),
+          )
+      : [];
+
+    const inUse = used.length > 0 || scores.length > 0 || tierRatings.length > 0;
+
     if (remove) {
       const assigned = await tx
         .select({ id: collections.id })
@@ -134,12 +182,15 @@ export async function mutateRubric(
       await tx.delete(ratingSystems).where(eq(ratingSystems.id, id));
       return;
     }
-    if (body.categories) {
+
+    if (!isTier && body.categories) {
       for (const cat of body.categories)
         if (cat.id && !cats.some((c) => c.id === cat.id))
           throw new RubricError("Category does not belong to this rubric");
     }
+
     const categoryChange =
+      !isTier &&
       body.categories &&
       (body.categories.length !== cats.length ||
         body.categories.some((c: any) => {
@@ -151,8 +202,10 @@ export async function mutateRubric(
             (c.isRequired !== false) !== old.isRequired
           );
         }));
+
     if (
       inUse &&
+      !isTier &&
       ((body.scale !== undefined && body.scale !== system.scale) ||
         categoryChange)
     )
@@ -160,11 +213,13 @@ export async function mutateRubric(
         "Saved ratings use this rubric. Duplicate it to change categories, weights, or scale; historical scores are preserved.",
         409,
       );
+
     if (body.isDefault)
       await tx
         .update(ratingSystems)
         .set({ isDefault: false })
         .where(eq(ratingSystems.userId, userId));
+
     await tx
       .update(ratingSystems)
       .set({
@@ -178,7 +233,8 @@ export async function mutateRubric(
         updatedAt: new Date(),
       })
       .where(eq(ratingSystems.id, id));
-    if (body.categories) {
+
+    if (!isTier && body.categories) {
       const removed = cats.filter(
         (c) => !body.categories.some((n: any) => n.id === c.id),
       );
@@ -208,9 +264,73 @@ export async function mutateRubric(
             .values({ id: randomUUID(), ratingSystemId: id, ...values });
       }
     }
+
+    if (isTier && body.tiers) {
+      const removedTiers = existingTiers.filter(
+        (t) => !body.tiers.some((n: any) => n.id === t.id),
+      );
+      if (removedTiers.length > 0) {
+        for (const rt of removedTiers) {
+          const assignedToTier = tierRatings.filter((r) => r.tierId === rt.id);
+          if (assignedToTier.length > 0) {
+            const targetTierId = body.tierMigrations?.[rt.id] || body.targetTierId;
+            if (targetTierId) {
+              await tx
+                .update(ratings)
+                .set({ tierId: targetTierId, updatedAt: new Date() })
+                .where(eq(ratings.tierId, rt.id));
+            } else if (body.unassignRemovedTiers) {
+              await tx
+                .update(ratings)
+                .set({ tierId: null, updatedAt: new Date() })
+                .where(eq(ratings.tierId, rt.id));
+            } else {
+              throw new RubricError(
+                `Tier "${rt.name}" has ${assignedToTier.length} active ratings. Reassign them or confirm unassignment to delete this tier.`,
+                409,
+              );
+            }
+          }
+        }
+        await tx.delete(ratingTiers).where(
+          inArray(
+            ratingTiers.id,
+            removedTiers.map((t) => t.id),
+          ),
+        );
+      }
+
+      for (const [index, t] of body.tiers.entries()) {
+        const values = {
+          name: t.name.trim(),
+          description: t.description ?? null,
+          color: t.color || "#FF4757",
+          sortOrder: index + 1,
+          updatedAt: new Date(),
+        };
+        if (t.id && existingTiers.some((et) => et.id === t.id)) {
+          await tx
+            .update(ratingTiers)
+            .set(values)
+            .where(eq(ratingTiers.id, t.id));
+        } else {
+          await tx
+            .insert(ratingTiers)
+            .values({
+              id: t.id || `tier_${Date.now()}_${randomUUID().slice(0, 6)}`,
+              ratingSystemId: id,
+              ...values,
+            });
+        }
+      }
+    }
+
     return tx.query.ratingSystems.findFirst({
       where: (r, { eq }) => eq(r.id, id),
-      with: { categories: { orderBy: (c, { asc }) => [asc(c.sortOrder)] } },
+      with: {
+        categories: { orderBy: (c, { asc }) => [asc(c.sortOrder)] },
+        tiers: { orderBy: (t, { asc }) => [asc(t.sortOrder)] },
+      },
     });
   });
 }

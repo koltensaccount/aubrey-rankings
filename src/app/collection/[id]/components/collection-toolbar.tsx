@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Grid, List, Plus } from "lucide-react";
+import { Grid, List, Plus, Layers } from "lucide-react";
 
 export type SortOption = "score_desc" | "score_asc" | "order" | "title";
 export type FilterOption = "all" | "rated" | "in_progress" | "unrated";
@@ -20,8 +20,9 @@ interface CollectionToolbarProps {
   setSelectedSeason: (season: string) => void;
   sortBy: SortOption;
   setSortBy: (sort: SortOption) => void;
-  viewMode: "list" | "editorial" | "compact";
-  setViewMode: (mode: "list" | "editorial" | "compact") => void;
+  viewMode: "list" | "editorial" | "compact" | "tier_board";
+  setViewMode: (mode: "list" | "editorial" | "compact" | "tier_board") => void;
+  isTierCollection?: boolean;
 }
 
 export function CollectionToolbar({
@@ -40,6 +41,7 @@ export function CollectionToolbar({
   setSortBy,
   viewMode,
   setViewMode,
+  isTierCollection,
 }: CollectionToolbarProps) {
   return (
     <div className="sticky top-20 z-30 bg-background/95 backdrop-blur-md border-b border-border">
@@ -79,7 +81,7 @@ export function CollectionToolbar({
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Rated ({completedCount})
+              {isTierCollection ? `Tiered (${completedCount})` : `Rated (${completedCount})`}
             </button>
             <button
               type="button"
@@ -101,7 +103,7 @@ export function CollectionToolbar({
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              Unrated ({unratedCount})
+              {isTierCollection ? `Untiered (${unratedCount})` : `Unrated (${unratedCount})`}
             </button>
           </div>
 
@@ -141,17 +143,35 @@ export function CollectionToolbar({
             onChange={(e) => setSortBy(e.target.value as SortOption)}
             className="bg-surface text-xs text-foreground border border-border-input rounded px-3 py-1.5 focus:outline-none focus:border-primary"
           >
-            <option value="score_desc">Sort: Highest Score</option>
+            <option value="score_desc">
+              {isTierCollection ? "Sort: Highest Tier" : "Sort: Highest Score"}
+            </option>
+            <option value="score_asc">
+              {isTierCollection ? "Sort: Lowest Tier" : "Sort: Lowest Score"}
+            </option>
             <option value="order">Sort: Chronological</option>
             <option value="title">Sort: Alphabetical</option>
           </select>
 
           {/* View Mode Toggle */}
           <div className="flex items-center gap-1 bg-card p-1 rounded border border-border">
+            {isTierCollection && (
+              <button
+                onClick={() => setViewMode("tier_board")}
+                title="Tier Board view"
+                className={`p-1.5 rounded text-xs transition-colors cursor-pointer ${
+                  viewMode === "tier_board"
+                    ? "bg-surface text-amber-400 font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Layers size={16} />
+              </button>
+            )}
             <button
               onClick={() => setViewMode("list")}
               title="List view"
-              className={`p-1.5 rounded text-xs transition-colors ${
+              className={`p-1.5 rounded text-xs transition-colors cursor-pointer ${
                 viewMode === "list"
                   ? "bg-surface text-primary-text font-bold"
                   : "text-muted-foreground hover:text-foreground"
@@ -162,7 +182,7 @@ export function CollectionToolbar({
             <button
               onClick={() => setViewMode("editorial")}
               title="Grid view"
-              className={`p-1.5 rounded text-xs transition-colors ${
+              className={`p-1.5 rounded text-xs transition-colors cursor-pointer ${
                 viewMode === "editorial"
                   ? "bg-surface text-primary-text font-bold"
                   : "text-muted-foreground hover:text-foreground"

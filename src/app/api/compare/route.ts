@@ -21,6 +21,11 @@ export async function GET(request: NextRequest) {
   const leftCol = await db.query.collections.findFirst({
     where: (c, { eq }) => eq(c.id, leftId),
     with: {
+      defaultRatingSystem: {
+        with: {
+          tiers: { orderBy: (t, { asc }) => [asc(t.sortOrder)] },
+        },
+      },
       user: {
         columns: { id: true, name: true, username: true, image: true },
       },
@@ -28,7 +33,9 @@ export async function GET(request: NextRequest) {
         orderBy: [asc(collectionEntries.sortOrder)],
         with: { mediaItem: true },
       },
-      ratings: true,
+      ratings: {
+        with: { tier: true },
+      },
     },
   });
 
@@ -36,6 +43,11 @@ export async function GET(request: NextRequest) {
   const rightCol = await db.query.collections.findFirst({
     where: (c, { eq }) => eq(c.id, rightId),
     with: {
+      defaultRatingSystem: {
+        with: {
+          tiers: { orderBy: (t, { asc }) => [asc(t.sortOrder)] },
+        },
+      },
       user: {
         columns: { id: true, name: true, username: true, image: true },
       },
@@ -43,7 +55,9 @@ export async function GET(request: NextRequest) {
         orderBy: [asc(collectionEntries.sortOrder)],
         with: { mediaItem: true },
       },
-      ratings: true,
+      ratings: {
+        with: { tier: true },
+      },
     },
   });
 
@@ -67,47 +81,61 @@ export async function GET(request: NextRequest) {
   }
 
   // Build maps of ratings for fast lookup
-  const leftRatingsMap = new Map<string, number | null>();
+  const leftRatingsMap = new Map<string, any>();
   for (const r of leftCol.ratings) {
-    leftRatingsMap.set(r.mediaItemId, r.calculatedOverallScore ?? null);
+    leftRatingsMap.set(r.mediaItemId, r);
   }
 
-  const rightRatingsMap = new Map<string, number | null>();
+  const rightRatingsMap = new Map<string, any>();
   for (const r of rightCol.ratings) {
-    rightRatingsMap.set(r.mediaItemId, r.calculatedOverallScore ?? null);
+    rightRatingsMap.set(r.mediaItemId, r);
   }
 
   // Build ordered comparison items
-  // Sort by calculated score desc if scored, else sortOrder
   const formatEntries = (
     col: typeof leftCol,
-    ratingsMap: Map<string, number | null>
+    ratingsMap: Map<string, any>
   ): ComparisonItem[] => {
+    const isTier = col.defaultRatingSystem?.type === "tier";
     const scoredList = col.entries.map((entry) => {
-      const score = ratingsMap.get(entry.mediaItemId) ?? null;
+      const rating = ratingsMap.get(entry.mediaItemId);
+      const score = rating?.calculatedOverallScore ?? null;
+      const tier = rating?.tier ?? null;
       return {
         mediaItemId: entry.mediaItemId,
         title: entry.mediaItem?.title || "Untitled",
         score,
+        tier,
         sortOrder: entry.sortOrder,
         posterPath: entry.mediaItem?.posterPath,
         stillPath: entry.mediaItem?.stillPath,
       };
     });
 
-    // Rank: score desc, then sortOrder asc
-    scoredList.sort((a, b) => {
-      if (a.score !== null && b.score !== null) return b.score - a.score;
-      if (a.score !== null) return -1;
-      if (b.score !== null) return 1;
-      return a.sortOrder - b.sortOrder;
-    });
+    // Rank items
+    if (isTier) {
+      scoredList.sort((a, b) => {
+        const aOrder = a.tier?.sortOrder ?? 9999;
+        const bOrder = b.tier?.sortOrder ?? 9999;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return a.sortOrder - b.sortOrder;
+      });
+    } else {
+      scoredList.sort((a, b) => {
+        if (a.score !== null && b.score !== null) return b.score - a.score;
+        if (a.score !== null) return -1;
+        if (b.score !== null) return 1;
+        return a.sortOrder - b.sortOrder;
+      });
+    }
 
     return scoredList.map((item, index) => ({
       mediaItemId: item.mediaItemId,
       title: item.title,
       rank: index + 1,
       score: item.score,
+      tierName: item.tier?.name ?? null,
+      tierColor: item.tier?.color ?? null,
       posterPath: item.posterPath,
       stillPath: item.stillPath,
     }));
@@ -125,6 +153,7 @@ export async function GET(request: NextRequest) {
       collectionType: leftCol.collectionType,
       customCoverImage: leftCol.customCoverImage,
       backdropImage: leftCol.backdropImage,
+      defaultRatingSystem: leftCol.defaultRatingSystem,
       user: leftCol.user,
       totalEntries: leftItems.length,
     },
@@ -134,6 +163,7 @@ export async function GET(request: NextRequest) {
       collectionType: rightCol.collectionType,
       customCoverImage: rightCol.customCoverImage,
       backdropImage: rightCol.backdropImage,
+      defaultRatingSystem: rightCol.defaultRatingSystem,
       user: rightCol.user,
       totalEntries: rightItems.length,
     },

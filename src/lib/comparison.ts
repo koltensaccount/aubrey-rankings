@@ -8,6 +8,8 @@ export interface ComparisonItem {
   title: string;
   rank: number; // 1-indexed rank within the collection
   score: number | null;
+  tierName?: string | null;
+  tierColor?: string | null;
   posterPath?: string | null;
   stillPath?: string | null;
 }
@@ -28,6 +30,10 @@ export interface ComparisonMetrics {
     rankDelta: number; // positive = higher on left, negative = higher on right
     leftScore: number | null;
     rightScore: number | null;
+    leftTierName?: string | null;
+    leftTierColor?: string | null;
+    rightTierName?: string | null;
+    rightTierColor?: string | null;
     scoreDelta: number | null;
     posterPath?: string | null;
     stillPath?: string | null;
@@ -39,6 +45,10 @@ export interface ComparisonMetrics {
     rightRank: number;
     leftScore: number | null;
     rightScore: number | null;
+    leftTierName?: string | null;
+    leftTierColor?: string | null;
+    rightTierName?: string | null;
+    rightTierColor?: string | null;
     posterPath?: string | null;
     stillPath?: string | null;
   }>;
@@ -162,6 +172,10 @@ export function compareRankings(
       rankDelta,
       leftScore: pair.left.score,
       rightScore: pair.right.score,
+      leftTierName: pair.left.tierName,
+      leftTierColor: pair.left.tierColor,
+      rightTierName: pair.right.tierName,
+      rightTierColor: pair.right.tierColor,
       scoreDelta,
       posterPath: pair.left.posterPath || pair.right.posterPath,
       stillPath: pair.left.stillPath || pair.right.stillPath,

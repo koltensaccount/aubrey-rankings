@@ -3,15 +3,17 @@
 import React from "react";
 import { Plus, Sliders, Trash2 } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
+import { TierBoardView } from "./tier-board-view";
 
 interface CollectionEntryListProps {
   processedEntries: any[];
   collection: any;
-  viewMode: "list" | "editorial" | "compact";
+  viewMode: "list" | "editorial" | "compact" | "tier_board";
   isOwner: boolean;
   onOpenAddModal: () => void;
   onSelectItemForRating: (media: any) => void;
   onSetEntryToDelete: (entry: any) => void;
+  onQuickAssignTier?: (mediaItem: any, tierId: string | null) => Promise<void>;
 }
 
 export function CollectionEntryList({
@@ -22,6 +24,7 @@ export function CollectionEntryList({
   onOpenAddModal,
   onSelectItemForRating,
   onSetEntryToDelete,
+  onQuickAssignTier,
 }: CollectionEntryListProps) {
   if (processedEntries.length === 0) {
     return (
@@ -41,12 +44,24 @@ export function CollectionEntryList({
     );
   }
 
+  if (viewMode === "tier_board") {
+    return (
+      <TierBoardView
+        collection={collection}
+        processedEntries={processedEntries}
+        isOwner={isOwner}
+        onSelectItemForRating={onSelectItemForRating}
+        onQuickAssignTier={onQuickAssignTier}
+      />
+    );
+  }
+
   if (viewMode === "list") {
     return (
       <div className="divide-y divide-border border-t border-border">
         {processedEntries.map((entry: any, index: number) => {
           const media = entry.mediaItem;
-          const { state, score, actionLabel, scoredCount, totalCategories } = entry.ratingStatus;
+          const { state, score, actionLabel, scoredCount, totalCategories, tier } = entry.ratingStatus;
           const isMovie =
             media.mediaType === "movie" ||
             collection.collectionType === "movie_franchise" ||
@@ -95,7 +110,16 @@ export function CollectionEntryList({
               {/* Score & Rate Button */}
               <div className="col-start-3 flex items-center justify-between sm:justify-start gap-3 sm:gap-4 shrink-0">
                 <div className="text-right">
-                  {state === "rated" && score !== null ? (
+                  {tier ? (
+                    <div className="flex items-center gap-1.5 justify-end">
+                      <span
+                        className="px-2.5 py-1 rounded font-display font-black text-sm uppercase text-black shadow-xs"
+                        style={{ backgroundColor: tier.color }}
+                      >
+                        {tier.name}
+                      </span>
+                    </div>
+                  ) : state === "rated" && score !== null ? (
                     <div className="font-display text-2xl sm:text-3xl font-bold text-primary-text">
                       {score.toFixed(1)}
                       <span className="text-[11px] text-muted-foreground/70 ml-1 font-sans font-normal">
@@ -158,7 +182,7 @@ export function CollectionEntryList({
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
       {processedEntries.map((entry: any, index: number) => {
         const media = entry.mediaItem;
-        const { state, score, actionLabel, scoredCount, totalCategories } = entry.ratingStatus;
+        const { state, score, actionLabel, scoredCount, totalCategories, tier } = entry.ratingStatus;
         const isMovie =
           collection.collectionType === "movie_franchise" ||
           media.mediaType === "movie" ||
@@ -187,7 +211,14 @@ export function CollectionEntryList({
               </div>
 
               {/* State Badge Top Right */}
-              {state === "rated" && score !== null ? (
+              {tier ? (
+                <div
+                  className="absolute top-3 right-3 px-2.5 py-1 rounded font-display font-black text-sm uppercase text-black shadow-lg"
+                  style={{ backgroundColor: tier.color }}
+                >
+                  {tier.name}
+                </div>
+              ) : state === "rated" && score !== null ? (
                 <div className="absolute top-3 right-3 px-2 py-0.5 rounded bg-black/85 backdrop-blur-md border border-primary/40 text-primary-text font-display text-base shadow-lg">
                   ★ {score.toFixed(1)}
                 </div>

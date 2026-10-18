@@ -29,6 +29,9 @@ export async function GET(
             categories: {
               orderBy: (cat, { asc }) => [asc(cat.sortOrder)],
             },
+            tiers: {
+              orderBy: (tier, { asc }) => [asc(tier.sortOrder)],
+            },
           },
         },
         entries: {
@@ -73,7 +76,8 @@ export async function GET(
         and(eq(r.userId, targetUserId), eq(r.collectionId, col.id)),
       with: {
         categoryScores: true,
-        ratingSystem: { with: { categories: true } },
+        tier: true,
+        ratingSystem: { with: { categories: true, tiers: true } },
       },
     });
 

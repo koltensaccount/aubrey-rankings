@@ -18,6 +18,8 @@ import { RatingDialogHeader } from "@/components/rating/rating-dialog-header";
 import { RatingCategorySlider } from "@/components/rating/rating-category-slider";
 import { RatingScoreSummary } from "@/components/rating/rating-score-summary";
 import { RatingClearDialog } from "@/components/rating/rating-clear-dialog";
+import { RatingTierSelector } from "@/components/rating/rating-tier-selector";
+import { TierItem } from "@/lib/tier-system";
 
 interface RatingDialogProps {
   isOpen: boolean;
@@ -27,13 +29,15 @@ interface RatingDialogProps {
   ratingSystem: {
     id: string;
     name: string;
-    scale: number;
-    categories: Array<{
+    scale?: number;
+    type?: string;
+    categories?: Array<{
       id: string;
       name: string;
       weight: number;
       isRequired: boolean;
     }>;
+    tiers?: Array<TierItem>;
   } | null;
   initialRating?: any;
   onRatingSaved: (savedRating: any) => void;
@@ -58,6 +62,7 @@ export function RatingDialog({
 
   // Genuine unset state: scores[catId] is number | null
   const [scores, setScores] = useState<Record<string, number | null>>({});
+  const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
   const [reviewText, setReviewText] = useState("");
   const [personalNotes, setPersonalNotes] = useState("");
   const [isWatched, setIsWatched] = useState(true);
@@ -74,7 +79,8 @@ export function RatingDialog({
   const [forceNewRubric, setForceNewRubric] = useState(false);
 
   const ratingSystem: RatingDialogProps["ratingSystem"] = !forceNewRubric && initialRating?.ratingSystem ? initialRating.ratingSystem : collectionRatingSystem;
-  const categories = !forceNewRubric ? withSavedWeights(ratingSystem?.categories || [], initialRating?.categoryScores ?? []) : ratingSystem?.categories || [];
+  const isTier = ratingSystem?.type === "tier";
+  const categories = !isTier && !forceNewRubric ? withSavedWeights(ratingSystem?.categories || [], initialRating?.categoryScores ?? []) : ratingSystem?.categories || [];
   const scale = ratingSystem?.scale || 10;
 
   // Initialize form state when item or initialRating changes
@@ -89,6 +95,7 @@ export function RatingDialog({
         }
       }
       setScores(scoresMap);
+      setSelectedTierId(initialRating.tierId ?? null);
       setReviewText(initialRating.reviewText || "");
       setPersonalNotes(initialRating.personalNotes || "");
       setIsWatched(initialRating.isWatched !== false);
@@ -101,6 +108,7 @@ export function RatingDialog({
       setForceNewRubric(false);
     } else {
       setScores({});
+      setSelectedTierId(null);
       setReviewText("");
       setPersonalNotes("");
       setIsWatched(true);
@@ -195,7 +203,11 @@ export function RatingDialog({
         query.set("collectionId", collectionId);
       }
       if (clearScoresOnly) {
-        query.set("clearScoresOnly", "true");
+        if (isTier) {
+          query.set("clearTierOnly", "true");
+        } else {
+          query.set("clearScoresOnly", "true");
+        }
       }
 
       const res = await fetch(`/api/ratings?${query.toString()}`, {
@@ -208,13 +220,22 @@ export function RatingDialog({
       }
 
       if (clearScoresOnly) {
-        setScores({});
-        onRatingSaved({
-          ...initialRating,
-          calculatedOverallScore: null,
-          categoryScores: [],
-          clearedScoresOnly: true,
-        });
+        if (isTier) {
+          setSelectedTierId(null);
+          onRatingSaved({
+            ...initialRating,
+            tierId: null,
+            clearedTierOnly: true,
+          });
+        } else {
+          setScores({});
+          onRatingSaved({
+            ...initialRating,
+            calculatedOverallScore: null,
+            categoryScores: [],
+            clearedScoresOnly: true,
+          });
+        }
       } else {
         onRatingSaved({
           mediaItemId: mediaItem.id,
@@ -240,7 +261,7 @@ export function RatingDialog({
       let categoryScoresArray: Array<{ categoryId: string; score: number }> = [];
       let numericScoresMap: Record<string, number | null> = {};
 
-      if (isUpdatingScores) {
+      if (!isTier && isUpdatingScores) {
         numericScoresMap = Object.fromEntries(categories.map((c) => [c.id, null]));
         for (const [catId, score] of Object.entries(scores)) {
           if (score !== null && typeof score === "number" && Number.isFinite(score)) {
@@ -263,7 +284,10 @@ export function RatingDialog({
         isFavorite,
       };
 
-      if (isUpdatingScores) {
+      if (isTier) {
+        payload.ratingSystemId = ratingSystem?.id || null;
+        payload.tierId = selectedTierId;
+      } else if (isUpdatingScores) {
         payload.ratingSystemId = ratingSystem?.id || null;
         payload.scores = numericScoresMap;
         payload.categoryScores = categoryScoresArray;
@@ -285,10 +309,11 @@ export function RatingDialog({
       onRatingSaved(
         savedData.rating || {
           mediaItemId: mediaItem.id,
-          calculatedOverallScore: isUpdatingScores
+          tierId: isTier ? selectedTierId : initialRating?.tierId ?? null,
+          calculatedOverallScore: !isTier && isUpdatingScores
             ? calculation.weightedScore
             : initialRating?.calculatedOverallScore ?? null,
-          categoryScores: isUpdatingScores
+          categoryScores: !isTier && isUpdatingScores
             ? categoryScoresArray
             : initialRating?.categoryScores ?? [],
           reviewText: reviewText.trim() || null,
@@ -430,37 +455,45 @@ export function RatingDialog({
             </div>
           )}
 
-          {/* Category Scoring Section */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-border pb-2">
-              <div className="flex items-center gap-2">
-                <Sliders className="h-4 w-4 text-primary" />
-                <h3 className="font-display text-sm sm:text-base font-bold text-foreground uppercase tracking-wide">
-                  Category Scoring
-                </h3>
+          {/* Tier or Category Scoring Section */}
+          {isTier ? (
+            <RatingTierSelector
+              tiers={ratingSystem?.tiers || []}
+              selectedTierId={selectedTierId}
+              onSelectTier={setSelectedTierId}
+            />
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between border-b border-border pb-2">
+                <div className="flex items-center gap-2">
+                  <Sliders className="h-4 w-4 text-primary" />
+                  <h3 className="font-display text-sm sm:text-base font-bold text-foreground uppercase tracking-wide">
+                    Category Scoring
+                  </h3>
+                </div>
+                <span className="text-xs text-muted-foreground font-mono">Scale 0–{scale}</span>
               </div>
-              <span className="text-xs text-muted-foreground font-mono">Scale 0–{scale}</span>
-            </div>
 
-            {categories.length === 0 ? (
-              <div className="p-6 text-center text-xs text-muted-foreground border border-dashed border-border rounded-card">
-                No scoring categories configured for this rubric.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                {categories.map((cat) => (
-                  <RatingCategorySlider
-                    key={cat.id}
-                    category={cat}
-                    score={scores[cat.id] ?? null}
-                    scale={scale}
-                    onScoreChange={handleScoreChange}
-                    onNumericInputChange={handleNumericInputChange}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+              {categories.length === 0 ? (
+                <div className="p-6 text-center text-xs text-muted-foreground border border-dashed border-border rounded-card">
+                  No scoring categories configured for this rubric.
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                  {categories.map((cat) => (
+                    <RatingCategorySlider
+                      key={cat.id}
+                      category={cat}
+                      score={scores[cat.id] ?? null}
+                      scale={scale}
+                      onScoreChange={handleScoreChange}
+                      onNumericInputChange={handleNumericInputChange}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Review Text */}
           <div className="space-y-2">
@@ -522,13 +555,15 @@ export function RatingDialog({
           </div>
 
           {/* Prominent Live Overall Score Card */}
-          <RatingScoreSummary
-            scoredCount={scoredCount}
-            totalCategoriesCount={totalCategoriesCount}
-            isComplete={isComplete}
-            weightedScore={calculation.weightedScore}
-            scale={scale}
-          />
+          {!isTier && (
+            <RatingScoreSummary
+              scoredCount={scoredCount}
+              totalCategoriesCount={totalCategoriesCount}
+              isComplete={isComplete}
+              weightedScore={calculation.weightedScore}
+              scale={scale}
+            />
+          )}
         </div>
 
         {/* Clear Rating Confirmation Banner */}
@@ -559,7 +594,7 @@ export function RatingDialog({
                 onClick={() => setShowClearConfirm(true)}
                 disabled={deleting || saving}
                 className="px-3 py-1.5 rounded-button text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 flex items-center gap-1.5 transition-colors cursor-pointer"
-                title="Options to clear numerical scores or remove entire rating"
+                title="Options to clear scores or remove entire rating"
               >
                 <Trash2 size={13} />
                 <span>Clear Rating...</span>
@@ -572,9 +607,13 @@ export function RatingDialog({
             onClick={handleSave}
             disabled={saving || deleting}
             className={`px-5 py-2.5 rounded-button text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-sm ${
-              scoredCount > 0
-                ? "bg-primary hover:bg-primary-hover text-primary-foreground font-bold shadow-primary/20"
-                : "bg-surface-elevated hover:bg-muted text-foreground border border-border"
+              isTier
+                ? selectedTierId
+                  ? "bg-primary hover:bg-primary-hover text-primary-foreground font-bold shadow-primary/20"
+                  : "bg-surface-elevated hover:bg-muted text-foreground border border-border"
+                : scoredCount > 0
+                  ? "bg-primary hover:bg-primary-hover text-primary-foreground font-bold shadow-primary/20"
+                  : "bg-surface-elevated hover:bg-muted text-foreground border border-border"
             }`}
           >
             {saving ? (
@@ -586,7 +625,15 @@ export function RatingDialog({
               <>
                 <Save className="h-4 w-4" />
                 <span>
-                  {isComplete ? "Save Rating" : scoredCount > 0 ? "Save Progress" : "Save"}
+                  {isTier
+                    ? selectedTierId
+                      ? "Save Tier Assignment"
+                      : "Save"
+                    : isComplete
+                      ? "Save Rating"
+                      : scoredCount > 0
+                        ? "Save Progress"
+                        : "Save"}
                 </span>
               </>
             )}

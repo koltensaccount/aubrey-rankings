@@ -7,6 +7,7 @@ import {
   GitCompare,
   Globe,
   Image as ImageIcon,
+  Layers,
   Lock,
   Share2,
   Sliders,
@@ -310,49 +311,95 @@ export function CollectionHeader({
 
           {/* Frosted Glass Rubric Breakdown Panel */}
           <div className="lg:col-span-4 p-4 sm:p-5 rounded-card bg-card/75 backdrop-blur-md border border-border/70 space-y-2.5 text-xs shadow-card">
-            <div className="flex justify-between items-center pb-2 border-b border-border font-semibold">
-              <span className="font-display uppercase tracking-wider text-sm text-foreground">
-                {collection.defaultRatingSystem?.name || "Weighted Rubric"}
-              </span>
-              <span className="text-primary-text font-mono">
-                Scale 0–{collection.defaultRatingSystem?.scale || 10}
-              </span>
-            </div>
-
-            {rubricCategories.length > 0 ? (
-              rubricCategories.map((cat: any) => (
-                <div key={cat.id} className="flex justify-between text-muted-foreground">
-                  <span>{cat.name}</span>
-                  <span className="text-foreground font-bold">{cat.weight}x</span>
+            {collection.defaultRatingSystem?.type === "tier" ? (
+              <>
+                <div className="flex justify-between items-center pb-2 border-b border-border font-semibold">
+                  <span className="font-display uppercase tracking-wider text-sm text-foreground flex items-center gap-1.5">
+                    <Layers size={14} className="text-amber-400" />
+                    <span>{collection.defaultRatingSystem?.name || "Tier System"}</span>
+                  </span>
+                  <span className="text-amber-400 font-mono text-[11px]">
+                    {collection.defaultRatingSystem?.tiers?.length || 0} Tiers
+                  </span>
                 </div>
-              ))
+
+                <div className="space-y-1.5 py-1">
+                  {(collection.defaultRatingSystem?.tiers || []).map((t: any) => (
+                    <div key={t.id} className="flex items-center justify-between text-muted-foreground">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="w-5 h-5 rounded flex items-center justify-center font-display font-black text-[10px] text-black shrink-0 shadow-xs"
+                          style={{ backgroundColor: t.color }}
+                        >
+                          {t.name}
+                        </span>
+                        {t.description && (
+                          <span className="truncate text-[11px] text-foreground/80">{t.description}</span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {isOwner && (
+                  <div className="pt-2 border-t border-border flex items-center justify-between">
+                    <Link
+                      href="/settings"
+                      className="text-[11px] text-primary-text hover:underline flex items-center gap-1 font-semibold"
+                    >
+                      <Layers size={12} />
+                      <span>Manage Tiers in Settings</span>
+                    </Link>
+                  </div>
+                )}
+              </>
             ) : (
               <>
-                <div className="flex justify-between text-muted-foreground"><span>Writing & Story</span><span className="text-foreground font-bold">8x</span></div>
-                <div className="flex justify-between text-muted-foreground"><span>Acting & Performance</span><span className="text-foreground font-bold">8x</span></div>
-                <div className="flex justify-between text-muted-foreground"><span>Cinematography</span><span className="text-foreground font-bold">7x</span></div>
-                <div className="flex justify-between text-muted-foreground"><span>Music & Sound Design</span><span className="text-foreground font-bold">3x</span></div>
-                <div className="flex justify-between text-muted-foreground"><span>Overall Impact</span><span className="text-primary-text font-bold">8x</span></div>
-              </>
-            )}
+                <div className="flex justify-between items-center pb-2 border-b border-border font-semibold">
+                  <span className="font-display uppercase tracking-wider text-sm text-foreground">
+                    {collection.defaultRatingSystem?.name || "Weighted Rubric"}
+                  </span>
+                  <span className="text-primary-text font-mono">
+                    Scale 0–{collection.defaultRatingSystem?.scale || 10}
+                  </span>
+                </div>
 
-            {isOwner && collection.defaultRatingSystem && (
-              <div className="pt-2 border-t border-border flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={onOpenRubricModal}
-                  className="text-[11px] text-primary-text hover:underline flex items-center gap-1 font-semibold cursor-pointer"
-                >
-                  <Sliders size={12} />
-                  <span>Adjust Rubric Weights</span>
-                </button>
-                <Link
-                  href="/settings"
-                  className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  Manage in Settings
-                </Link>
-              </div>
+                {rubricCategories.length > 0 ? (
+                  rubricCategories.map((cat: any) => (
+                    <div key={cat.id} className="flex justify-between text-muted-foreground">
+                      <span>{cat.name}</span>
+                      <span className="text-foreground font-bold">{cat.weight}x</span>
+                    </div>
+                  ))
+                ) : (
+                  <>
+                    <div className="flex justify-between text-muted-foreground"><span>Writing & Story</span><span className="text-foreground font-bold">8x</span></div>
+                    <div className="flex justify-between text-muted-foreground"><span>Acting & Performance</span><span className="text-foreground font-bold">8x</span></div>
+                    <div className="flex justify-between text-muted-foreground"><span>Cinematography</span><span className="text-foreground font-bold">7x</span></div>
+                    <div className="flex justify-between text-muted-foreground"><span>Music & Sound Design</span><span className="text-foreground font-bold">3x</span></div>
+                    <div className="flex justify-between text-muted-foreground"><span>Overall Impact</span><span className="text-primary-text font-bold">8x</span></div>
+                  </>
+                )}
+
+                {isOwner && collection.defaultRatingSystem && (
+                  <div className="pt-2 border-t border-border flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={onOpenRubricModal}
+                      className="text-[11px] text-primary-text hover:underline flex items-center gap-1 font-semibold cursor-pointer"
+                    >
+                      <Sliders size={12} />
+                      <span>Adjust Rubric Weights</span>
+                    </button>
+                    <Link
+                      href="/settings"
+                      className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      Manage in Settings
+                    </Link>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>

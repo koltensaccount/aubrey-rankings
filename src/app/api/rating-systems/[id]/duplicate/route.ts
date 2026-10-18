@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { ratingSystems, ratingCategories } from "@/db/schema";
+import { ratingSystems, ratingCategories, ratingTiers } from "@/db/schema";
 import { nanoid } from "@/lib/utils";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or, isNull } from "drizzle-orm";
 
 export async function POST(
   request: NextRequest,
@@ -17,11 +17,20 @@ export async function POST(
 
   try {
     const source = await db.query.ratingSystems.findFirst({
-      where: (rs, { eq, and }) =>
-        and(eq(rs.id, id), eq(rs.userId, session.user.id)),
+      where: (rs, { eq, and, or, isNull }) =>
+        and(
+          eq(rs.id, id),
+          or(
+            eq(rs.userId, session.user.id),
+            and(isNull(rs.userId), eq(rs.isSystemTemplate, true))
+          )
+        ),
       with: {
         categories: {
           orderBy: (cat, { asc }) => [asc(cat.sortOrder)],
+        },
+        tiers: {
+          orderBy: (tier, { asc }) => [asc(tier.sortOrder)],
         },
       },
     });
@@ -39,19 +48,34 @@ export async function POST(
         name: `Copy of ${source.name}`,
         description: source.description,
         scale: source.scale,
+        type: source.type || "numerical",
         isDefault: false,
+        isSystemTemplate: false,
       });
 
-      for (const cat of source.categories) {
-        await tx.insert(ratingCategories).values({
-          id: `rc_${Date.now()}_${nanoid(6)}`,
-          ratingSystemId: newSystemId,
-          name: cat.name,
-          description: cat.description,
-          weight: cat.weight,
-          sortOrder: cat.sortOrder,
-          isRequired: cat.isRequired,
-        });
+      if (source.type === "tier" && Array.isArray(source.tiers)) {
+        for (const t of source.tiers) {
+          await tx.insert(ratingTiers).values({
+            id: `tier_${Date.now()}_${nanoid(6)}`,
+            ratingSystemId: newSystemId,
+            name: t.name,
+            description: t.description,
+            color: t.color,
+            sortOrder: t.sortOrder,
+          });
+        }
+      } else if (Array.isArray(source.categories)) {
+        for (const cat of source.categories) {
+          await tx.insert(ratingCategories).values({
+            id: `rc_${Date.now()}_${nanoid(6)}`,
+            ratingSystemId: newSystemId,
+            name: cat.name,
+            description: cat.description,
+            weight: cat.weight,
+            sortOrder: cat.sortOrder,
+            isRequired: cat.isRequired,
+          });
+        }
       }
     });
 
@@ -60,6 +84,9 @@ export async function POST(
       with: {
         categories: {
           orderBy: (cat, { asc }) => [asc(cat.sortOrder)],
+        },
+        tiers: {
+          orderBy: (tier, { asc }) => [asc(tier.sortOrder)],
         },
       },
     });

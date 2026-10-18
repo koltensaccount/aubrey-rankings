@@ -2,9 +2,9 @@ import { validateRubric, RubricError } from "@/lib/rubric-management";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { ratingSystems, ratingCategories } from "@/db/schema";
+import { ratingSystems, ratingCategories, ratingTiers } from "@/db/schema";
 import { nanoid } from "@/lib/utils";
-import { eq, and, asc, sql } from "drizzle-orm";
+import { eq, or, and, isNull, sql } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession();
@@ -14,10 +14,17 @@ export async function GET(request: NextRequest) {
 
   try {
     const systems = await db.query.ratingSystems.findMany({
-      where: (rs, { eq }) => eq(rs.userId, session.user.id),
+      where: (rs, { eq, or, and, isNull }) =>
+        or(
+          eq(rs.userId, session.user.id),
+          and(isNull(rs.userId), eq(rs.isSystemTemplate, true))
+        ),
       with: {
         categories: {
           orderBy: (cat, { asc }) => [asc(cat.sortOrder)],
+        },
+        tiers: {
+          orderBy: (tier, { asc }) => [asc(tier.sortOrder)],
         },
       },
     });
@@ -41,7 +48,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => null);
     validateRubric(body, true);
-    const { name, description, scale, isDefault, categories } = body;
+    const { name, description, scale, isDefault, categories, tiers, type = "numerical" } = body;
 
     if (!name) {
       return NextResponse.json(
@@ -70,10 +77,25 @@ export async function POST(request: NextRequest) {
         name: name.trim(),
         description: description || null,
         scale: scale || 10,
+        type: type === "tier" ? "tier" : "numerical",
         isDefault: Boolean(isDefault),
       });
 
-      if (Array.isArray(categories)) {
+      if (type === "tier" && Array.isArray(tiers)) {
+        for (let i = 0; i < tiers.length; i++) {
+          const t = tiers[i];
+          if (t.name) {
+            await tx.insert(ratingTiers).values({
+              id: t.id || `tier_${Date.now()}_${nanoid(6)}`,
+              ratingSystemId: systemId,
+              name: t.name.trim(),
+              description: t.description || null,
+              color: t.color || "#FF4757",
+              sortOrder: i + 1,
+            });
+          }
+        }
+      } else if (Array.isArray(categories)) {
         for (let i = 0; i < categories.length; i++) {
           const cat = categories[i];
           if (cat.name) {

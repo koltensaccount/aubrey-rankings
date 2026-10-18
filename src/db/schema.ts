@@ -119,11 +119,11 @@ export const ratingSystems = pgTable(
   {
     id: text("id").primaryKey(),
     userId: text("user_id")
-      .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
     description: text("description"),
     scale: integer("scale").notNull().default(10), // 5, 10, or 100
+    type: text("type").notNull().default("numerical"), // 'numerical' | 'tier'
     isDefault: boolean("is_default").notNull().default(false),
     isSystemTemplate: boolean("is_system_template").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -133,7 +133,7 @@ export const ratingSystems = pgTable(
     index("idx_rating_systems_user").on(table.userId),
     uniqueIndex("uniq_user_default_rating_system")
       .on(table.userId)
-      .where(sql`"is_default" = true`),
+      .where(sql`"user_id" IS NOT NULL AND "is_default" = true`),
   ]
 );
 
@@ -154,6 +154,25 @@ export const ratingCategories = pgTable(
   },
   (table) => [
     index("idx_categories_system").on(table.ratingSystemId, table.sortOrder),
+  ]
+);
+
+export const ratingTiers = pgTable(
+  "rating_tiers",
+  {
+    id: text("id").primaryKey(),
+    ratingSystemId: text("rating_system_id")
+      .notNull()
+      .references(() => ratingSystems.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    description: text("description"),
+    color: text("color").notNull().default("#FF4757"),
+    sortOrder: integer("sort_order").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_tiers_system").on(table.ratingSystemId, table.sortOrder),
   ]
 );
 
@@ -238,6 +257,9 @@ export const ratings = pgTable(
       () => ratingSystems.id,
       { onDelete: "set null" }
     ),
+    tierId: text("tier_id").references(() => ratingTiers.id, {
+      onDelete: "restrict",
+    }),
     calculatedOverallScore: real("calculated_overall_score"),
     sourceRating: real("source_rating"),
     sourceScale: real("source_scale"),
@@ -263,6 +285,7 @@ export const ratings = pgTable(
     index("idx_ratings_user").on(table.userId),
     index("idx_ratings_collection").on(table.collectionId),
     index("idx_ratings_media").on(table.mediaItemId),
+    index("idx_ratings_tier").on(table.tierId),
   ]
 );
 
@@ -552,6 +575,7 @@ export const ratingSystemsRelations = relations(
       references: [user.id],
     }),
     categories: many(ratingCategories),
+    tiers: many(ratingTiers),
     ratings: many(ratings),
   })
 );
@@ -564,6 +588,17 @@ export const ratingCategoriesRelations = relations(
       references: [ratingSystems.id],
     }),
     scores: many(categoryScores),
+  })
+);
+
+export const ratingTiersRelations = relations(
+  ratingTiers,
+  ({ one, many }) => ({
+    system: one(ratingSystems, {
+      fields: [ratingTiers.ratingSystemId],
+      references: [ratingSystems.id],
+    }),
+    ratings: many(ratings),
   })
 );
 
@@ -583,6 +618,10 @@ export const ratingsRelations = relations(ratings, ({ one, many }) => ({
   ratingSystem: one(ratingSystems, {
     fields: [ratings.ratingSystemId],
     references: [ratingSystems.id],
+  }),
+  tier: one(ratingTiers, {
+    fields: [ratings.tierId],
+    references: [ratingTiers.id],
   }),
   categoryScores: many(categoryScores),
 }));

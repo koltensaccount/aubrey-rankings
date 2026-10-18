@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
     mediaItemId,
     collectionId,
     ratingSystemId,
+    tierId,
     scores,
     categoryScores: inputCategoryScores,
     watchDate,
@@ -34,6 +35,7 @@ export async function POST(request: NextRequest) {
     !mediaItemId ||
     (collectionId != null && typeof collectionId !== "string") ||
     (ratingSystemId != null && typeof ratingSystemId !== "string") ||
+    (tierId != null && typeof tierId !== "string") ||
     [isWatched, isFavorite].some(
       (value) => value !== undefined && typeof value !== "boolean",
     ) ||
@@ -145,12 +147,15 @@ export async function POST(request: NextRequest) {
       }
       const system = activeRatingSystemId
         ? await tx.query.ratingSystems.findFirst({
-            where: (r, { eq, and }) =>
+            where: (r, { eq, and, or, isNull }) =>
               and(
                 eq(r.id, activeRatingSystemId),
-                eq(r.userId, session.user.id),
+                or(
+                  eq(r.userId, session.user.id),
+                  and(isNull(r.userId), eq(r.isSystemTemplate, true))
+                )
               ),
-            with: { categories: true },
+            with: { categories: true, tiers: true },
           })
         : null;
       if (activeRatingSystemId && !system)
@@ -158,6 +163,16 @@ export async function POST(request: NextRequest) {
           { error: "Invalid rating system or access denied" },
           { status: 400 },
         );
+
+      if (tierId !== undefined && tierId !== null) {
+        const validTier = await tx.query.ratingTiers.findFirst({
+          where: (t, { eq }) => eq(t.id, tierId),
+        });
+        if (!validTier) {
+          return NextResponse.json({ error: "Tier not found" }, { status: 404 });
+        }
+      }
+
       const isScoresUpdate = scores !== undefined || inputCategoryScores !== undefined;
       const categories = existing?.ratingSystemId === activeRatingSystemId && body.replaceRatingSystem !== true ? withSavedWeights(system?.categories ?? [], existing?.categoryScores ?? []) : system?.categories ?? [];
       let finalScores: Record<string, number> = {};
@@ -193,7 +208,8 @@ export async function POST(request: NextRequest) {
       {
         const values = {
           calculatedOverallScore,
-          ratingSystemId: isScoresUpdate ? activeRatingSystemId : (existing?.ratingSystemId ?? activeRatingSystemId),
+          tierId: tierId !== undefined ? tierId : (existing?.tierId ?? null),
+          ratingSystemId: (isScoresUpdate || tierId !== undefined) ? activeRatingSystemId : (existing?.ratingSystemId ?? activeRatingSystemId),
           watchDate:
             parsedWatchDate === undefined
               ? (existing?.watchDate ?? null)
@@ -250,7 +266,7 @@ export async function POST(request: NextRequest) {
       }
       const rating = await tx.query.ratings.findFirst({
         where: (r, { eq }) => eq(r.id, ratingId),
-        with: { categoryScores: true },
+        with: { categoryScores: true, tier: true },
       });
       return NextResponse.json({
         success: true,
@@ -319,6 +335,29 @@ export async function DELETE(request: NextRequest) {
         { error: "Rating not found or access denied" },
         { status: 404 },
       );
+    }
+
+    const clearTierOnly = url.searchParams.get("clearTierOnly") === "true";
+    if (clearTierOnly) {
+      await db
+        .update(ratings)
+        .set({
+          tierId: null,
+          updatedAt: new Date(),
+        })
+        .where(
+          and(
+            eq(ratings.id, targetRating.id),
+            eq(ratings.userId, session.user.id),
+          ),
+        );
+
+      return NextResponse.json({
+        success: true,
+        clearedTierOnly: true,
+        deletedRatingId: targetRating.id,
+        mediaItemId: targetRating.mediaItemId,
+      });
     }
 
     const clearScoresOnly = url.searchParams.get("clearScoresOnly") === "true";

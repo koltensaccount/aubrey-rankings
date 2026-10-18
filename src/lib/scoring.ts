@@ -88,10 +88,13 @@ export function calculateWeightedAverage(
 
 export type RatingState = "unrated" | "in_progress" | "rated";
 
+import { TierItem } from "./tier-system";
+
 export interface ItemRatingStatus {
   state: RatingState;
   score: number | null;
   scoreScale?: number;
+  tier?: TierItem | null;
   scoredCount: number;
   totalCategories: number;
   requiredCount: number;
@@ -106,11 +109,48 @@ export function getItemRatingStatus(
     calculatedOverallScore?: number | null;
     sourceRating?: number | null;
     sourceScale?: number | null;
+    tierId?: string | null;
     categoryScores?: Array<{ categoryId: string; score: number | null; weightApplied?:number|null }> | null;
-    ratingSystem?: { categories: CategoryDef[]; scale?:number } | null;
+    ratingSystem?: { type?: string; categories?: CategoryDef[]; tiers?: TierItem[]; scale?:number } | null;
   } | null | undefined,
-  defaultScale = 10
+  defaultScale = 10,
+  activeRatingSystem?: { type?: string; tiers?: TierItem[]; categories?: CategoryDef[]; scale?: number } | null
 ): ItemRatingStatus {
+  const effectiveSystem = activeRatingSystem ?? rating?.ratingSystem;
+  if (effectiveSystem?.type === "tier") {
+    const tiers = effectiveSystem.tiers || [];
+    if (rating?.tierId) {
+      const matchedTier = tiers.find((t) => t.id === rating.tierId) || {
+        id: rating.tierId,
+        name: "Rated",
+        color: "#FF4757",
+        sortOrder: 0,
+      };
+      return {
+        state: "rated",
+        score: null,
+        tier: matchedTier,
+        scoredCount: 1,
+        totalCategories: 1,
+        requiredCount: 1,
+        isComplete: true,
+        statusLabel: matchedTier.name,
+        actionLabel: "Edit Tier",
+      };
+    }
+    return {
+      state: "unrated",
+      score: null,
+      tier: null,
+      scoredCount: 0,
+      totalCategories: 1,
+      requiredCount: 1,
+      isComplete: false,
+      statusLabel: "Unrated",
+      actionLabel: "Assign Tier",
+    };
+  }
+
   categories = withSavedWeights(rating?.ratingSystem?.categories ?? categories, rating?.categoryScores ?? []);
   const scoreScale = rating?.ratingSystem?.scale ?? defaultScale;
   const totalCategories = categories.length;

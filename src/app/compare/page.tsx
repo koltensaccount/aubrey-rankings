@@ -313,10 +313,12 @@ function ComparePageContent() {
               Mean Score Gap
             </span>
             <div className="font-display text-4xl text-primary">
-              {metrics.meanScoreDifference !== null ? `${metrics.meanScoreDifference} pts` : "—"}
+              {metrics.meanScoreDifference !== null ? `${metrics.meanScoreDifference} pts` : "Ordinal"}
             </div>
             <p className="text-[11px] text-muted-foreground">
-              Average sensory score disparity across {metrics.overlappingCount} shared titles.
+              {metrics.meanScoreDifference !== null
+                ? `Average sensory score disparity across ${metrics.overlappingCount} shared titles.`
+                : `Correlating ordinal rank positions across ${metrics.overlappingCount} shared titles.`}
             </p>
           </div>
         </section>
@@ -380,11 +382,20 @@ function ComparePageContent() {
                         <span className="text-[10px] text-muted-foreground block">
                           {leftCollection.user.name || "Left"}&apos;s Rank
                         </span>
-                        <div className="font-display text-lg text-foreground">
-                          #{item.leftRank}{" "}
-                          <span className="text-xs font-sans text-primary">
-                            ({item.leftScore !== null ? item.leftScore.toFixed(1) : "—"})
-                          </span>
+                        <div className="font-display text-lg text-foreground flex items-center gap-1.5 flex-wrap">
+                          <span>#{item.leftRank}</span>
+                          {item.leftTierName ? (
+                            <span
+                              className="px-1.5 py-0.5 rounded text-[10px] font-bold text-black uppercase"
+                              style={{ backgroundColor: item.leftTierColor || "#EF4444" }}
+                            >
+                              {item.leftTierName}
+                            </span>
+                          ) : (
+                            <span className="text-xs font-sans text-primary">
+                              ({item.leftScore !== null ? item.leftScore.toFixed(1) : "—"})
+                            </span>
+                          )}
                         </div>
                       </div>
 
@@ -392,11 +403,20 @@ function ComparePageContent() {
                         <span className="text-[10px] text-muted-foreground block">
                           {rightCollection.user.name || "Right"}&apos;s Rank
                         </span>
-                        <div className="font-display text-lg text-foreground">
-                          #{item.rightRank}{" "}
-                          <span className="text-xs font-sans text-primary">
-                            ({item.rightScore !== null ? item.rightScore.toFixed(1) : "—"})
-                          </span>
+                        <div className="font-display text-lg text-foreground flex items-center gap-1.5 flex-wrap">
+                          <span>#{item.rightRank}</span>
+                          {item.rightTierName ? (
+                            <span
+                              className="px-1.5 py-0.5 rounded text-[10px] font-bold text-black uppercase"
+                              style={{ backgroundColor: item.rightTierColor || "#EF4444" }}
+                            >
+                              {item.rightTierName}
+                            </span>
+                          ) : (
+                            <span className="text-xs font-sans text-primary">
+                              ({item.rightScore !== null ? item.rightScore.toFixed(1) : "—"})
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -430,8 +450,8 @@ function ComparePageContent() {
                     {rightCollection.user.name || "Right"} Rank
                   </th>
                   <th className="py-3 px-4 text-center">Shift</th>
-                  <th className="py-3 px-4 text-right">Left Score</th>
-                  <th className="py-3 px-4 text-right">Right Score</th>
+                  <th className="py-3 px-4 text-right">Left Evaluation</th>
+                  <th className="py-3 px-4 text-right">Right Evaluation</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -456,10 +476,32 @@ function ComparePageContent() {
                       )}
                     </td>
                     <td className="py-3 px-4 text-right font-medium text-foreground">
-                      {item.leftScore !== null ? item.leftScore.toFixed(1) : "—"}
+                      {item.leftTierName ? (
+                        <span
+                          className="px-2 py-0.5 rounded text-[10px] font-bold text-black uppercase"
+                          style={{ backgroundColor: item.leftTierColor || "#EF4444" }}
+                        >
+                          {item.leftTierName}
+                        </span>
+                      ) : item.leftScore !== null ? (
+                        item.leftScore.toFixed(1)
+                      ) : (
+                        "—"
+                      )}
                     </td>
                     <td className="py-3 px-4 text-right font-medium text-foreground">
-                      {item.rightScore !== null ? item.rightScore.toFixed(1) : "—"}
+                      {item.rightTierName ? (
+                        <span
+                          className="px-2 py-0.5 rounded text-[10px] font-bold text-black uppercase"
+                          style={{ backgroundColor: item.rightTierColor || "#EF4444" }}
+                        >
+                          {item.rightTierName}
+                        </span>
+                      ) : item.rightScore !== null ? (
+                        item.rightScore.toFixed(1)
+                      ) : (
+                        "—"
+                      )}
                     </td>
                   </tr>
                 ))}

@@ -67,7 +67,7 @@ export default function CollectionDetailPage({
   const [deletingEntry, setDeletingEntry] = useState(false);
 
   // View preferences
-  const [viewMode, setViewMode] = useState<"list" | "editorial" | "compact">("list");
+  const [viewMode, setViewMode] = useState<"list" | "editorial" | "compact" | "tier_board">("list");
   const [sortBy, setSortBy] = useState<SortOption>("score_desc");
   const [filterRated, setFilterRated] = useState<FilterOption>("all");
   const [selectedSeason, setSelectedSeason] = useState<string>("all");
@@ -498,6 +498,8 @@ export default function CollectionDetailPage({
   const rubricCategories = collection?.defaultRatingSystem?.categories || [];
 
   // Calculate accurate collection rating progress
+  const isTierCollection = collection?.defaultRatingSystem?.type === "tier";
+
   const { completedCount, inProgressCount, unratedCount, completionPercentage } = useMemo(() => {
     if (!collection?.entries) return { completedCount: 0, inProgressCount: 0, unratedCount: 0, completionPercentage: 0 };
     const categories = collection.defaultRatingSystem?.categories || [];
@@ -507,7 +509,12 @@ export default function CollectionDetailPage({
 
     for (const entry of collection.entries) {
       const ur = ratingsMap[entry.mediaItem?.id];
-      const status = getItemRatingStatus(categories, ur, collection.defaultRatingSystem?.scale ?? 10);
+      const status = getItemRatingStatus(
+        categories,
+        ur,
+        collection.defaultRatingSystem?.scale ?? 10,
+        collection.defaultRatingSystem
+      );
       if (status.state === "rated") {
         completed++;
       } else if (status.state === "in_progress") {
@@ -535,7 +542,12 @@ export default function CollectionDetailPage({
     let list = collection.entries.map((entry: any) => {
       const media = entry.mediaItem;
       const userRating = ratingsMap[media.id];
-      const ratingStatus = getItemRatingStatus(categories, userRating, collection.defaultRatingSystem?.scale ?? 10);
+      const ratingStatus = getItemRatingStatus(
+        categories,
+        userRating,
+        collection.defaultRatingSystem?.scale ?? 10,
+        collection.defaultRatingSystem
+      );
       const score = ratingStatus.score;
       return {
         ...entry,
@@ -569,11 +581,23 @@ export default function CollectionDetailPage({
     // Sorting
     list.sort((a: any, b: any) => {
       if (sortBy === "score_desc") {
+        if (isTierCollection) {
+          const aTier = a.ratingStatus.tier?.sortOrder ?? 9999;
+          const bTier = b.ratingStatus.tier?.sortOrder ?? 9999;
+          if (aTier !== bTier) return aTier - bTier;
+          return a.sortOrder - b.sortOrder;
+        }
         if (a.score === null && b.score === null) return a.sortOrder - b.sortOrder;
         if (a.score === null) return 1;
         if (b.score === null) return -1;
         return b.score / (b.ratingStatus.scoreScale ?? 10) - a.score / (a.ratingStatus.scoreScale ?? 10);
       } else if (sortBy === "score_asc") {
+        if (isTierCollection) {
+          const aTier = a.ratingStatus.tier?.sortOrder ?? -1;
+          const bTier = b.ratingStatus.tier?.sortOrder ?? -1;
+          if (aTier !== bTier) return bTier - aTier;
+          return a.sortOrder - b.sortOrder;
+        }
         if (a.score === null && b.score === null) return a.sortOrder - b.sortOrder;
         if (a.score === null) return 1;
         if (b.score === null) return -1;
@@ -593,7 +617,7 @@ export default function CollectionDetailPage({
     });
 
     return list;
-  }, [collection, ratingsMap, filterRated, selectedSeason, searchFilter, sortBy]);
+  }, [collection, ratingsMap, filterRated, selectedSeason, searchFilter, sortBy, isTierCollection]);
 
   const handleRatingSaved = (savedRating: any) => {
     if (!savedRating?.mediaItemId) return;
@@ -608,6 +632,30 @@ export default function CollectionDetailPage({
         [savedRating.mediaItemId]: savedRating,
       };
     });
+  };
+
+  const handleQuickAssignTier = async (mediaItem: any, tierId: string | null) => {
+    try {
+      const res = await fetch("/api/ratings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mediaItemId: mediaItem.id,
+          collectionId: id,
+          tierId: tierId,
+          ratingSystemId: collection.defaultRatingSystem?.id || null,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        handleRatingSaved(data.rating || {
+          mediaItemId: mediaItem.id,
+          tierId,
+        });
+      }
+    } catch (err) {
+      console.error("Quick assign tier error", err);
+    }
   };
 
   if (loading) {
@@ -681,6 +729,7 @@ export default function CollectionDetailPage({
         setSortBy={setSortBy}
         viewMode={viewMode}
         setViewMode={setViewMode}
+        isTierCollection={isTierCollection}
       />
 
       {/* 3. Main Rankings Entries & Community Discussion */}
@@ -693,6 +742,7 @@ export default function CollectionDetailPage({
           onOpenAddModal={() => setShowAddModal(true)}
           onSelectItemForRating={isOwner ? setSelectedItemForRating : () => {}}
           onSetEntryToDelete={setEntryToDelete}
+          onQuickAssignTier={isOwner ? handleQuickAssignTier : undefined}
         />
 
         <CommentsSection collectionId={collection.id} isOwner={isOwner} />

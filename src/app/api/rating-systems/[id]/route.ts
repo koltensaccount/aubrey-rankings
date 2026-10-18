@@ -24,11 +24,20 @@ export async function GET(
 
   try {
     const system = await db.query.ratingSystems.findFirst({
-      where: (rs, { eq, and }) =>
-        and(eq(rs.id, id), eq(rs.userId, session.user.id)),
+      where: (rs, { eq, and, or, isNull }) =>
+        and(
+          eq(rs.id, id),
+          or(
+            eq(rs.userId, session.user.id),
+            and(isNull(rs.userId), eq(rs.isSystemTemplate, true))
+          )
+        ),
       with: {
         categories: {
           orderBy: (cat, { asc }) => [asc(cat.sortOrder)],
+        },
+        tiers: {
+          orderBy: (tier, { asc }) => [asc(tier.sortOrder)],
         },
       },
     });
