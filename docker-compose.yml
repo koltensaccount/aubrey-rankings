@@ -18,7 +18,7 @@ services:
       - aubrey_internal
 
   aubrey-web:
-    image: ghcr.io/koltensaccount/aubrey-rankings:latest
+    image: ${AUBREY_IMAGE:-ghcr.io/koltensaccount/aubrey-rankings:latest}
     build:
       context: .
       dockerfile: Dockerfile
@@ -37,6 +37,10 @@ services:
       TMDB_API_KEY: ${TMDB_API_KEY}
       RESEND_API_KEY: ${RESEND_API_KEY}
       EMAIL_FROM: ${EMAIL_FROM:-Aubrey Rankings <accounts@aubrey.koltensserver.com>}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
+      ADMIN_USER_IDS: ${ADMIN_USER_IDS:-}
+      ADMIN_EMAILS: ${ADMIN_EMAILS:-}
       PORT: 3000
     volumes:
       - aubrey_uploads:/app/public/uploads

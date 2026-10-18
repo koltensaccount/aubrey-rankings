@@ -5,6 +5,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: aubrey-production-release
+  cancel-in-progress: false
+
 permissions:
   contents: read
   packages: write
@@ -43,7 +47,11 @@ jobs:
       - name: Run Schema Migrations
         env:
           DATABASE_URL: postgresql://koltenbendickson:password@localhost:5432/aubrey_rankings
-        run: npx drizzle-kit push
+          MIGRATIONS_DIR: ./src/db/migrations
+        run: node scripts/migrate.cjs
+        # Use the exact SQL shipped in the production image.
+        # The runner defaults to /app/migrations in Docker.
+        # Source checkouts use MIGRATIONS_DIR.
 
       - name: Run Test Suite
         env:
@@ -85,6 +93,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
+          build-args: APP_REVISION=${{ github.sha }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha

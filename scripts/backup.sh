@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 BACKUP_DIR="${BACKUP_DIR:-/home/koltensaccount/backups/aubrey-rankings}"
 TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
@@ -16,10 +17,8 @@ gzip -t "${BACKUP_DIR}/aubrey_db_${TIMESTAMP}.sql.gz"
 
 # 2. Uploaded Artwork Volume Backup
 echo "-> Backing up uploaded artwork volume..."
-docker run --rm \
-  -v aubrey_uploads:/volume:ro \
-  -v "${BACKUP_DIR}":/backup \
-  alpine tar -czf "/backup/aubrey_uploads_${TIMESTAMP}.tar.gz" -C /volume .
+# Stream to a host-owned file, rather than letting container root create it.
+docker run --rm -v aubrey_uploads:/volume:ro alpine tar -czf - -C /volume . > "${BACKUP_DIR}/aubrey_uploads_${TIMESTAMP}.tar.gz"
 
 # Validate artwork tarball gzip integrity
 gzip -t "${BACKUP_DIR}/aubrey_uploads_${TIMESTAMP}.tar.gz"

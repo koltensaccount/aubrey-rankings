@@ -26,6 +26,8 @@ In the Cloudflare Zero Trust Dashboard (or local tunnel config):
 
 ---
 
+See [the corrected pipeline contract and recovery procedure](deployment-pipeline.md).
+
 ## 2. Automatic CI/CD & Updates
 
 - **GitHub Actions**: Every verified push to `main` triggers automated tests (`npm test`) and publishes a multi-stage Docker build to GitHub Container Registry (`ghcr.io/koltensaccount/aubrey-rankings:latest`).

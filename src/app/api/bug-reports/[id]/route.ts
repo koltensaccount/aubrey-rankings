@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
 import { bugReports } from "@/db/schema";
-import { checkIsAdmin } from "../route";
+import { checkIsAdmin } from "@/lib/admin";
 import { eq } from "drizzle-orm";
 
 export async function PATCH(

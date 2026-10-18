@@ -16,12 +16,16 @@ COPY . .
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV NODE_ENV=production
 ENV BETTER_AUTH_SECRET="build_placeholder_secret_for_compilation_only"
+ARG APP_REVISION=unknown
+ENV APP_REVISION=$APP_REVISION
 RUN npm run build
 
 # Stage 4: Production Runner
 FROM base AS runner
 WORKDIR /app
 
+ARG APP_REVISION=unknown
+ENV APP_REVISION=$APP_REVISION
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
@@ -39,6 +43,12 @@ COPY --from=builder /app/public ./public
 # https://nextjs.org/docs/advanced-features/output-file-tracing
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+
+COPY --from=builder /app/docker-compose.yml ./docker-compose.yml
+COPY --from=builder /app/scripts/migrate.cjs ./scripts/migrate.cjs
+COPY --from=builder /app/scripts/auto-update.sh ./scripts/auto-update.sh
+COPY --from=builder /app/scripts/backup.sh ./scripts/backup.sh
+COPY --from=builder /app/src/db/migrations ./migrations
 
 USER nextjs
 
