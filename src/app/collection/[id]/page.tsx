@@ -19,6 +19,7 @@ import { getTmdbImageUrl } from "@/lib/tmdb";
 import { RatingDialog } from "@/components/rating-dialog";
 import { LikeButton } from "@/components/social/like-button";
 import { CommentsSection } from "@/components/social/comments-section";
+import { calibrateOklchTheme } from "@/lib/palette";
 
 type SortOption = "score_desc" | "score_asc" | "order" | "title";
 type FilterOption = "all" | "rated" | "unrated";
@@ -106,6 +107,10 @@ export default function CollectionDetailPage({
       }
     }
     return Array.from(seasons).sort((a, b) => a - b);
+  }, [collection]);
+
+  const calibratedTheme = useMemo(() => {
+    return calibrateOklchTheme(collection?.customCoverColor || "#89d5d5");
   }, [collection]);
 
   // Process and sort entries
@@ -223,7 +228,14 @@ export default function CollectionDetailPage({
       {/* =========================================================================
           ATMOSPHERIC 4K HEADER WITH TRANSPARENT CLEARLOGO (Screen B Layout)
           ========================================================================= */}
-      <header className="relative overflow-hidden bg-[#101513] border-b border-[#303b34]">
+      <header
+        className="relative overflow-hidden bg-[#101513] border-b border-[#303b34]"
+        style={{
+          ["--art-tint" as any]: calibratedTheme.primaryAccent,
+          ["--art-glow" as any]: calibratedTheme.softGlow,
+          ["--art-border" as any]: calibratedTheme.borderTone,
+        }}
+      >
         {/* Backdrop Art with Vignette */}
         <div className="absolute inset-0 z-0">
           <img
@@ -307,12 +319,12 @@ export default function CollectionDetailPage({
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-end">
             <div className="lg:col-span-8 space-y-4">
-              {/* Authentic Transparent ClearLOGO for Black Mirror */}
-              {isBlackMirror && (
+              {/* Transparent ClearLOGO */}
+              {(collection.clearLogoUrl || isBlackMirror) && (
                 <div className="py-1">
                   <img
-                    src="/prototype-art/black-mirror-logo.png"
-                    alt="Black Mirror"
+                    src={collection.clearLogoUrl || "/prototype-art/black-mirror-logo.png"}
+                    alt={collection.title || collection.name || "Title Logo"}
                     className="h-16 sm:h-20 w-auto object-contain filter drop-shadow-[0_10px_24px_rgba(0,0,0,0.95)]"
                   />
                 </div>

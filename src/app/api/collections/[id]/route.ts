@@ -3,6 +3,7 @@ import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
 import { collections, collectionEntries, mediaItems, ratings, ratingSystems } from "@/db/schema";
 import { eq, and, asc } from "drizzle-orm";
+import { tmdb } from "@/lib/tmdb";
 
 export async function GET(
   request: NextRequest,
@@ -77,8 +78,20 @@ export async function GET(
       }));
     }
 
+    let clearLogoUrl = col.title.toLowerCase().includes("black mirror")
+      ? "/prototype-art/black-mirror-logo.png"
+      : null;
+
+    if (!clearLogoUrl && col.tmdbId) {
+      const mediaType = col.collectionType === "tv_show" ? "tv" : "movie";
+      clearLogoUrl = await tmdb.getClearLogo(col.tmdbId, mediaType).catch(() => null);
+    }
+
     return NextResponse.json({
-      collection: col,
+      collection: {
+        ...col,
+        clearLogoUrl,
+      },
       ratings: collectionRatings,
       isOwner,
     });

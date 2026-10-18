@@ -217,12 +217,26 @@ export const tmdb = {
     }>(`/movie/${movieId}`);
   },
 
-  async getMovieImages(movieId: number): Promise<{ posters: TmdbImageItem[]; backdrops: TmdbImageItem[] }> {
+  async getMovieImages(movieId: number): Promise<{ posters: TmdbImageItem[]; backdrops: TmdbImageItem[]; logos: TmdbImageItem[] }> {
     return tmdbFetch(`/movie/${movieId}/images`);
   },
 
-  async getTvImages(tvId: number): Promise<{ posters: TmdbImageItem[]; backdrops: TmdbImageItem[] }> {
+  async getTvImages(tvId: number): Promise<{ posters: TmdbImageItem[]; backdrops: TmdbImageItem[]; logos: TmdbImageItem[] }> {
     return tmdbFetch(`/tv/${tvId}/images`);
+  },
+
+  async getClearLogo(mediaId: number, mediaType: "tv" | "movie"): Promise<string | null> {
+    try {
+      const data = mediaType === "tv" ? await this.getTvImages(mediaId) : await this.getMovieImages(mediaId);
+      if (data.logos && data.logos.length > 0) {
+        // Return highest rated logo
+        const sorted = [...data.logos].sort((a, b) => b.vote_average - a.vote_average);
+        return getTmdbImageUrl(sorted[0].file_path, "original");
+      }
+      return null;
+    } catch {
+      return null;
+    }
   },
 
   async getEpisodeImages(tvId: number, seasonNumber: number, episodeNumber: number): Promise<{ stills: TmdbImageItem[] }> {
