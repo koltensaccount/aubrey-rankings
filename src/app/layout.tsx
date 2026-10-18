@@ -14,8 +14,8 @@ export const metadata: Metadata = {
 const themeInitScript = `
 (function() {
   try {
-    var storedTheme = localStorage.getItem('ar_theme') || 'dark';
-    var storedAccent = localStorage.getItem('ar_accent') || '#89D5D5';
+    var storedTheme = localStorage.getItem('ar_theme:guest') || 'dark';
+    var storedAccent = localStorage.getItem('ar_accent:guest') || '#89D5D5';
     var isDark = storedTheme === 'dark';
     if (storedTheme === 'system') {
       isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;

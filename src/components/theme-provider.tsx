@@ -1,5 +1,6 @@
 "use client";
 
+import { useSession } from "@/lib/auth-client";
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import {
   ThemeMode,
@@ -58,9 +59,13 @@ export function ThemeProvider({
   initialUserTheme?: ThemeMode;
   initialUserAccent?: string;
 }) {
+  const {data: session} = useSession();
+  const accountKey = session?.user.id ?? "guest";
+  const themeKey = `${STORAGE_KEY_THEME}:${accountKey}`;
+  const accentKey = `${STORAGE_KEY_ACCENT}:${accountKey}`;
   const [theme, setThemeState] = useState<ThemeMode>(() => {
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem(STORAGE_KEY_THEME);
+      const stored = localStorage.getItem(`${STORAGE_KEY_THEME}:guest`);
       if (isValidThemeMode(stored)) return stored;
     }
     return initialUserTheme || DEFAULT_THEME;
@@ -68,7 +73,7 @@ export function ThemeProvider({
 
   const [accentColor, setAccentColorState] = useState<string>(() => {
     if (typeof window !== "undefined") {
-      const stored = localStorage.getItem(STORAGE_KEY_ACCENT);
+      const stored = localStorage.getItem(`${STORAGE_KEY_ACCENT}:guest`);
       if (stored && isValidHexColor(stored)) return normalizeHexColor(stored);
     }
     return initialUserAccent || DEFAULT_ACCENT;
@@ -156,11 +161,11 @@ export function ThemeProvider({
       if (!isValidThemeMode(newTheme)) return;
       setThemeState(newTheme);
       if (typeof window !== "undefined") {
-        localStorage.setItem(STORAGE_KEY_THEME, newTheme);
+        localStorage.setItem(themeKey, newTheme);
       }
       persistToServer(newTheme, undefined);
     },
-    [persistToServer]
+    [persistToServer, themeKey, accentKey]
   );
 
   const setAccentColor = useCallback(
@@ -169,26 +174,30 @@ export function ThemeProvider({
       const normalized = normalizeHexColor(newAccent);
       setAccentColorState(normalized);
       if (typeof window !== "undefined") {
-        localStorage.setItem(STORAGE_KEY_ACCENT, normalized);
+        localStorage.setItem(accentKey, normalized);
       }
       persistToServer(undefined, normalized);
     },
-    [persistToServer]
+    [persistToServer, themeKey, accentKey]
   );
 
   const resetToDefaults = useCallback(() => {
     setThemeState(DEFAULT_THEME);
     setAccentColorState(DEFAULT_ACCENT);
     if (typeof window !== "undefined") {
-      localStorage.setItem(STORAGE_KEY_THEME, DEFAULT_THEME);
-      localStorage.setItem(STORAGE_KEY_ACCENT, DEFAULT_ACCENT);
+      localStorage.setItem(themeKey, DEFAULT_THEME);
+      localStorage.setItem(accentKey, DEFAULT_ACCENT);
     }
     persistToServer(DEFAULT_THEME, DEFAULT_ACCENT);
-  }, [persistToServer]);
+  }, [persistToServer, themeKey, accentKey]);
 
   // Initial load: sync from user profile if signed in
   useEffect(() => {
     let mounted = true;
+    const storedTheme = localStorage.getItem(themeKey);
+    const storedAccent = localStorage.getItem(accentKey);
+    setThemeState(isValidThemeMode(storedTheme) ? storedTheme : DEFAULT_THEME);
+    setAccentColorState(storedAccent && isValidHexColor(storedAccent) ? normalizeHexColor(storedAccent) : DEFAULT_ACCENT);
     async function loadUserProfile() {
       try {
         const res = await fetch("/api/user/profile");
@@ -197,23 +206,23 @@ export function ThemeProvider({
         if (mounted && data?.user) {
           if (data.user.preferredTheme && isValidThemeMode(data.user.preferredTheme)) {
             setThemeState(data.user.preferredTheme);
-            localStorage.setItem(STORAGE_KEY_THEME, data.user.preferredTheme);
+            localStorage.setItem(themeKey, data.user.preferredTheme);
           }
           if (data.user.accentColor && isValidHexColor(data.user.accentColor)) {
             const norm = normalizeHexColor(data.user.accentColor);
             setAccentColorState(norm);
-            localStorage.setItem(STORAGE_KEY_ACCENT, norm);
+            localStorage.setItem(accentKey, norm);
           }
         }
       } catch {
         // Logged-out or offline; localStorage values are already used
       }
     }
-    loadUserProfile();
+    if (session?.user.id) loadUserProfile();
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [session?.user.id, themeKey, accentKey]);
 
   return (
     <ThemeContext.Provider

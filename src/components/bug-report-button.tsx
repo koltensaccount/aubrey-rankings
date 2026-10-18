@@ -23,6 +23,7 @@ export function BugReportButton() {
         if (items[i].type.indexOf("image") !== -1) {
           const file = items[i].getAsFile();
           if (file) {
+            if (file.size > 2*1024*1024 || !["image/png","image/jpeg","image/webp"].includes(file.type)) { setError("Use a PNG, JPEG, or WebP screenshot up to 2MB."); continue; }
             const reader = new FileReader();
             reader.onload = (loadEvent) => {
               const res = loadEvent.target?.result as string;
@@ -42,8 +43,8 @@ export function BugReportButton() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (file.size > 5 * 1024 * 1024) {
-      setError("Screenshot file is too large (max 5MB).");
+    if (file.size > 2 * 1024 * 1024) {
+      setError("Screenshot file is too large (max 2MB).");
       return;
     }
 

@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { ratings, categoryScores, collections } from "@/db/schema";
-import { calculateWeightedAverage } from "@/lib/scoring";
+import { ratings, categoryScores, collections, ratingSystems } from "@/db/schema";
+import { calculateWeightedAverage, withSavedWeights } from "@/lib/scoring";
 import { normalizeRatingScores } from "@/lib/rating-validation";
 import { nanoid } from "@/lib/utils";
 import { eq, and, isNull, sql } from "drizzle-orm";
@@ -139,6 +139,10 @@ export async function POST(request: NextRequest) {
         ratingSystemId === undefined
           ? (existing?.ratingSystemId ?? col?.defaultRatingSystemId ?? null)
           : ratingSystemId;
+      if (activeRatingSystemId) await tx.select({id:ratingSystems.id}).from(ratingSystems).where(eq(ratingSystems.id,activeRatingSystemId)).for("update");
+      if (existing?.ratingSystemId && existing.categoryScores.length && activeRatingSystemId !== existing.ratingSystemId && body.replaceRatingSystem !== true) {
+        return NextResponse.json({error:"Changing a saved rating's rubric requires explicit confirmation", code:"RUBRIC_CHANGE_REQUIRES_CONFIRMATION"},{status:409});
+      }
       const system = activeRatingSystemId
         ? await tx.query.ratingSystems.findFirst({
             where: (r, { eq, and }) =>
@@ -155,7 +159,7 @@ export async function POST(request: NextRequest) {
           { status: 400 },
         );
       const isScoresUpdate = scores !== undefined || inputCategoryScores !== undefined;
-      const categories = system?.categories ?? [];
+      const categories = existing?.ratingSystemId === activeRatingSystemId && body.replaceRatingSystem !== true ? withSavedWeights(system?.categories ?? [], existing?.categoryScores ?? []) : system?.categories ?? [];
       let finalScores: Record<string, number> = {};
       let calculatedOverallScore: number | null = existing?.calculatedOverallScore ?? null;
 
@@ -321,6 +325,7 @@ export async function DELETE(request: NextRequest) {
 
     if (clearScoresOnly) {
       await db.transaction(async (tx) => {
+        await tx.select({id:ratings.id}).from(ratings).where(and(eq(ratings.id,targetRating!.id),eq(ratings.userId,session.user.id))).for("update");
         await tx
           .delete(categoryScores)
           .where(eq(categoryScores.ratingId, targetRating!.id));

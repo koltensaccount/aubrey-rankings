@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { sql } from "drizzle-orm";
 import { nextCookies } from "better-auth/next-js";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@/db";
@@ -8,6 +9,7 @@ import { ratingSystems, ratingCategories } from "@/db/schema";
 
 export async function seedDefaultRatingSystem(userId: string) {
   return await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`rubrics:${userId}`},0))`);
     const existing = await tx.query.ratingSystems.findFirst({
       where: (rs, { eq, and }) => and(eq(rs.userId, userId), eq(rs.isDefault, true)),
     });
@@ -59,8 +61,8 @@ export const auth = betterAuth({
     accountLinking: {
       enabled: true,
       trustedProviders: ["google"],
-      requireLocalEmailVerified: false,
-      updateUserInfoOnLink: true,
+      requireLocalEmailVerified: true,
+      updateUserInfoOnLink: false,
     },
   },
   database: drizzleAdapter(db, {

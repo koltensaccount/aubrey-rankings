@@ -22,6 +22,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
+  if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({error:"Invalid preferences"},{status:400});
   const current = await getUserNotificationPreferences(session.user.id);
 
   const updated = {
@@ -48,21 +49,7 @@ export async function PATCH(request: NextRequest) {
     updatedAt: new Date(),
   };
 
-  const existing = await db.query.notificationPreferences.findFirst({
-    where: (p, { eq }) => eq(p.userId, session.user.id),
-  });
-
-  if (existing) {
-    await db
-      .update(notificationPreferences)
-      .set(updated)
-      .where(eq(notificationPreferences.userId, session.user.id));
-  } else {
-    await db.insert(notificationPreferences).values({
-      userId: session.user.id,
-      ...updated,
-    });
-  }
+  await db.insert(notificationPreferences).values({userId:session.user.id,...updated}).onConflictDoUpdate({target:notificationPreferences.userId,set:updated});
 
   return NextResponse.json({ preferences: updated });
 }

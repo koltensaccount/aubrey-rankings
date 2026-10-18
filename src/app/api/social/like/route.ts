@@ -1,3 +1,4 @@
+import { requireRateLimit } from "@/lib/request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
@@ -54,7 +55,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  try { requireRateLimit(`social-like:${session.user.id}`,60); } catch { return NextResponse.json({error:"Too many requests"},{status:429}); }
   const body = await request.json().catch(() => ({}));
+  if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({error:"Invalid request"},{status:400});
   const collectionId = body.collectionId;
 
   if (!collectionId) {
@@ -145,6 +148,7 @@ export async function DELETE(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
+  if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({error:"Invalid request"},{status:400});
   const collectionId = body.collectionId || request.nextUrl.searchParams.get("collectionId");
 
   if (!collectionId) {

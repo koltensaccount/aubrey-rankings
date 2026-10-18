@@ -65,6 +65,7 @@ export async function GET(
         and(eq(r.userId, targetUserId), eq(r.collectionId, col.id)),
       with: {
         categoryScores: true,
+        ratingSystem: { with: { categories: true } },
       },
     });
 

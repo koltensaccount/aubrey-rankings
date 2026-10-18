@@ -7,7 +7,7 @@ import { eq, and, desc, sql, isNotNull } from "drizzle-orm";
 import { getServerSession } from "@/lib/server-session";
 import { normalizeUsername } from "@/lib/username";
 import { getTmdbImageUrl } from "@/lib/tmdb";
-import { getTopRankedEntries } from "@/lib/scoring";
+import { getTopRankedEntries, getRatingSummary } from "@/lib/scoring";
 import { FollowButton } from "@/components/social/follow-button";
 import { ProfileSocialStats } from "@/components/social/profile-social-stats";
 import { getAccentTokens } from "@/lib/theme";
@@ -63,6 +63,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
   const userRatings =
     collectionIds.length > 0
       ? await db.query.ratings.findMany({
+          with:{ratingSystem:{columns:{scale:true}}},
           where: (r, { eq, and, inArray }) =>
             and(eq(r.userId, targetUser.id), inArray(r.collectionId, collectionIds)),
         })
@@ -108,12 +109,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
       })
     : "Recent";
 
-  const meanScore = userRatings.length
-    ? (
-        userRatings.reduce((acc, r) => acc + (r.calculatedOverallScore || 0), 0) /
-        userRatings.length
-      ).toFixed(1)
-    : "—";
+  const {meanScore,ratedCount} = getRatingSummary(userRatings);
 
   const profileAccentTokens = getAccentTokens(targetUser.accentColor || "#89D5D5");
 
@@ -124,6 +120,8 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
         "--profile-accent": profileAccentTokens.primary,
         "--profile-accent-fg": profileAccentTokens.primaryForeground,
         "--profile-accent-hover": profileAccentTokens.primaryHover,
+        "--profile-accent-light-text": getAccentTokens(targetUser.accentColor || "#89D5D5", "light").primaryText,
+        "--profile-accent-dark-text": getAccentTokens(targetUser.accentColor || "#89D5D5", "dark").primaryText,
       } as React.CSSProperties}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
@@ -181,7 +179,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
           {/* Subtle Horizontal Metadata Bar */}
           <div className="ar-profileMetaBar">
             <span>
-              <strong>{userRatings.length}</strong> rated
+              <strong>{ratedCount}</strong> scored
             </span>
             <span className="ar-dot">·</span>
             <span>
@@ -189,7 +187,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
             </span>
             <span className="ar-dot">·</span>
             <span>
-              <strong>{meanScore}</strong> mean score
+              <strong>{meanScore}</strong> mean /10
             </span>
             <span className="ar-dot">·</span>
             <span className="ar-profileRubricSummary">Weighted Rubric</span>
@@ -202,7 +200,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
           <section className="space-y-3">
             <div className="flex items-center justify-between border-b border-border pb-2">
               <h2 className="font-display text-xs uppercase font-bold tracking-widest text-muted-foreground flex items-center gap-1.5">
-                <Sparkles size={13} style={{ color: profileAccentTokens.primary }} />
+                <Sparkles size={13} style={{ color: "var(--profile-accent-text)" }} />
                 Pinned Canon
               </h2>
               <span className="text-[11px] text-muted-foreground">
@@ -274,7 +272,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                         />
                         <div className="ar-peekMeta">
                           <strong>{entry.mediaItem?.title || "Item"}</strong>
-                          <small style={{ color: profileAccentTokens.primary }}>
+                          <small style={{ color: "var(--profile-accent-text)" }}>
                             {score !== null ? `★ ${score.toFixed(1)}` : "—"}
                           </small>
                         </div>
@@ -379,7 +377,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                         {rev.sourceRating && (
                           <span
                             className="font-semibold"
-                            style={{ color: profileAccentTokens.primary }}
+                            style={{ color: "var(--profile-accent-text)" }}
                           >
                             ★ {rev.sourceRating.toFixed(1)}/5
                           </span>
@@ -387,7 +385,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                         {rev.calculatedOverallScore && (
                           <span
                             className="font-semibold"
-                            style={{ color: profileAccentTokens.primary }}
+                            style={{ color: "var(--profile-accent-text)" }}
                           >
                             Weighted: {rev.calculatedOverallScore.toFixed(1)}
                           </span>

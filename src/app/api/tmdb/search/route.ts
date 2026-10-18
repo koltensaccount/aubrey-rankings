@@ -1,3 +1,4 @@
+import { requireRateLimit } from "@/lib/request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { tmdb } from "@/lib/tmdb";
 import { getServerSession } from "@/lib/server-session";
@@ -8,10 +9,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  try { requireRateLimit(`tmdb-search:${session.user.id}`,60); } catch { return NextResponse.json({error:"Too many searches"},{status:429}); }
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("q")?.trim();
   const type = searchParams.get("type") || "all"; // 'tv' | 'franchise' | 'movie' | 'all'
 
+  if (query && query.length > 200) return NextResponse.json({error:"Search is too long"},{status:400});
   if (!query) {
     return NextResponse.json({ results: [] });
   }

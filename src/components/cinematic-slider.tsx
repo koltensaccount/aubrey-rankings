@@ -6,7 +6,7 @@ export interface CinematicSliderProps {
   id?: string;
   name?: string;
   value: number | null; // null = genuine unrated state
-  onChange: (value: any) => void;
+  onChange: (value: number | null) => void;
   min?: number;
   max?: number;
   step?: number;
@@ -36,6 +36,7 @@ export function CinematicSlider({
   valueSuffix = "",
 }: CinematicSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
+  const pointerStart = useRef<{x:number,value:number|null} | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
   const [hoverValue, setHoverValue] = useState<number | null>(null);
@@ -61,7 +62,7 @@ export function CinematicSlider({
       const rawRatio = (clientX - rect.left) / rect.width;
       const clampedRatio = Math.max(0, Math.min(1, rawRatio));
       const rawVal = min + clampedRatio * range;
-      const stepped = Math.round(rawVal / step) * step;
+      const stepped = min + Math.round((rawVal - min) / step) * step;
       // Clamp to min and max and round to 2 decimals
       const clamped = Math.max(min, Math.min(max, Number(stepped.toFixed(2))));
       return clamped;
@@ -70,9 +71,11 @@ export function CinematicSlider({
   );
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (disabled) return;
+    if (disabled || e.button !== 0) return;
     e.preventDefault();
+    trackRef.current?.focus();
     trackRef.current?.setPointerCapture(e.pointerId);
+    pointerStart.current = {x:e.clientX,value};
     setIsDragging(true);
     const newVal = getValueFromPointer(e.clientX);
     onChange(newVal);
@@ -90,6 +93,9 @@ export function CinematicSlider({
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const start = pointerStart.current;
+    pointerStart.current = null;
+    if (allowUnset && start?.value != null && Math.abs(start.x-e.clientX)<3 && getValueFromPointer(e.clientX)===start.value) onChange(null);
     if (isDragging) {
       try {
         trackRef.current?.releasePointerCapture(e.pointerId);
@@ -134,7 +140,7 @@ export function CinematicSlider({
     } else if (e.key === "End") {
       e.preventDefault();
       onChange(max);
-    } else if (e.key === "Delete" || e.key === "Backspace" || e.key === "Escape") {
+    } else if (e.key === "Delete" || e.key === "Backspace") {
       e.preventDefault();
       if (allowUnset) {
         onChange(null); // Genuine unset
@@ -154,7 +160,7 @@ export function CinematicSlider({
       : "w-4 h-4 sm:w-4.5 sm:h-4.5";
 
   return (
-    <div className={`relative flex items-center select-none py-1.5 ${className}`}>
+    <div className={`relative flex items-center min-h-11 select-none py-1.5 ${className}`}>
       {/* Interactive slider track container */}
       <div
         ref={trackRef}
@@ -164,6 +170,7 @@ export function CinematicSlider({
         aria-label={ariaLabel || name || "Slider control"}
         aria-valuemin={min}
         aria-valuemax={max}
+        aria-disabled={disabled}
         aria-valuenow={isRated ? value : undefined}
         aria-valuetext={isRated ? `${value} out of ${max}` : "Not set"}
         onPointerDown={handlePointerDown}
@@ -177,7 +184,7 @@ export function CinematicSlider({
           setIsFocused(false);
           setHoverValue(null);
         }}
-        className={`group/track relative w-full ${trackHeight} rounded-full cursor-pointer touch-none transition-all ${
+        className={`group/track relative w-full before:absolute before:inset-x-0 before:-inset-y-4 before:content-[''] ${trackHeight} rounded-full cursor-pointer touch-none transition-all ${
           disabled
             ? "opacity-50 cursor-not-allowed bg-muted border border-border"
             : "bg-muted/70 border border-border hover:border-primary/50"

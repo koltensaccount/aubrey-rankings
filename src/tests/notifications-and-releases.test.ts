@@ -33,7 +33,10 @@ describe("Stage 8: Social Notifications, Connections & Release Tracking", () => 
   const tvCollectionId = `col_notif_tv_${Date.now()}`;
   const movieCollectionId = `col_notif_mov_${Date.now()}`;
 
+  const originalTv = tmdb.getTvDetails, originalMovie = tmdb.getMovieCollection;
   before(async () => {
+    tmdb.getTvDetails = async (id:number) => ({id,name:"Fixture show",number_of_seasons:0,seasons:[]} as any);
+    tmdb.getMovieCollection = async (id:number) => ({id,name:"Fixture franchise",parts:[]} as any);
     // 1. Create test users
     await db.insert(user).values([
       {
@@ -80,6 +83,7 @@ describe("Stage 8: Social Notifications, Connections & Release Tracking", () => 
   });
 
   after(async () => {
+    tmdb.getTvDetails = originalTv; tmdb.getMovieCollection = originalMovie;
     // Cleanup in order
     await db.delete(notifications).where(
       sql`${notifications.recipientUserId} IN (${userA}, ${userB}, ${userC})`
@@ -354,6 +358,8 @@ describe("Stage 8: Social Notifications, Connections & Release Tracking", () => 
     };
 
     try {
+      // Another subscriber's baseline/event record must not suppress delivery to this user.
+      await db.insert(processedReleaseEvents).values({id:randomUUID(),eventKey:`tv:${mockTvId}:s2e1`,tmdbType:"tv",tmdbId:mockTvId,releaseDate:today}).onConflictDoNothing();
       const result = await checkNewReleases();
       assert.ok(result.notificationsCreated >= 1, "Should create notification for newly aired episode");
 

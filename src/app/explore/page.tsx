@@ -117,9 +117,9 @@ export default function ExplorePage() {
                 </h2>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {userResults.map((u) => {
+                {userResults.filter((u) => typeof u.username === "string" && u.username.trim()).map((u) => {
                   const initial = (u.name || u.username || "U").charAt(0).toUpperCase();
-                  const handle = u.username || u.id;
+                  const handle = u.username;
                   return (
                     <Link
                       key={u.id}

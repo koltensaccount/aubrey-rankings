@@ -41,6 +41,7 @@ services:
       GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-}
       ADMIN_USER_IDS: ${ADMIN_USER_IDS:-}
       ADMIN_EMAILS: ${ADMIN_EMAILS:-}
+      CRON_SECRET: ${CRON_SECRET:-}
       PORT: 3000
     volumes:
       - aubrey_uploads:/app/public/uploads

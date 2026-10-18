@@ -1193,7 +1193,7 @@ export default function SettingsPage() {
                           )}
                         </div>
                         <p className="text-[11px] text-muted-foreground mt-0.5">
-                          {sys.categories?.length || 0} categories · Scale 1–{sys.scale || 10}
+                          {sys.categories?.length || 0} categories · Scale 0–{sys.scale || 10}
                         </p>
                       </div>
                     </div>
@@ -1280,9 +1280,9 @@ export default function SettingsPage() {
                         }
                         className="h-10 px-3 text-xs rounded bg-surface border border-input-border text-foreground focus:outline-none focus:border-primary"
                       >
-                        <option value={10}>Scale 1–10 (Standard)</option>
-                        <option value={5}>Scale 1–5</option>
-                        <option value={100}>Scale 1–100</option>
+                        <option value={10}>Scale 0–10 (Standard)</option>
+                        <option value={5}>Scale 0–5</option>
+                        <option value={100}>Scale 0–100</option>
                       </select>
                     </div>
 

@@ -11,6 +11,7 @@ import {
   ratings,
   categoryScores,
   verification,
+  notifications,
 } from "../src/db/schema";
 import { eq, inArray } from "drizzle-orm";
 
@@ -128,6 +129,42 @@ async function call(path: string, method = "GET", body?: unknown, cookie = "") {
     let saved = await call("/api/ratings", "POST", payload, a.cookie);
     assert.equal(saved.res.status, 200, JSON.stringify(saved.data));
     assert.equal(saved.data.rating.categoryScores.length, 2);
+    assert.equal((await call(`/api/rating-systems/${system.id}`,"PATCH",{categories:[{id:c[0].id,name:c[0].name,weight:99}]},a.cookie)).res.status,409);
+    assert.equal((await call(`/api/rating-systems/${system.id}`,"DELETE",undefined,a.cookie)).res.status,409);
+    assert.equal((await call(`/api/rating-systems/${system.id}`,"PATCH",{name:"Stolen"},b.cookie)).res.status,404);
+    assert.equal((await call(`/api/collections/${colId}`,"GET",undefined,b.cookie)).res.status,404);
+    assert.equal((await call("/api/bug-reports","GET",undefined,a.cookie)).res.status,403);
+    assert.equal((await call("/api/bug-reports","POST",{description:"bad screenshot",pageUrl:"/",screenshotUrl:"data:image/svg+xml;base64,PHN2Zz4="},a.cookie)).res.status,400);
+    assert.equal((await call(`/api/collections/${colId}/tracking`,"GET",undefined,b.cookie)).data.targetTitle,null);
+    assert.equal((await call("/api/notifications?limit=-1","GET",undefined,b.cookie)).res.status,200);
+    assert.equal((await call("/api/notifications","PATCH",null,b.cookie)).res.status,400);
+    assert.equal((await call("/api/user/profile","PATCH",{username:123},a.cookie)).res.status,400);
+    assert.equal((await call("/api/user/profile","PATCH",{image:"/uploads/avatars/other_account.webp"},a.cookie)).res.status,400);
+    const sharp = (await import("sharp")).default;
+    const image = await sharp({create:{width:40,height:40,channels:3,background:"#17656a"}}).png().toBuffer();
+    const avatarForm = new FormData();avatarForm.set("type","avatar");avatarForm.set("file",new File([image],"avatar.png",{type:"image/png"}));
+    const avatar = await call("/api/upload","POST",avatarForm,a.cookie);
+    assert.equal(avatar.res.status,200,JSON.stringify(avatar.data));
+    const avatarImage = await fetch(base+avatar.data.url);
+    assert.equal(avatarImage.status,200,"new uploads must be served immediately by production Next.js");
+    assert.equal(avatarImage.headers.get("content-type"),"image/webp");
+    assert.equal((await call("/api/user/profile","GET",undefined,a.cookie)).data.user.image,avatar.data.url);
+    const privateNotice = `notice-${tag}`;
+    const otherNotice = `notice-other-${tag}`;
+    await db.insert(notifications).values([{id:privateNotice,recipientUserId:b.id,notificationType:"tv_release",collectionId:colId,metadata:{message:"private ranking"}},{id:otherNotice,recipientUserId:a.id,notificationType:"follow"}]);
+    const notices = await call("/api/notifications","GET",undefined,b.cookie);
+    assert.equal(notices.data.notifications.some((n:any)=>n.id===privateNotice),false);
+    await call("/api/notifications","PATCH",{id:otherNotice},b.cookie);
+    assert.equal((await db.query.notifications.findFirst({where:(n,{eq})=>eq(n.id,otherNotice)}))?.readAt,null);
+    await call("/api/notifications","PATCH",{id:otherNotice},a.cookie);
+    assert.notEqual((await db.query.notifications.findFirst({where:(n,{eq})=>eq(n.id,otherNotice)}))?.readAt,null);
+    const clear = await call(`/api/ratings?ratingId=${saved.data.ratingId}&clearScoresOnly=true`,"DELETE",undefined,a.cookie);
+    assert.equal(clear.res.status,200);
+    const cleared = await db.query.ratings.findFirst({where:(r,{eq})=>eq(r.id,saved.data.ratingId),with:{categoryScores:true}});
+    assert.equal(cleared?.categoryScores.length,0);assert.equal(cleared?.reviewText,"preserve this review");
+    saved = await call("/api/ratings","POST",payload,a.cookie);assert.equal(saved.res.status,200);
+    console.log("PASS: rubric preservation, report/notification/profile validation, private tracking metadata and persistent avatar serving");
+
     let detail = await call(
       "/api/collections/" + colId,
       "GET",
@@ -226,6 +263,7 @@ async function call(path: string, method = "GET", body?: unknown, cookie = "") {
         mediaItemId: mediaId,
         collectionId: colId,
         ratingSystemId: switchedSystem,
+        replaceRatingSystem: true,
         categoryScores: [{ categoryId: switchedCategory, score: 7 }],
         watchDate: null,
       },

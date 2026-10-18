@@ -131,15 +131,15 @@ export function CommentsSection({
   };
 
   return (
-    <section className="mt-14 pt-10 border-t border-[#232d27] space-y-8">
+    <section className="mt-14 pt-10 border-t border-border space-y-8">
       {/* Section Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <MessageSquare className="h-5 w-5 text-[#89d5d5]" />
-          <h2 className="font-display text-2xl uppercase tracking-tight text-[#f1f0e9]">
-            Critical Notes & Discussion
+          <MessageSquare className="h-5 w-5 text-primary-text" />
+          <h2 className="font-display text-2xl uppercase tracking-tight text-foreground">
+            Comments
           </h2>
-          <span className="px-2 py-0.5 rounded-full bg-[#1b2520] border border-[#3b4c40] text-xs font-semibold text-[#89d5d5]">
+          <span className="px-2 py-0.5 rounded-full bg-surface border border-border text-xs font-semibold text-primary-text">
             {comments.length}
           </span>
         </div>
@@ -147,21 +147,21 @@ export function CommentsSection({
 
       {/* Post Comment Input */}
       <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="relative rounded-xl border border-[#303b34] bg-[#141a17] focus-within:border-[#89d5d5]/60 transition-colors">
+        <div className="relative rounded-xl border border-border bg-card focus-within:border-primary/60 transition-colors">
           <textarea
             value={newContent}
             onChange={(e) => setNewContent(e.target.value)}
             maxLength={2000}
             rows={3}
             placeholder="Add a note, debate category scores, or comment on this ranking..."
-            className="w-full bg-transparent p-4 text-sm text-[#f1f0e9] placeholder-[#5a6a61] resize-none focus:outline-none"
+            className="w-full bg-transparent p-4 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none"
           />
-          <div className="flex items-center justify-between px-4 pb-3 pt-1 border-t border-[#232d27]/60 text-xs text-[#5a6a61]">
+          <div className="flex items-center justify-between px-4 pb-3 pt-1 border-t border-border/60 text-xs text-muted-foreground">
             <span>{newContent.length}/2,000 characters</span>
             <button
               type="submit"
               disabled={submitting || !newContent.trim() || newContent.length > 2000}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-[#89d5d5] hover:bg-[#a2e5e5] disabled:opacity-40 disabled:hover:bg-[#89d5d5] text-[#102523] font-semibold text-xs transition-colors shadow-sm shadow-[#89d5d5]/15"
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:hover:bg-primary text-primary-foreground font-semibold text-xs transition-colors shadow-sm shadow-primary/15"
             >
               {submitting ? (
                 <Loader2 size={13} className="animate-spin" />
@@ -177,11 +177,11 @@ export function CommentsSection({
 
       {/* Comments List */}
       {loading ? (
-        <div className="flex items-center justify-center py-10 text-[#5a6a61]">
+        <div className="flex items-center justify-center py-10 text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
       ) : comments.length === 0 ? (
-        <div className="py-8 text-center text-xs text-[#6e7f74] border border-dashed border-[#232d27] rounded-xl">
+        <div className="py-8 text-center text-xs text-muted-foreground border border-dashed border-border rounded-xl">
           No critical notes yet. Be the first to comment on this canon.
         </div>
       ) : (
@@ -202,14 +202,14 @@ export function CommentsSection({
             return (
               <div
                 key={item.id}
-                className="group relative rounded-xl border border-[#27332c] bg-[#141a17]/80 hover:bg-[#141a17] p-4 transition-colors space-y-2.5"
+                className="group relative rounded-xl border border-border bg-card/80 hover:bg-card p-4 transition-colors space-y-2.5"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
                     {profileHref ? (
                       <Link
                         href={profileHref}
-                        className="h-7 w-7 rounded-full bg-[#1b2520] border border-[#3b4c40] flex items-center justify-center text-xs font-semibold text-[#89d5d5] hover:border-[#89d5d5] transition-colors shrink-0 overflow-hidden"
+                        className="h-7 w-7 rounded-full bg-surface border border-border flex items-center justify-center text-xs font-semibold text-primary-text hover:border-primary transition-colors shrink-0 overflow-hidden"
                       >
                         {item.author.image ? (
                           <img
@@ -222,7 +222,7 @@ export function CommentsSection({
                         )}
                       </Link>
                     ) : (
-                      <div className="h-7 w-7 rounded-full bg-[#1b2520] border border-[#3b4c40] flex items-center justify-center text-xs font-semibold text-[#89d5d5] shrink-0">
+                      <div className="h-7 w-7 rounded-full bg-surface border border-border flex items-center justify-center text-xs font-semibold text-primary-text shrink-0">
                         {authorInitial}
                       </div>
                     )}
@@ -231,22 +231,22 @@ export function CommentsSection({
                       {profileHref ? (
                         <Link
                           href={profileHref}
-                          className="font-medium text-[#f1f0e9] hover:text-[#89d5d5] transition-colors"
+                          className="font-medium text-foreground hover:text-primary-text transition-colors"
                         >
                           {item.author.name || `@${item.author.username}`}
                         </Link>
                       ) : (
-                        <span className="font-medium text-[#f1f0e9]">
+                        <span className="font-medium text-foreground">
                           {item.author.name || "Anonymous Critic"}
                         </span>
                       )}
 
                       {item.author.username && (
-                        <span className="text-[#5a6a61]">@{item.author.username}</span>
+                        <span className="text-muted-foreground">@{item.author.username}</span>
                       )}
 
-                      <span className="text-[#3b4c40]">·</span>
-                      <span className="text-[#5a6a61]">
+                      <span className="text-muted-foreground">·</span>
+                      <span className="text-muted-foreground">
                         {formatCommentDate(item.createdAt)}
                       </span>
                     </div>
@@ -256,7 +256,7 @@ export function CommentsSection({
                     <button
                       onClick={() => handleDelete(item.id)}
                       disabled={deletingId === item.id}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-[#6e7f74] hover:text-[#f87171] transition-opacity"
+                      className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-[#f87171] transition-opacity"
                       title={item.isAuthor ? "Delete your note" : "Moderate note"}
                       aria-label="Delete comment"
                     >
@@ -269,7 +269,7 @@ export function CommentsSection({
                   )}
                 </div>
 
-                <p className="text-xs sm:text-sm text-[#c8d4cd] leading-relaxed pl-9 whitespace-pre-line">
+                <p className="text-xs sm:text-sm text-foreground leading-relaxed pl-9 whitespace-pre-line">
                   {item.content}
                 </p>
               </div>

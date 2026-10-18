@@ -5,6 +5,15 @@ export interface CategoryDef {
   isRequired?: boolean;
 }
 
+/** Preserve the weights recorded when a score was saved, including older rubric versions. */
+export function withSavedWeights<T extends CategoryDef>(categories:T[],scores:readonly {categoryId:string;weightApplied?:number|null}[] = []):T[] {
+  const saved = new Map(scores.map(s=>[s.categoryId,s.weightApplied]));
+  return categories.map(category => {
+    const weight = saved.get(category.id);
+    return typeof weight === "number" && Number.isFinite(weight) && weight >= 0 ? {...category,weight} : category;
+  });
+}
+
 export interface ScoreInput {
   categoryId: string;
   score: number | null | undefined;
@@ -82,6 +91,7 @@ export type RatingState = "unrated" | "in_progress" | "rated";
 export interface ItemRatingStatus {
   state: RatingState;
   score: number | null;
+  scoreScale?: number;
   scoredCount: number;
   totalCategories: number;
   requiredCount: number;
@@ -94,12 +104,21 @@ export function getItemRatingStatus(
   categories: CategoryDef[],
   rating: {
     calculatedOverallScore?: number | null;
-    categoryScores?: Array<{ categoryId: string; score: number | null }> | null;
-  } | null | undefined
+    sourceRating?: number | null;
+    sourceScale?: number | null;
+    categoryScores?: Array<{ categoryId: string; score: number | null; weightApplied?:number|null }> | null;
+    ratingSystem?: { categories: CategoryDef[]; scale?:number } | null;
+  } | null | undefined,
+  defaultScale = 10
 ): ItemRatingStatus {
+  categories = withSavedWeights(rating?.ratingSystem?.categories ?? categories, rating?.categoryScores ?? []);
+  const scoreScale = rating?.ratingSystem?.scale ?? defaultScale;
   const totalCategories = categories.length;
   const requiredCount = categories.filter((c) => c.isRequired).length;
 
+  if (rating && (!rating.categoryScores || rating.categoryScores.length === 0) && typeof rating.sourceRating === "number" && Number.isFinite(rating.sourceRating)) {
+    return {state:"rated",score:rating.sourceRating,scoreScale:rating.sourceScale??5,scoredCount:0,totalCategories,requiredCount,isComplete:true,statusLabel:`★ ${rating.sourceRating.toFixed(1)}/${rating.sourceScale ?? 5}`,actionLabel:"Edit Rating"};
+  }
   if (!rating || !rating.categoryScores || rating.categoryScores.length === 0) {
     return {
       state: "unrated",
@@ -140,6 +159,7 @@ export function getItemRatingStatus(
     return {
       state: "rated",
       score: finalScore,
+      scoreScale,
       scoredCount: calc.totalScoredCategories,
       totalCategories,
       requiredCount,
@@ -152,6 +172,7 @@ export function getItemRatingStatus(
   return {
     state: "in_progress",
     score: calc.weightedScore,
+    scoreScale,
     scoredCount: calc.totalScoredCategories,
     totalCategories,
     requiredCount,
@@ -172,14 +193,15 @@ export function getTopRankedEntries(
     const score = r?.calculatedOverallScore ?? r?.sourceRating ?? null;
     return {
       entry,
-      score: typeof score === "number" && !isNaN(score) ? score : null,
+      score: typeof score === "number" && Number.isFinite(score) ? score : null,
+      scale: r?.calculatedOverallScore != null ? (r?.ratingSystem?.scale || 10) : (r?.sourceScale || 5),
       sortOrder: typeof entry.sortOrder === "number" ? entry.sortOrder : 0,
     };
   });
 
   scored.sort((a, b) => {
     if (a.score !== null && b.score !== null) {
-      if (b.score !== a.score) return b.score - a.score;
+      if (b.score / b.scale !== a.score / a.scale) return b.score / b.scale - a.score / a.scale;
     }
     if (a.score !== null && b.score === null) return -1;
     if (a.score === null && b.score !== null) return 1;
@@ -193,3 +215,13 @@ export function getTopRankedEntries(
   }));
 }
 
+
+/** Summary scores use a common ten-point display scale; stored scores are untouched. */
+export function getRatingSummary(ratings: Array<{calculatedOverallScore?:number|null;sourceRating?:number|null;sourceScale?:number|null;ratingSystem?:{scale?:number}|null}>) {
+  const scores = ratings.flatMap(r=> {
+    const value = r.calculatedOverallScore ?? r.sourceRating;
+    const scale = r.calculatedOverallScore != null ? (r.ratingSystem?.scale ?? 10) : (r.sourceScale ?? 5);
+    return typeof value === "number" && Number.isFinite(value) && Number.isFinite(scale) && scale>0 ? [value / scale * 10] : [];
+  });
+  return {ratedCount:scores.length,meanScore:scores.length?(scores.reduce((a,b)=>a+b,0)/scores.length).toFixed(1):"—"};
+}

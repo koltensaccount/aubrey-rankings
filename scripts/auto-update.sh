@@ -53,6 +53,11 @@ if compose up -d --no-deps --no-build --pull never aubrey-web; then
       install -m 700 "$helper_dir/auto-update.sh" scripts/auto-update.sh
       install -m 700 "$helper_dir/backup.sh" scripts/backup.sh
       install -m 600 "$helper_dir/docker-compose.yml" docker-compose.yml
+      docker cp "$helper_container:/app/scripts/check-releases.sh" "$helper_dir/check-releases.sh"
+      docker cp "$helper_container:/app/scripts/install-updater.sh" "$helper_dir/install-updater.sh"
+      install -m 700 "$helper_dir/check-releases.sh" scripts/check-releases.sh
+      install -m 700 "$helper_dir/install-updater.sh" scripts/install-updater.sh
+      bash scripts/install-updater.sh
       printf '%s\n' "$revision" > logs/deployed-revision
       rm -f logs/last-deployment-error
       log "Deployment verified: $revision"

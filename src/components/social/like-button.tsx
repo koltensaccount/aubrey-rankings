@@ -82,7 +82,7 @@ export function LikeButton({
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
         isLiked
           ? "bg-[#331c21] text-[#f87171] border border-[#7f1d24]"
-          : "bg-[#17201c] hover:bg-[#1f2b26] text-[#b1bfb7] border border-[#3b4c40]"
+          : "bg-surface hover:bg-surface-elevated text-foreground border border-border"
       }`}
       title={isLiked ? "Unlike ranking" : "Like ranking"}
       aria-label="Like ranking"
@@ -90,7 +90,7 @@ export function LikeButton({
       <Heart
         size={14}
         className={`transition-transform duration-200 ${
-          isLiked ? "fill-[#f87171] text-[#f87171] scale-110" : "text-[#8fa095]"
+          isLiked ? "fill-[#f87171] text-[#f87171] scale-110" : "text-muted-foreground"
         }`}
       />
       <span className="font-semibold text-xs">{likeCount}</span>

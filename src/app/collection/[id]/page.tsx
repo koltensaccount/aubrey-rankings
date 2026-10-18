@@ -502,7 +502,7 @@ export default function CollectionDetailPage({
 
     for (const entry of collection.entries) {
       const ur = ratingsMap[entry.mediaItem?.id];
-      const status = getItemRatingStatus(categories, ur);
+      const status = getItemRatingStatus(categories, ur, collection.defaultRatingSystem?.scale ?? 10);
       if (status.state === "rated") {
         completed++;
       } else if (status.state === "in_progress") {
@@ -530,7 +530,7 @@ export default function CollectionDetailPage({
     let list = collection.entries.map((entry: any) => {
       const media = entry.mediaItem;
       const userRating = ratingsMap[media.id];
-      const ratingStatus = getItemRatingStatus(categories, userRating);
+      const ratingStatus = getItemRatingStatus(categories, userRating, collection.defaultRatingSystem?.scale ?? 10);
       const score = ratingStatus.score;
       return {
         ...entry,
@@ -567,12 +567,12 @@ export default function CollectionDetailPage({
         if (a.score === null && b.score === null) return a.sortOrder - b.sortOrder;
         if (a.score === null) return 1;
         if (b.score === null) return -1;
-        return b.score - a.score;
+        return b.score / (b.ratingStatus.scoreScale ?? 10) - a.score / (a.ratingStatus.scoreScale ?? 10);
       } else if (sortBy === "score_asc") {
         if (a.score === null && b.score === null) return a.sortOrder - b.sortOrder;
         if (a.score === null) return 1;
         if (b.score === null) return -1;
-        return a.score - b.score;
+        return a.score / (a.ratingStatus.scoreScale ?? 10) - b.score / (b.ratingStatus.scoreScale ?? 10);
       } else if (sortBy === "title") {
         return (a.mediaItem?.title || "").localeCompare(b.mediaItem?.title || "");
       } else {
@@ -833,7 +833,7 @@ export default function CollectionDetailPage({
                   {collection.defaultRatingSystem?.name || "Weighted Rubric"}
                 </span>
                 <span className="text-primary font-mono">
-                  Scale 1–{collection.defaultRatingSystem?.scale || 10}
+                  Scale 0–{collection.defaultRatingSystem?.scale || 10}
                 </span>
               </div>
 
@@ -1039,20 +1039,20 @@ export default function CollectionDetailPage({
               const isMovie =
                 media.mediaType === "movie" ||
                 collection.collectionType === "movie_franchise" ||
-                (!media.seasonNumber && Boolean(media.posterPath));
+                (media.mediaType !== "episode" && !media.stillPath && Boolean(media.posterPath));
 
               return (
                 <div
                   key={entry.id}
-                  className="flex items-center gap-4 sm:gap-6 py-4 hover:bg-surface/40 px-2 sm:px-3 -mx-2 sm:-mx-3 rounded-lg transition-colors group"
+                  className="relative grid grid-cols-[1.5rem_5rem_minmax(0,1fr)] gap-x-3 gap-y-2 sm:flex items-center sm:gap-6 py-4 hover:bg-surface/40 px-2 sm:px-3 -mx-2 sm:-mx-3 rounded-lg transition-colors group"
                 >
                   {/* Rank Numeral */}
-                  <span className="w-8 sm:w-10 text-center font-display text-2xl sm:text-3xl font-bold text-muted-foreground/70 group-hover:text-primary transition-colors shrink-0">
+                  <span className="row-span-2 w-6 sm:w-10 text-center font-display text-2xl sm:text-3xl font-bold text-muted-foreground/70 group-hover:text-primary transition-colors shrink-0">
                     {index < 9 ? `0${index + 1}` : index + 1}
                   </span>
 
                   {/* Cinematic Card: 2:3 Portrait for Movies, 16:9 for Episodes */}
-                  <div className={isMovie ? "w-[72px] sm:w-[84px] shrink-0" : "w-28 sm:w-36 shrink-0"}>
+                  <div className={isMovie ? "row-span-2 w-20 sm:w-[84px] shrink-0" : "row-span-2 w-20 sm:w-36 shrink-0"}>
                     <CinematicMediaCard
                       stillPath={media.stillPath}
                       posterPath={media.posterPath}
@@ -1082,12 +1082,12 @@ export default function CollectionDetailPage({
                   </div>
 
                   {/* Score & Rate Button */}
-                  <div className="flex items-center gap-3 sm:gap-4 shrink-0">
+                  <div className="col-start-3 flex items-center justify-between sm:justify-start gap-3 sm:gap-4 shrink-0">
                     <div className="text-right">
                       {state === "rated" && score !== null ? (
                         <div className="font-display text-2xl sm:text-3xl font-bold text-primary">
                           {score.toFixed(1)}
-                          <span className="text-[11px] text-muted-foreground/70 ml-1 font-sans font-normal">/ 10</span>
+                          <span className="text-[11px] text-muted-foreground/70 ml-1 font-sans font-normal">/ {entry.userRating?.categoryScores?.length ? (entry.userRating?.ratingSystem?.scale ?? collection.defaultRatingSystem?.scale ?? 10) : (entry.userRating?.sourceScale ?? 10)}</span>
                         </div>
                       ) : state === "in_progress" ? (
                         <div className="text-right">
@@ -1124,7 +1124,7 @@ export default function CollectionDetailPage({
                       <button
                         type="button"
                         onClick={() => setEntryToDelete(entry)}
-                        className="p-1.5 rounded text-muted-foreground hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-colors cursor-pointer"
+                        className="absolute right-0 top-3 sm:static p-1.5 rounded text-muted-foreground hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-colors cursor-pointer"
                         title="Remove from this ranking"
                       >
                         <Trash2 size={13} />
@@ -1144,7 +1144,7 @@ export default function CollectionDetailPage({
               const isMovie =
                 collection.collectionType === "movie_franchise" ||
                 media.mediaType === "movie" ||
-                !media.seasonNumber;
+                (media.mediaType !== "episode" && !media.stillPath);
 
               return (
                 <div

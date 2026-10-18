@@ -6,7 +6,7 @@ import { collections, ratings, user, follows } from "@/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import { ArrowRight, Settings } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
-import { getTopRankedEntries } from "@/lib/scoring";
+import { getTopRankedEntries, getRatingSummary } from "@/lib/scoring";
 import { ProfileSocialStats } from "@/components/social/profile-social-stats";
 
 export default async function ProfilePage() {
@@ -31,16 +31,12 @@ export default async function ProfilePage() {
           mediaItem: true,
         },
       },
-      ratings: true,
+      ratings: {with:{ratingSystem:{columns:{scale:true}}}},
     },
   });
 
-  const totalRated = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(ratings)
-    .where(eq(ratings.userId, session.user.id));
-
-  const totalRatedCount = Number(totalRated[0]?.count || 0);
+  const summaryRatings = await db.query.ratings.findMany({where:(r,{eq})=>eq(r.userId,session.user.id), columns:{calculatedOverallScore:true,sourceRating:true,sourceScale:true},with:{ratingSystem:{columns:{scale:true}}}});
+  const {ratedCount:totalRatedCount,meanScore} = getRatingSummary(summaryRatings);
 
   const allRatings = await db.query.ratings.findMany({
     where: (r, { eq }) => eq(r.userId, session.user.id),
@@ -51,12 +47,7 @@ export default async function ProfilePage() {
     },
   });
 
-  const meanScore = allRatings.length
-    ? (
-        allRatings.reduce((acc, r) => acc + (r.calculatedOverallScore || 0), 0) /
-        allRatings.length
-      ).toFixed(1)
-    : "—";
+
 
   const initial = (dbUser?.name || session.user.name || session.user.email || "a")
     .charAt(0)
@@ -163,7 +154,7 @@ export default async function ProfilePage() {
             </span>
             <span className="ar-dot">·</span>
             <span>
-              <strong>{meanScore}</strong> mean score
+              <strong>{meanScore}</strong> mean /10
             </span>
             <span className="ar-dot">·</span>
             <span className="ar-profileRubricSummary">Weighted Rubric</span>

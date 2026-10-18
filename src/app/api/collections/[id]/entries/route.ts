@@ -33,6 +33,7 @@ export async function POST(
 
     const { tmdbId, mediaType, seasonNumber, episodeNumber, customTitle, overview, posterPath, stillPath } = body;
 
+    if ((tmdbId !== undefined && (!Number.isInteger(tmdbId) || tmdbId <= 0)) || [seasonNumber,episodeNumber].some(v=>v!==undefined && (!Number.isInteger(v)||v<0)) || (customTitle!==undefined && (typeof customTitle!=="string" || customTitle.length>300))) return NextResponse.json({error:"Invalid entry fields"},{status:400});
     let targetMediaItemId: string | null = null;
 
     if (tmdbId && (mediaType === "movie" || !mediaType)) {
@@ -128,12 +129,13 @@ export async function POST(
     const nextOrder = (lastEntry?.sortOrder || 0) + 1;
     const entryId = `entry_${Date.now()}_${nanoid(6)}`;
 
-    await db.insert(collectionEntries).values({
+    const inserted = await db.insert(collectionEntries).values({
       id: entryId,
       collectionId,
       mediaItemId: targetMediaItemId!,
       sortOrder: nextOrder,
-    });
+    }).onConflictDoNothing().returning({id:collectionEntries.id});
+    if (!inserted.length) return NextResponse.json({error:"This item is already in this collection"},{status:409});
 
     // Fetch created entry with mediaItem
     const created = await db.query.collectionEntries.findFirst({
@@ -147,7 +149,7 @@ export async function POST(
   } catch (error: any) {
     console.error("[Add Collection Entry Error]", error);
     return NextResponse.json(
-      { error: error?.message || "Failed to add entry to collection" },
+      { error: "Failed to add entry to collection" },
       { status: 500 }
     );
   }

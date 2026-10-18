@@ -32,10 +32,10 @@ export async function getCollectionTrackingStatus(
 ): Promise<TrackingStatus> {
   const col = await db.query.collections.findFirst({
     where: (c, { eq }) => eq(c.id, collectionId),
-    columns: { id: true, title: true, collectionType: true, tmdbId: true, userId: true },
+    columns: { id: true, title: true, collectionType: true, tmdbId: true, userId: true, visibility: true },
   });
 
-  if (!col) {
+  if (!col || (col.userId !== userId && col.visibility !== "public" && col.visibility !== "unlisted")) {
     return {
       supported: false,
       enabled: false,
@@ -46,7 +46,7 @@ export async function getCollectionTrackingStatus(
     };
   }
 
-  const effectiveUserId = userId || col.userId;
+  const effectiveUserId = userId;
 
   if (col.collectionType === "tv_show" && col.tmdbId) {
     let enabled = true;
@@ -224,13 +224,14 @@ export async function initializeReleaseBaseline(
  */
 export async function checkNewReleases() {
   const today = getTodayIsoDate();
+  const errors: string[] = [];
 
   // 1. Query all active subscriptions
   const activeSubs = await db.query.releaseTrackingSubscriptions.findMany({
     where: (s, { eq }) => eq(s.enabled, true),
     with: {
       collection: {
-        columns: { id: true, title: true, isPublic: true },
+        columns: { id: true, title: true, isPublic: true, visibility: true, userId: true },
       },
     },
   });
@@ -249,6 +250,7 @@ export async function checkNewReleases() {
   const movieGroups = new Map<number, typeof activeSubs>();
 
   for (const sub of activeSubs) {
+    if (!sub.collection || (sub.collection.userId !== sub.userId && sub.collection.visibility === "private")) continue;
     if (sub.tmdbType === "tv") {
       const list = tvGroups.get(sub.tmdbId) || [];
       list.push(sub);
@@ -300,7 +302,7 @@ export async function checkNewReleases() {
               where: (e, { eq }) => eq(e.eventKey, eventKey),
             });
 
-            if (alreadyProcessed) continue;
+            // Shared event history cannot suppress per-user delivery; recipient deduplication is authoritative.
 
             // Record release event
             await db
@@ -329,6 +331,7 @@ export async function checkNewReleases() {
               const notif = await createNotification({
                 recipientUserId: sub.userId,
                 notificationType: "tv_release",
+                returnExisting: false,
                 collectionId: sub.collectionId,
                 deduplicationKey: `tv_release:${sub.userId}:${tmdbId}:s${ep.season_number}e${ep.episode_number}`,
                 metadata: {
@@ -348,6 +351,7 @@ export async function checkNewReleases() {
             }
           }
         } catch (seasonErr) {
+          errors.push(`TV ${tmdbId} season ${seasonMeta.season_number}`);
           console.error(`Failed to process TV season ${seasonMeta.season_number} for show ${tmdbId}:`, seasonErr);
         }
       }
@@ -363,6 +367,7 @@ export async function checkNewReleases() {
           )
         );
     } catch (showErr) {
+      errors.push(`TV ${tmdbId}`);
       console.error(`Failed to check TV show ${tmdbId}:`, showErr);
     }
   }
@@ -382,7 +387,7 @@ export async function checkNewReleases() {
           where: (e, { eq }) => eq(e.eventKey, eventKey),
         });
 
-        if (alreadyProcessed) continue;
+        // Shared event history cannot suppress per-user delivery; recipient deduplication is authoritative.
 
         // Record release event
         await db
@@ -410,6 +415,7 @@ export async function checkNewReleases() {
           const notif = await createNotification({
             recipientUserId: sub.userId,
             notificationType: "movie_release",
+            returnExisting: false,
             collectionId: sub.collectionId,
             deduplicationKey: `movie_release:${sub.userId}:${tmdbId}:m${part.id}`,
             metadata: {
@@ -438,12 +444,14 @@ export async function checkNewReleases() {
           )
         );
     } catch (franchiseErr) {
+      errors.push(`Movie collection ${tmdbId}`);
       console.error(`Failed to check Movie Franchise ${tmdbId}:`, franchiseErr);
     }
   }
 
   return {
-    success: true,
+    success: errors.length === 0,
+    errors,
     processedShows: tvGroups.size,
     processedFranchises: movieGroups.size,
     notificationsCreated,

@@ -11,12 +11,9 @@ export async function POST(request: NextRequest) {
 
   const providedToken = bearerToken || cronSecretHeader;
   const expectedSecret =
-    process.env.CRON_SECRET ||
-    process.env.AUTO_UPDATE_TOKEN ||
-    process.env.BETTER_AUTH_SECRET;
+    process.env.CRON_SECRET;
 
   if (
-    process.env.NODE_ENV === "production" &&
     (!expectedSecret || providedToken !== expectedSecret)
   ) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -28,7 +25,7 @@ export async function POST(request: NextRequest) {
   } catch (err: any) {
     console.error("Release check failed:", err);
     return NextResponse.json(
-      { error: "Release check failed", message: err?.message },
+      { error: "Release check failed" },
       { status: 500 }
     );
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   X,
   Star,
@@ -17,7 +17,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
-import { calculateWeightedAverage, CategoryDef } from "@/lib/scoring";
+import { calculateWeightedAverage, CategoryDef, withSavedWeights } from "@/lib/scoring";
 import { CinematicSlider } from "@/components/cinematic-slider";
 
 interface RatingDialogProps {
@@ -45,10 +45,17 @@ export function RatingDialog({
   onClose,
   mediaItem,
   collectionId,
-  ratingSystem,
+  ratingSystem: collectionRatingSystem,
   initialRating,
   onRatingSaved,
 }: RatingDialogProps) {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!isOpen) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const frame = requestAnimationFrame(() => dialogRef.current?.querySelector<HTMLElement>("button")?.focus());
+    return () => { cancelAnimationFrame(frame); previous?.focus(); };
+  }, [isOpen]);
   // Genuine unset state: scores[catId] is number | null
   const [scores, setScores] = useState<Record<string, number | null>>({});
   const [reviewText, setReviewText] = useState("");
@@ -66,7 +73,8 @@ export function RatingDialog({
   // Rubric mismatch state
   const [forceNewRubric, setForceNewRubric] = useState(false);
 
-  const categories = ratingSystem?.categories || [];
+  const ratingSystem: RatingDialogProps["ratingSystem"] = !forceNewRubric && initialRating?.ratingSystem ? initialRating.ratingSystem : collectionRatingSystem;
+  const categories = !forceNewRubric ? withSavedWeights(ratingSystem?.categories || [],initialRating?.categoryScores ?? []) : ratingSystem?.categories || [];
   const scale = ratingSystem?.scale || 10;
 
   // Initialize form state when item or initialRating changes
@@ -264,6 +272,7 @@ export function RatingDialog({
         payload.ratingSystemId = ratingSystem?.id || null;
         payload.scores = numericScoresMap;
         payload.categoryScores = categoryScoresArray;
+        if (forceNewRubric) payload.replaceRatingSystem = true;
       }
 
       const res = await fetch("/api/ratings", {
@@ -314,10 +323,17 @@ export function RatingDialog({
 
   return (
     <div
+      ref={dialogRef}
       role="dialog"
       aria-modal="true"
       aria-labelledby="rating-dialog-title"
       onKeyDown={(e) => {
+        if (e.key === "Tab") {
+          const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),textarea:not(:disabled),[tabindex="0"]') ?? []).filter(el => el.getClientRects().length);
+          const first = controls[0], last = controls.at(-1);
+          if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); }
+          else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); }
+        }
         if (e.key === "Escape" && !showClearConfirm) onClose();
       }}
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
@@ -375,6 +391,14 @@ export function RatingDialog({
             </div>
           )}
 
+          {!forceNewRubric && initialRating?.ratingSystemId && collectionRatingSystem && initialRating.ratingSystemId !== collectionRatingSystem.id && (
+            <div className="text-xs text-muted-foreground rounded-lg border border-border p-3 space-y-2">
+              <p>This rating uses its original rubric, {ratingSystem?.name}. Your saved scores are preserved.</p>
+              <button type="button" className="text-primary-text underline" onClick={() => {
+                if (window.confirm("Use the collection's current rubric? Saving will replace this rating's old category scores. Other ratings will be preserved.")) { setScores({}); setForceNewRubric(true); }
+              }}>Re-rate with the collection rubric</button>
+            </div>
+          )}
           {/* Overview snippet if available */}
           {mediaItem.overview && (
             <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
@@ -420,7 +444,7 @@ export function RatingDialog({
                 </h3>
               </div>
               <span className="text-xs text-muted-foreground font-mono">
-                Scale 1–{scale}
+                Scale 0–{scale}
               </span>
             </div>
 
@@ -481,7 +505,7 @@ export function RatingDialog({
                           <CinematicSlider
                             value={currentScore ?? null}
                             onChange={(val) => handleScoreChange(cat.id, val)}
-                            min={1}
+                            min={0}
                             max={scale}
                             step={0.5}
                             name={cat.name}

@@ -11,7 +11,7 @@ export async function GET(request: NextRequest) {
   }
 
   const searchParams = request.nextUrl.searchParams;
-  const limit = Math.min(Number(searchParams.get("limit")) || 30, 100);
+  const limit = Math.min(Math.max(1, Math.floor(Number(searchParams.get("limit")) || 30)), 100);
   const unreadOnly = searchParams.get("unread") === "true";
 
   // Calculate unread count
@@ -21,6 +21,7 @@ export async function GET(request: NextRequest) {
     .where(
       and(
         eq(notifications.recipientUserId, session.user.id),
+        sql`(${notifications.collectionId} IS NULL OR EXISTS (SELECT 1 FROM collections c WHERE c.id = ${notifications.collectionId} AND (c.user_id = ${session.user.id} OR c.visibility IN ('public','unlisted'))))`,
         isNull(notifications.readAt)
       )
     );
@@ -30,9 +31,10 @@ export async function GET(request: NextRequest) {
   const whereClause = unreadOnly
     ? and(
         eq(notifications.recipientUserId, session.user.id),
+        sql`(${notifications.collectionId} IS NULL OR EXISTS (SELECT 1 FROM collections c WHERE c.id = ${notifications.collectionId} AND (c.user_id = ${session.user.id} OR c.visibility IN ('public','unlisted'))))`,
         isNull(notifications.readAt)
       )
-    : eq(notifications.recipientUserId, session.user.id);
+    : and(eq(notifications.recipientUserId, session.user.id), sql`(${notifications.collectionId} IS NULL OR EXISTS (SELECT 1 FROM collections c WHERE c.id = ${notifications.collectionId} AND (c.user_id = ${session.user.id} OR c.visibility IN ('public','unlisted'))))`);
 
   const list = await db.query.notifications.findMany({
     where: whereClause,
@@ -63,6 +65,7 @@ export async function PATCH(request: NextRequest) {
   }
 
   const body = await request.json().catch(() => ({}));
+  if (!body || typeof body !== "object" || Array.isArray(body) || (body.markAll !== undefined && typeof body.markAll !== "boolean") || (body.id !== undefined && typeof body.id !== "string")) return NextResponse.json({error:"Invalid notification update"},{status:400});
   const { markAll, id } = body;
 
   const now = new Date();
@@ -74,6 +77,7 @@ export async function PATCH(request: NextRequest) {
       .where(
         and(
           eq(notifications.recipientUserId, session.user.id),
+        sql`(${notifications.collectionId} IS NULL OR EXISTS (SELECT 1 FROM collections c WHERE c.id = ${notifications.collectionId} AND (c.user_id = ${session.user.id} OR c.visibility IN ('public','unlisted'))))`,
           isNull(notifications.readAt)
         )
       );
@@ -98,6 +102,7 @@ export async function PATCH(request: NextRequest) {
     .where(
       and(
         eq(notifications.recipientUserId, session.user.id),
+        sql`(${notifications.collectionId} IS NULL OR EXISTS (SELECT 1 FROM collections c WHERE c.id = ${notifications.collectionId} AND (c.user_id = ${session.user.id} OR c.visibility IN ('public','unlisted'))))`,
         isNull(notifications.readAt)
       )
     );

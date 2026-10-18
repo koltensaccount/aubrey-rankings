@@ -1,3 +1,4 @@
+import { requireRateLimit } from "@/lib/request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
@@ -68,7 +69,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  try { requireRateLimit(`social-comments:${session.user.id}`,20); } catch { return NextResponse.json({error:"Too many requests"},{status:429}); }
   const body = await request.json().catch(() => ({}));
+  if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({error:"Invalid request"},{status:400});
   const { collectionId, content } = body;
 
   if (!collectionId) {

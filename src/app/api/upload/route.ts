@@ -1,3 +1,4 @@
+import { boundedFormData, requireRateLimit, RequestError } from "@/lib/request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
@@ -18,12 +19,14 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const formData = await request.formData();
+    requireRateLimit(`upload:${session.user.id}`, 20);
+    if (Number(request.headers.get("content-length")) > MAX_FILE_SIZE + 65536) throw new RequestError("Upload exceeds 5MB limit",413);
+    const formData = await boundedFormData(request, MAX_FILE_SIZE + 65536);
     const file = formData.get("file") as File | null;
     const uploadType = formData.get("type") as string | null; // "avatar" | "backdrop" | "media"
     const mediaItemId = formData.get("mediaItemId") as string | null;
 
-    if (!file) {
+    if (!(file instanceof File)) {
       return NextResponse.json(
         { error: "Image file is required" },
         { status: 400 }
@@ -48,8 +51,8 @@ export async function POST(request: NextRequest) {
     const buffer = Buffer.from(arrayBuffer);
 
     // Validate image integrity with sharp
-    const metadata = await sharp(buffer).metadata();
-    if (!metadata.format || !metadata.width || !metadata.height) {
+    const metadata = await sharp(buffer,{limitInputPixels:16000000}).metadata();
+    if (!metadata.format || !["jpeg","png","webp"].includes(metadata.format) || !metadata.width || !metadata.height) {
       return NextResponse.json(
         { error: "Invalid or corrupted image file" },
         { status: 400 }
@@ -64,7 +67,7 @@ export async function POST(request: NextRequest) {
       const filename = `${session.user.id}_${Date.now()}_${nanoid(6)}.webp`;
       const targetPath = path.join(avatarsDir, filename);
 
-      await sharp(buffer)
+      await sharp(buffer,{limitInputPixels:16000000})
         .resize(400, 400, { fit: "cover" })
         .webp({ quality: 85 })
         .toFile(targetPath);
@@ -95,7 +98,7 @@ export async function POST(request: NextRequest) {
       const filename = `${session.user.id}_${Date.now()}_${nanoid(6)}.webp`;
       const targetPath = path.join(backdropsDir, filename);
 
-      await sharp(buffer)
+      await sharp(buffer,{limitInputPixels:16000000})
         .resize({ width: 1920, height: 1080, fit: "inside", withoutEnlargement: true })
         .webp({ quality: 85 })
         .toFile(targetPath);
@@ -116,7 +119,7 @@ export async function POST(request: NextRequest) {
       const filename = `${session.user.id}_${Date.now()}_${nanoid(8)}.webp`;
       const targetPath = path.join(uploadsDir, filename);
 
-      await sharp(buffer)
+      await sharp(buffer,{limitInputPixels:16000000})
         .resize({ width: 1200, height: 1800, fit: "inside", withoutEnlargement: true })
         .webp({ quality: 85 })
         .toFile(targetPath);
@@ -152,10 +155,11 @@ export async function POST(request: NextRequest) {
       { status: 400 }
     );
   } catch (error: any) {
+    if (error instanceof RequestError) return NextResponse.json({error:error.message},{status:error.status});
     console.error("[Upload Error]", error);
     return NextResponse.json(
-      { error: error?.message || "Failed to process image upload" },
-      { status: 500 }
+      { error: "Invalid image or upload target" },
+      { status: 400 }
     );
   }
 }

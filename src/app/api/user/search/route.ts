@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { user } from "@/db/schema";
-import { ilike, or } from "drizzle-orm";
+import { ilike, or, and, isNotNull, ne } from "drizzle-orm";
 
 export const dynamic = "force-dynamic";
 
@@ -15,10 +15,10 @@ export async function GET(request: NextRequest) {
 
   try {
     const matches = await db.query.user.findMany({
-      where: or(
+      where: and(isNotNull(user.username), ne(user.username,""), or(
         ilike(user.name, `%${q}%`),
         ilike(user.username, `%${q}%`)
-      ),
+      )),
       columns: {
         id: true,
         name: true,

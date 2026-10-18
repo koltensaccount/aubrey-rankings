@@ -18,6 +18,7 @@ export interface CreateNotificationParams {
   mediaItemId?: string | null;
   deduplicationKey?: string | null;
   metadata?: Record<string, any> | null;
+  returnExisting?: boolean;
 }
 
 export async function getUserNotificationPreferences(userId: string) {
@@ -42,6 +43,7 @@ export async function createNotification({
   mediaItemId,
   deduplicationKey,
   metadata,
+  returnExisting = true,
 }: CreateNotificationParams) {
   // 1. Never notify a user about their own actions
   if (actorUserId && recipientUserId === actorUserId) {
@@ -62,7 +64,7 @@ export async function createNotification({
       where: (n, { eq }) => eq(n.deduplicationKey, deduplicationKey),
     });
     if (existing) {
-      return existing;
+      return returnExisting ? existing : null;
     }
   }
 
@@ -87,7 +89,8 @@ export async function createNotification({
     return created;
   } catch (err: any) {
     // If concurrent insert hit unique constraint on deduplication_key, handle safely
-    if (deduplicationKey && err?.code === "23505") {
+    if (deduplicationKey && (err?.code === "23505" || err?.cause?.code === "23505")) {
+      if (!returnExisting) return null;
       return await db.query.notifications.findFirst({
         where: (n, { eq }) => eq(n.deduplicationKey, deduplicationKey),
       });

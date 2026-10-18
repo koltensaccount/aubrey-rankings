@@ -48,6 +48,8 @@ COPY --from=builder /app/docker-compose.yml ./docker-compose.yml
 COPY --from=builder /app/scripts/migrate.cjs ./scripts/migrate.cjs
 COPY --from=builder /app/scripts/auto-update.sh ./scripts/auto-update.sh
 COPY --from=builder /app/scripts/backup.sh ./scripts/backup.sh
+COPY --from=builder /app/scripts/check-releases.sh ./scripts/check-releases.sh
+COPY --from=builder /app/scripts/install-updater.sh ./scripts/install-updater.sh
 COPY --from=builder /app/src/db/migrations ./migrations
 
 USER nextjs

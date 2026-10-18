@@ -35,7 +35,8 @@ export async function POST(
   }
 
   const body = await request.json().catch(() => ({}));
-  const enabled = typeof body.enabled === "boolean" ? body.enabled : true;
+  if (!body || typeof body !== "object" || typeof body.enabled !== "boolean") return NextResponse.json({error:"enabled must be boolean"},{status:400});
+  const enabled = body.enabled;
 
   try {
     const updated = await setCollectionTracking(id, session.user.id, enabled);

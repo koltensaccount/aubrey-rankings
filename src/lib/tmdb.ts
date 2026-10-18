@@ -165,14 +165,15 @@ async function tmdbFetch<T>(path: string, params: Record<string, string | number
   const res = await fetch(url, {
     headers: getAuthHeaders(),
     next: { revalidate: 3600 },
+    signal: AbortSignal.timeout(15000),
   });
 
   if (!res.ok) {
-    const errorText = await res.text();
-    throw new Error(`TMDB API request failed [${res.status}]: ${errorText}`);
+    throw new Error(`TMDB API request failed [${res.status}]`);
   }
 
   const data = (await res.json()) as T;
+  if (cache.size >= 1000) cache.delete(cache.keys().next().value!);
   cache.set(url, { timestamp: Date.now(), data });
   return data;
 }

@@ -47,7 +47,8 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const body = await req.json();
+    const body = await req.json().catch(()=>null);
+    if (!body || typeof body !== "object" || Array.isArray(body) || (body.username !== undefined && typeof body.username !== "string")) return NextResponse.json({error:"Invalid profile fields"},{status:400});
     const {
       name,
       username: candidateUsername,
@@ -100,7 +101,9 @@ export async function PATCH(req: NextRequest) {
     if (image === null || image === "") {
       updates.image = null;
     } else if (typeof image === "string") {
-      updates.image = image.trim();
+      const prefix = `/uploads/avatars/${session.user.id}_`;
+      if (!image.startsWith(prefix) || !/^\/uploads\/avatars\/[A-Za-z0-9_-]+\.webp$/.test(image)) return NextResponse.json({error:"Use an avatar uploaded by this account"},{status:400});
+      updates.image = image;
     }
 
     if (candidateUsername !== undefined) {

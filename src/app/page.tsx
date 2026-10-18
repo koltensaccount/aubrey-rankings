@@ -5,7 +5,7 @@ import { collections, ratings, follows } from "@/db/schema";
 import { desc, eq, sql, and, ne, or } from "drizzle-orm";
 import { Plus, ArrowRight, Tv, Film, ListPlus, ArrowUpRight, Globe, Users } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
-import { getTopRankedEntries } from "@/lib/scoring";
+import { getTopRankedEntries, getRatingSummary } from "@/lib/scoring";
 
 export default async function HomePage() {
   const session = await getServerSession();
@@ -112,28 +112,17 @@ export default async function HomePage() {
           mediaItem: true,
         },
       },
-      ratings: true,
+      ratings: {with:{ratingSystem:{columns:{scale:true}}}},
     },
   });
-
-  const totalRated = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(ratings)
-    .where(eq(ratings.userId, session.user.id));
-
-  const totalRatedCount = Number(totalRated[0]?.count || 0);
 
   // Compute average score across user's ratings
   const allRatings = await db.query.ratings.findMany({
     where: (r, { eq }) => eq(r.userId, session.user.id),
-    columns: { calculatedOverallScore: true },
+    columns: { calculatedOverallScore: true,sourceRating:true,sourceScale:true },
+    with:{ratingSystem:{columns:{scale:true}}},
   });
-  const meanScore = allRatings.length
-    ? (
-        allRatings.reduce((acc, r) => acc + (r.calculatedOverallScore || 0), 0) /
-        allRatings.length
-      ).toFixed(1)
-    : "—";
+  const {meanScore,ratedCount:totalRatedCount} = getRatingSummary(allRatings);
 
   const pinnedCollection = userCollections.find((c) => c.isPinned) || userCollections[0];
   const otherCollections = userCollections.filter((c) => c.id !== pinnedCollection?.id);
@@ -160,7 +149,7 @@ export default async function HomePage() {
         limit: 4,
         with: { mediaItem: true },
       },
-      ratings: true,
+      ratings: {with:{ratingSystem:{columns:{scale:true}}}},
     },
   });
 
@@ -192,7 +181,7 @@ export default async function HomePage() {
           </span>
           <span className="text-muted-foreground/60">·</span>
           <span>
-            <strong className="text-primary font-semibold">{meanScore}</strong> mean score
+            <strong className="text-primary font-semibold">{meanScore}</strong> mean /10
           </span>
           <span className="text-muted-foreground/60">·</span>
           <span className="text-primary ml-auto font-medium">Weighted Rubric</span>

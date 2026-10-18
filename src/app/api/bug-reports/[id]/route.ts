@@ -16,7 +16,8 @@ export async function PATCH(
   }
 
   try {
-    const body = await request.json();
+    const body = await request.json().catch(()=>null);
+    if (!body || typeof body !== "object" || Array.isArray(body) || (body.status !== undefined && !["open","investigating","resolved"].includes(body.status)) || (body.adminNotes != null && (typeof body.adminNotes !== "string" || body.adminNotes.length>5000))) return NextResponse.json({error:"Invalid report update"},{status:400});
     const { status, adminNotes } = body;
 
     const payload: Record<string, any> = {
