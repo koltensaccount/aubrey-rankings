@@ -1,36 +1,170 @@
 @import "tailwindcss";
 
+/* =========================================================================
+   APPROVED CINEMATIC TYPOGRAPHY — Self-hosted Barlow Condensed & Inter
+   ========================================================================= */
+@font-face {
+  font-family: "AR Barlow Condensed";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("/prototype-fonts/barlow-condensed-0.woff2") format("woff2");
+}
+@font-face {
+  font-family: "AR Barlow Condensed";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("/prototype-fonts/barlow-condensed-1.woff2") format("woff2");
+}
+@font-face {
+  font-family: "AR Inter";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("/prototype-fonts/inter-0.woff2") format("woff2");
+}
+
+/* =========================================================================
+   DESIGN TOKENS — Approved Modern Cinema Editorial Palette
+   ========================================================================= */
 :root {
-  --background: #090b10;
-  --foreground: #f3f4f6;
-  --card: #11141d;
-  --card-foreground: #f3f4f6;
-  --popover: #11141d;
-  --popover-foreground: #f3f4f6;
-  --primary: #f59e0b;
-  --primary-foreground: #090b10;
-  --secondary: #1c2130;
-  --secondary-foreground: #e2e8f0;
-  --muted: #1e2436;
-  --muted-foreground: #94a3b8;
-  --accent: #272f45;
-  --accent-foreground: #f8fafc;
+  --background: #111514;
+  --foreground: #f1f0e9;
+  --card: #181d1a;
+  --card-foreground: #f1f0e9;
+  --popover: #181d1a;
+  --popover-foreground: #f1f0e9;
+  --primary: #89d5d5;
+  --primary-foreground: #102523;
+  --secondary: #222c27;
+  --secondary-foreground: #e2e8e4;
+  --muted: #1c2420;
+  --muted-foreground: #94a39b;
+  --accent: #26342d;
+  --accent-foreground: #f1f0e9;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: #232a3d;
-  --input: #1a2030;
-  --ring: #f59e0b;
-  --radius: 0.75rem;
+  --border: #303b34;
+  --input: #1b231f;
+  --ring: #89d5d5;
+  --radius: 0.5rem;
+
+  /* Typography tokens */
+  --type-display-font: "AR Barlow Condensed", Arial, sans-serif;
+  --type-title-font: "AR Barlow Condensed", Arial, sans-serif;
+  --type-section-font: "AR Inter", Arial, sans-serif;
+  --type-body-font: "AR Inter", Arial, sans-serif;
+  --type-nav-font: "AR Inter", Arial, sans-serif;
+  --type-score-font: "AR Inter", Arial, sans-serif;
+  --type-meta-font: "AR Inter", Arial, sans-serif;
+
+  --type-display-weight: 700;
+  --type-title-weight: 600;
+  --type-section-weight: 600;
+  --type-body-weight: 400;
+  --type-nav-weight: 600;
+  --type-score-weight: 600;
+
+  --type-display-tracking: .005em;
+  --type-title-tracking: .005em;
+  --type-body-tracking: 0em;
+  --type-meta-tracking: .035em;
+
+  --type-display-case: uppercase;
+  --type-display-leading: 1.1;
+  --type-title-leading: 1.2;
+  --type-body-leading: 1.75;
+  --type-body-size: 14px;
+}
+
+/* Typography Utility Classes */
+.font-display {
+  font-family: var(--type-display-font);
+  letter-spacing: var(--type-display-tracking);
+}
+
+.font-editorial {
+  font-family: 'Newsreader', Georgia, serif;
+}
+
+.font-ui, .font-sans {
+  font-family: var(--type-body-font);
 }
 
 body {
   background-color: var(--background);
   color: var(--foreground);
+  font-family: var(--type-body-font);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-leading);
   font-feature-settings: "rlig" 1, "calt" 1;
   min-height: 100vh;
-  selection-background-color: #f59e0b;
-  selection-color: #090b10;
+  -webkit-font-smoothing: antialiased;
 }
+
+h1, h2, h3, h4 {
+  font-family: var(--type-title-font);
+  font-weight: var(--type-title-weight);
+  letter-spacing: var(--type-title-tracking);
+  line-height: var(--type-title-leading);
+}
+
+/* =========================================================================
+   APPROVED EDITORIAL & FEED UTILITY STYLES
+   ========================================================================= */
+.ar-brand { display: flex; align-items: baseline; gap: 5px; font-size: 24px; letter-spacing: -1.2px; font-weight: 600; color: #f1f0e9; text-decoration: none; }
+.ar-brand span { font-weight: 400; color: #a9b0aa; }
+.ar-brand i { width: 5px; height: 5px; background: #89d5d5; border-radius: 50%; margin-left: 3px; }
+
+.ar-avatar, .ar-smallAvatar { background: #25322a; border: 1px solid #485a4f; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; color: #e3ede6; text-decoration: none; font-weight: 700; text-transform: uppercase; }
+.ar-avatar { height: 34px; width: 34px; font-size: 16px; }
+.ar-smallAvatar { height: 24px; width: 24px; font-size: 12px; }
+
+.ar-neutralButton { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 38px; padding: 0 16px; border: 1px solid #485a4f; border-radius: 4px; background: #d8e2d8; color: #18251e; cursor: pointer; font-size: 12px; font-weight: 600; transition: background .2s, transform .2s; text-decoration: none; }
+.ar-neutralButton:hover { background: #edf5ed; transform: translateY(-1px); }
+
+.ar-textButton { display: inline-flex; align-items: center; gap: 8px; min-height: 38px; padding: 0; font-size: 12px; color: var(--primary); cursor: pointer; background: transparent; border: 0; text-decoration: none; }
+.ar-textButton:hover { color: #cef6f0; }
+
+.ar-feedCover { display: block; position: relative; isolation: isolate; overflow: hidden; height: 230px; background: #0b1717; border-radius: 4px; text-decoration: none; color: inherit; }
+.ar-feedCover > img:first-child { width: 100%; height: 100%; object-fit: cover; object-position: center 44%; }
+.ar-feedCoverShade { position: absolute; inset: 0; background: linear-gradient(90deg, #0a1818fa 0%, #0a1818a0 40%, transparent 80%), linear-gradient(0deg, #081818dd, transparent 90%); }
+.ar-feedCover > div:not(.ar-feedCoverShade) { position: absolute; left: 28px; bottom: 26px; z-index: 1; }
+.ar-feedCover > div > span { font-size: 11px; color: #a7d9d6; letter-spacing: .04em; }
+.ar-feedCover h2 { font-family: var(--type-display-font); font-size: 42px; line-height: .98; letter-spacing: var(--type-display-tracking); text-transform: uppercase; margin-top: 10px; font-weight: 700; color: #f1f0e9; }
+.ar-feedCover .ar-feedCoverLogo { position: absolute; width: 42%; max-width: 380px; right: 24px; bottom: 28px; height: auto; z-index: 1; filter: drop-shadow(0 4px 16px rgba(0,0,0,0.9)); }
+
+.ar-rankingPeek { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 15px 0 6px; text-decoration: none; color: inherit; }
+.ar-rankingPeek > div { display: grid; grid-template-columns: 18px 36px 1fr; column-gap: 8px; row-gap: 2px; align-items: center; min-width: 0; }
+.ar-rankingPeek > div > span { grid-row: 1/3; font-size: 11px; color: #8db5ab; font-variant-numeric: tabular-nums; }
+.ar-rankingPeek img { grid-row: 1/3; height: 34px; width: 36px; object-fit: cover; border-radius: 2px; }
+.ar-rankingPeek strong { font-size: 12px; font-weight: 500; line-height: 1.2; color: #e5ece5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ar-rankingPeek small { font-size: 11px; color: #89d5d5; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+.ar-smallRanking { display: flex; gap: 18px; align-items: center; text-align: left; width: 100%; text-decoration: none; color: inherit; cursor: pointer; }
+.ar-smallRanking > img { width: 80px; height: 116px; object-fit: cover; border-radius: 3px; flex-shrink: 0; background: #0c1210; }
+.ar-smallRanking > div { flex: 1; min-width: 0; }
+.ar-smallRanking div > span { color: #8aa292; font-size: 11px; }
+.ar-smallRanking h2 { font-size: 18px; line-height: 1.3; font-weight: 600; letter-spacing: .005em; margin: 4px 0 8px; color: #f1f0e9; }
+.ar-smallRanking ol { display: flex; flex-wrap: wrap; gap: 5px 16px; list-style: decimal inside; font-size: 11px; color: #a8bbad; }
+
+.ar-ordinaryPost { padding-top: 24px; border-top: 1px solid #303b34; }
+.ar-reviewBody { display: flex; align-items: flex-start; gap: 28px; }
+.ar-reviewBody > div { flex: 1; min-width: 0; }
+.ar-reviewBody h3 { font-size: 18px; font-weight: 600; margin: 0 0 10px; color: #f1f0e9; }
+.ar-reviewBody h3 span { font-size: 11px; color: #89988f; margin-left: 8px; font-weight: 400; }
+.ar-reviewBody p { font-size: 14px; line-height: 1.8; color: #b1bfb7; margin: 0 0 16px; }
+.ar-reviewBody > img { width: 84px; height: 114px; object-fit: cover; border-radius: 3px; flex-shrink: 0; }
+
+.ar-postAuthor { display: flex; align-items: center; gap: 11px; font-size: 12px; padding: 0 0 16px; color: #d6e4d9; }
+.ar-postAuthor strong { font-weight: 600; color: #f1f0e9; }
+.ar-postAuthor span { color: #8b9b91; font-size: 11px; margin-left: 6px; }
+.ar-personAvatar { width: 32px; height: 32px; display: inline-flex; justify-content: center; align-items: center; border-radius: 50%; background: #25322a; color: #e3ede6; font-size: 14px; font-weight: 700; flex-shrink: 0; text-transform: uppercase; }
+
+.ar-socialActions { display: flex; align-items: center; gap: 22px; color: #91a99a; font-size: 11px; padding: 12px 0 6px; }
+.ar-socialActions button, .ar-socialActions a { display: inline-flex; align-items: center; gap: 7px; min-height: 34px; background: transparent; border: 0; color: #91a99a; cursor: pointer; text-decoration: none; font-size: 11px; }
+.ar-socialActions button:hover, .ar-socialActions a:hover { color: #f1f0e9; }
 
 /* Custom Scrollbars */
 ::-webkit-scrollbar {
@@ -38,12 +172,23 @@ body {
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #090b10;
+  background: #111514;
 }
 ::-webkit-scrollbar-thumb {
-  background: #232a3d;
+  background: #28342d;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #3b4563;
+  background: #3b4e42;
+}
+
+@media(max-width: 800px) {
+  .ar-feedCover { height: 190px; }
+  .ar-feedCover h2 { font-size: 34px; }
+  .ar-feedCover .ar-feedCoverLogo { width: 44%; right: 16px; bottom: 20px; }
+  .ar-rankingPeek { column-gap: 8px; }
+  .ar-rankingPeek > div { grid-template-columns: 14px 1fr; }
+  .ar-rankingPeek img { display: none; }
+  .ar-reviewBody { gap: 16px; }
+  .ar-reviewBody > img { width: 64px; height: 90px; }
 }

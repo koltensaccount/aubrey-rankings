@@ -1,0 +1,68 @@
+[
+  {
+    "file": "barlow-condensed-0.woff2",
+    "family": "AR Barlow Condensed",
+    "weight": "600",
+    "source": "https://fonts.gstatic.com/s/barlowcondensed/v13/HTxwL3I-JCGChYJ8VI-L6OO_au7B4873z3bWuQ.woff2"
+  },
+  {
+    "file": "barlow-condensed-1.woff2",
+    "family": "AR Barlow Condensed",
+    "weight": "700",
+    "source": "https://fonts.gstatic.com/s/barlowcondensed/v13/HTxwL3I-JCGChYJ8VI-L6OO_au7B46r2z3bWuQ.woff2"
+  },
+  {
+    "file": "inter-0.woff2",
+    "family": "AR Inter",
+    "weight": "400 700",
+    "source": "https://fonts.gstatic.com/s/inter/v20/UcC73FwrK3iLTeHuS_nVMrMxCp50SjIa1ZL7.woff2"
+  },
+  {
+    "file": "newsreader-0.woff2",
+    "family": "AR Newsreader",
+    "weight": "400 500",
+    "source": "https://fonts.gstatic.com/s/newsreader/v26/cY9VfjOCX1hbuyalUrK49dLac06G1ZGsZBtoBAbNJYQ.woff2"
+  },
+  {
+    "file": "manrope-0.woff2",
+    "family": "AR Manrope",
+    "weight": "400 600",
+    "source": "https://fonts.gstatic.com/s/manrope/v20/xn7gYHE41ni1AdIRggexSg.woff2"
+  },
+  {
+    "file": "dm-serif-0.woff2",
+    "family": "AR DM Serif Display",
+    "weight": "400",
+    "source": "https://fonts.gstatic.com/s/dmserifdisplay/v17/-nFnOHM81r4j6k0gjAW3mujVU2B2G_Bx0g.woff2"
+  },
+  {
+    "file": "work-sans-0.woff2",
+    "family": "AR Work Sans",
+    "weight": "400 600",
+    "source": "https://fonts.gstatic.com/s/worksans/v24/QGYsz_wNahGAdqQ43Rh_fKDp.woff2"
+  },
+  {
+    "file": "syne-0.woff2",
+    "family": "AR Syne",
+    "weight": "600 800",
+    "source": "https://fonts.gstatic.com/s/syne/v24/8vIH7w4qzmVxm2BL9A.woff2"
+  },
+  {
+    "file": "dm-sans-0.woff2",
+    "family": "AR DM Sans",
+    "weight": "400 600",
+    "source": "https://fonts.gstatic.com/l/font?kit=rP2-p2ywxg089UriI5-g4vlH9VoD8CmcqZG40F9JadbnoEwAopwDRUUHvP-6oMc49yvtf0DPCg&skey=cd068b3e1b767e51&v=v17"
+  },
+  {
+    "file": "oswald-0.woff2",
+    "family": "AR Oswald",
+    "weight": "400 600",
+    "source": "https://fonts.gstatic.com/s/oswald/v57/TK3IWkUHHAIjg75cFRf3bXL8LICs1_Fv40pKlN4NNSeSASz7FmlWHYg.woff2"
+  },
+  {
+    "file": "plex-sans-0.woff2",
+    "family": "AR IBM Plex Sans",
+    "weight": "400 600",
+    "source": "https://fonts.gstatic.com/s/ibmplexsans/v23/zYXzKVElMYYaJe8bpLHnCwDKr932-G7dytD-Dmu1syxeKYY.woff2"
+  }
+]

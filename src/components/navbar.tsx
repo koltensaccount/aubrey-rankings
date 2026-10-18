@@ -3,15 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
-import {
-  Film,
-  PlusCircle,
-  Settings,
-  LogOut,
-  User,
-  Sparkles,
-} from "lucide-react";
+import { Plus, Settings, LogOut } from "lucide-react";
 
 export function Navbar() {
   const pathname = usePathname();
@@ -21,104 +13,116 @@ export function Navbar() {
   const handleSignOut = async () => {
     await signOut();
     router.push("/login");
+    router.refresh();
   };
 
+  const initial = session?.user?.name
+    ? session.user.name.charAt(0).toLowerCase()
+    : session?.user?.email
+      ? session.user.email.charAt(0).toLowerCase()
+      : "a";
+
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-background/80 backdrop-blur-md">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+    <header className="sticky top-0 z-50 w-full border-b border-[#303b34] bg-[#111514]/90 backdrop-blur-md">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         {/* Brand */}
-        <div className="flex items-center gap-6">
-          <Link
-            href="/"
-            className="flex items-center gap-2.5 font-bold text-lg tracking-tight hover:opacity-90 transition-opacity"
-          >
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-tr from-amber-600 via-amber-500 to-yellow-400 flex items-center justify-center shadow-lg shadow-amber-500/20 text-stone-950 font-black text-xl">
-              A
-            </div>
-            <div className="flex flex-col leading-tight">
-              <span className="text-white font-extrabold flex items-center gap-1.5">
-                Aubrey <span className="text-amber-400">Rankings</span>
-              </span>
-              <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">
-                Definitive Media Ratings
-              </span>
-            </div>
+        <div className="flex items-center gap-8">
+          <Link href="/" className="ar-brand">
+            aubrey<span>rankings</span>
+            <i />
           </Link>
 
           {/* Navigation Links */}
-          {session && (
-            <nav className="hidden md:flex items-center gap-1 pl-4 border-l border-border/60">
-              <Link
-                href="/"
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  pathname === "/"
-                    ? "bg-accent text-white"
-                    : "text-muted-foreground hover:text-white hover:bg-accent/50"
-                }`}
-              >
-                Library
-              </Link>
-              <Link
-                href="/create"
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                  pathname === "/create"
-                    ? "bg-accent text-white"
-                    : "text-muted-foreground hover:text-white hover:bg-accent/50"
-                }`}
-              >
-                New Ranking
-              </Link>
-            </nav>
-          )}
+          <nav className="hidden md:flex items-center gap-6 text-xs text-[#939f98]">
+            <Link
+              href="/"
+              className={`transition-colors py-1 ${
+                pathname === "/" ? "text-[#f1f0e9] font-semibold" : "hover:text-[#f1f0e9]"
+              }`}
+            >
+              Feed
+            </Link>
+            {session && (
+              <>
+                <Link
+                  href="/#library"
+                  className={`transition-colors py-1 ${
+                    pathname === "/#library" ? "text-[#f1f0e9] font-semibold" : "hover:text-[#f1f0e9]"
+                  }`}
+                >
+                  My Rankings
+                </Link>
+                <Link
+                  href="/create"
+                  className={`transition-colors py-1 ${
+                    pathname === "/create" ? "text-[#f1f0e9] font-semibold" : "hover:text-[#f1f0e9]"
+                  }`}
+                >
+                  Create
+                </Link>
+              </>
+            )}
+            <Link
+              href="/prototype"
+              className="text-[#6d7e74] hover:text-[#939f98] transition-colors py-1"
+            >
+              Prototype
+            </Link>
+          </nav>
         </div>
 
         {/* Right Section / Auth */}
         <div className="flex items-center gap-3">
           {isPending ? (
-            <div className="h-8 w-24 rounded-lg bg-card animate-pulse" />
+            <div className="h-8 w-20 rounded bg-[#1c2420] animate-pulse" />
           ) : session ? (
-            <div className="flex items-center gap-2.5">
-              <Link href="/create">
-                <Button size="sm" className="hidden sm:inline-flex gap-1.5 font-semibold">
-                  <PlusCircle className="h-4 w-4" />
-                  <span>Create Ranking</span>
-                </Button>
-              </Link>
-
-              <Link href="/settings">
-                <Button variant="ghost" size="icon" title="Settings" className="text-muted-foreground hover:text-white">
-                  <Settings className="h-4 w-4" />
-                </Button>
-              </Link>
-
-              <div className="hidden sm:flex items-center gap-2 pl-2 border-l border-border/60 text-xs text-muted-foreground">
-                <div className="h-7 w-7 rounded-full bg-accent flex items-center justify-center text-amber-300 font-semibold uppercase border border-amber-500/30">
-                  {session.user.name ? session.user.name[0] : "U"}
-                </div>
-                <span className="font-medium text-slate-200 max-w-[120px] truncate">
-                  {session.user.name || session.user.email}
-                </span>
-              </div>
-
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleSignOut}
-                title="Log Out"
-                className="text-muted-foreground hover:text-red-400"
+            <div className="flex items-center gap-3">
+              <Link
+                href="/create"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-[#d8e2d8] hover:bg-[#edf5ed] text-[#102523] text-xs font-semibold transition-colors"
               >
-                <LogOut className="h-4 w-4" />
-              </Button>
+                <Plus size={14} />
+                <span>New ranking</span>
+              </Link>
+
+              <Link
+                href="/settings"
+                title="Settings"
+                className="p-2 text-[#939f98] hover:text-[#f1f0e9] transition-colors"
+              >
+                <Settings size={17} />
+              </Link>
+
+              <Link
+                href="/profile"
+                className="ar-avatar"
+                aria-label="Your profile"
+                title={session.user.name || session.user.email}
+              >
+                {initial}
+              </Link>
+
+              <button
+                onClick={handleSignOut}
+                title="Sign out"
+                className="p-2 text-[#939f98] hover:text-red-400 transition-colors bg-transparent border-0 cursor-pointer"
+              >
+                <LogOut size={16} />
+              </button>
             </div>
           ) : (
-            <div className="flex items-center gap-2">
-              <Link href="/login">
-                <Button variant="ghost" size="sm">
-                  Sign In
-                </Button>
+            <div className="flex items-center gap-3 text-xs">
+              <Link
+                href="/login"
+                className="text-[#939f98] hover:text-[#f1f0e9] transition-colors px-3 py-1.5 font-medium"
+              >
+                Sign in
               </Link>
-              <Link href="/signup">
-                <Button size="sm">Sign Up</Button>
+              <Link
+                href="/signup"
+                className="px-4 py-2 rounded bg-[#89d5d5] hover:bg-[#a5dfdf] text-[#102523] font-semibold transition-colors"
+              >
+                Get started
               </Link>
             </div>
           )}

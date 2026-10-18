@@ -2,15 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useSession, signOut } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Sliders,
   User,
   Shield,
-  Palette,
   FileSpreadsheet,
   Download,
   Trash2,
@@ -18,7 +13,7 @@ import {
   Check,
   AlertTriangle,
   Loader2,
-  RefreshCw,
+  Save,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -98,16 +93,20 @@ export default function SettingsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: editingSystem.name,
-          description: editingSystem.description,
           scale: editingSystem.scale,
-          isDefault: true,
-          categories: editingSystem.categories,
+          categories: editingSystem.categories.map((c: any, idx: number) => ({
+            name: c.name,
+            weight: c.weight,
+            isRequired: c.isRequired,
+            sortOrder: idx + 1,
+          })),
         }),
       });
+
       if (res.ok) {
         setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 2500);
-        await fetchRatingSystems();
+        setTimeout(() => setSaveSuccess(false), 2000);
+        fetchRatingSystems();
       }
     } catch (err) {
       console.error(err);
@@ -115,128 +114,108 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-10 space-y-8">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
+      {/* Header */}
       <div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight">Settings</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Customize weighted scoring formulas, account preferences, and data options.
+        <span className="text-[11px] text-[#8fa095] uppercase tracking-wider block">
+          Platform Configuration
+        </span>
+        <h1 className="font-display text-4xl sm:text-5xl font-bold uppercase tracking-tight text-[#f1f0e9] mt-1">
+          Settings
+        </h1>
+        <p className="text-xs text-[#9aa79e] mt-1">
+          Manage personalized weighted rubrics, critique preferences, and account security.
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-border/80 gap-6 text-sm font-semibold">
+      <div className="flex items-center gap-2 border-b border-[#303b34] pb-px">
         <button
           onClick={() => setActiveTab("rating_systems")}
-          className={`pb-3 flex items-center gap-2 border-b-2 transition-colors ${
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
             activeTab === "rating_systems"
-              ? "border-amber-500 text-white"
-              : "border-transparent text-muted-foreground hover:text-white"
+              ? "border-[#89d5d5] text-[#f1f0e9]"
+              : "border-transparent text-[#8fa095] hover:text-[#f1f0e9]"
           }`}
         >
-          <Sliders className="h-4 w-4" />
-          Rating Systems
+          <Sliders size={14} />
+          <span>Weighted Rubrics</span>
         </button>
+
         <button
           onClick={() => setActiveTab("account")}
-          className={`pb-3 flex items-center gap-2 border-b-2 transition-colors ${
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
             activeTab === "account"
-              ? "border-amber-500 text-white"
-              : "border-transparent text-muted-foreground hover:text-white"
+              ? "border-[#89d5d5] text-[#f1f0e9]"
+              : "border-transparent text-[#8fa095] hover:text-[#f1f0e9]"
           }`}
         >
-          <User className="h-4 w-4" />
-          Account & Security
+          <User size={14} />
+          <span>Account & Security</span>
         </button>
+
         <button
           onClick={() => setActiveTab("data")}
-          className={`pb-3 flex items-center gap-2 border-b-2 transition-colors ${
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
             activeTab === "data"
-              ? "border-amber-500 text-white"
-              : "border-transparent text-muted-foreground hover:text-white"
+              ? "border-[#89d5d5] text-[#f1f0e9]"
+              : "border-transparent text-[#8fa095] hover:text-[#f1f0e9]"
           }`}
         >
-          <FileSpreadsheet className="h-4 w-4" />
-          Data & Importer
+          <FileSpreadsheet size={14} />
+          <span>Data & Import</span>
         </button>
       </div>
 
       {/* TAB 1: RATING SYSTEMS */}
       {activeTab === "rating_systems" && (
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Systems List */}
-          <div className="space-y-4">
-            <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-              Your Systems
-            </h3>
-            <div className="space-y-2">
-              {ratingSystems.map((rs) => (
-                <div
-                  key={rs.id}
-                  onClick={() => setEditingSystem(rs)}
-                  className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                    editingSystem?.id === rs.id
-                      ? "border-amber-500 bg-amber-500/10"
-                      : "border-border/70 bg-card hover:border-border"
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-white text-sm">{rs.name}</span>
-                    {rs.isDefault && (
-                      <Badge variant="default" className="text-[10px]">
-                        Default
-                      </Badge>
-                    )}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                    {rs.description || `${rs.categories?.length || 0} categories`}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* System Editor */}
+        <div className="space-y-6">
           {editingSystem && (
-            <Card className="lg:col-span-2 p-6 space-y-6 border-border/80 bg-card/80">
-              <div className="flex items-center justify-between border-b border-border/80 pb-4">
+            <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-6">
+              <div className="flex items-center justify-between border-b border-[#28342d] pb-4">
                 <div>
-                  <h3 className="text-lg font-bold text-white">{editingSystem.name}</h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Adjust weights to automatically recalibrate weighted averages.
+                  <h3 className="font-display text-2xl uppercase font-bold text-[#f1f0e9]">
+                    {editingSystem.name}
+                  </h3>
+                  <p className="text-xs text-[#8fa095] mt-0.5">
+                    Adjust weights to automatically recalibrate weighted averages across your library.
                   </p>
                 </div>
-                <Button
+                <button
                   onClick={handleSaveSystem}
-                  className="font-bold gap-2 shadow-md shadow-amber-500/20"
+                  className="px-4 py-2 rounded bg-[#d8e2d8] hover:bg-[#edf5ed] text-[#102523] text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
                 >
                   {saveSuccess ? (
                     <>
-                      <Check className="h-4 w-4 text-stone-950" />
-                      Saved!
+                      <Check size={14} />
+                      <span>Saved!</span>
                     </>
                   ) : (
-                    "Save Changes"
+                    <>
+                      <Save size={14} />
+                      <span>Save Rubric</span>
+                    </>
                   )}
-                </Button>
+                </button>
               </div>
 
               {/* Categories and Weights */}
               <div className="space-y-3">
-                <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <span className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
                   Scoring Categories & Weights
                 </span>
 
-                <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {editingSystem.categories?.map((cat: any) => (
                     <div
                       key={cat.id}
-                      className="p-3.5 rounded-xl border border-border/70 bg-secondary/30 flex items-center justify-between gap-4"
+                      className="p-3.5 rounded-lg border border-[#2b3730] bg-[#111613] flex items-center justify-between gap-4"
                     >
                       <div className="flex-1 min-w-0">
-                        <span className="font-semibold text-white text-sm">
+                        <span className="font-semibold text-[#f1f0e9] text-xs">
                           {cat.name}
                         </span>
-                        <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-3 mt-1.5">
                           <input
                             type="range"
                             min="0"
@@ -246,54 +225,52 @@ export default function SettingsPage() {
                             onChange={(e) =>
                               handleUpdateWeight(cat.id, parseFloat(e.target.value))
                             }
-                            className="w-32 accent-amber-500 cursor-pointer"
+                            className="w-28 accent-[#89d5d5] cursor-pointer"
                           />
-                          <span className="text-xs font-bold text-amber-300">
+                          <span className="text-xs font-bold text-[#89d5d5] font-display">
                             {cat.weight}x
                           </span>
                         </div>
                       </div>
 
-                      <Button
-                        variant="ghost"
-                        size="icon"
+                      <button
                         onClick={() => handleRemoveCategory(cat.id)}
-                        className="text-muted-foreground hover:text-red-400"
+                        className="text-[#8fa095] hover:text-red-400 p-1 transition-colors bg-transparent border-0 cursor-pointer"
+                        title="Remove Category"
                       >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                        <Trash2 size={15} />
+                      </button>
                     </div>
                   ))}
                 </div>
               </div>
 
               {/* Add New Category Form */}
-              <div className="pt-2 border-t border-border/60 flex items-center gap-3">
-                <Input
-                  placeholder="New category (e.g. Concept, Pacing)..."
+              <div className="pt-3 border-t border-[#28342d] flex items-center gap-3">
+                <input
+                  placeholder="New category (e.g. Atmosphere, Pacing)..."
                   value={newCategoryName}
                   onChange={(e) => setNewCategoryName(e.target.value)}
-                  className="h-10 text-xs bg-secondary/50"
+                  className="flex-1 h-9 px-3 text-xs rounded bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
                 />
-                <Input
+                <input
                   type="number"
                   min="1"
                   max="10"
                   placeholder="Weight"
                   value={newCategoryWeight}
                   onChange={(e) => setNewCategoryWeight(e.target.value)}
-                  className="w-20 h-10 text-center text-xs bg-secondary/50"
+                  className="w-20 h-9 text-center text-xs rounded bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
                 />
-                <Button
+                <button
                   onClick={handleAddCategory}
-                  variant="secondary"
-                  className="gap-1.5 shrink-0"
+                  className="px-4 h-9 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  <Plus className="h-4 w-4" />
-                  Add
-                </Button>
+                  <Plus size={14} />
+                  <span>Add</span>
+                </button>
               </div>
-            </Card>
+            </div>
           )}
         </div>
       )}
@@ -301,91 +278,81 @@ export default function SettingsPage() {
       {/* TAB 2: ACCOUNT & SECURITY */}
       {activeTab === "account" && (
         <div className="max-w-2xl space-y-6">
-          <Card className="p-6 space-y-4 border-border/80 bg-card/80">
-            <h3 className="text-base font-bold text-white">Profile Information</h3>
+          <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-4">
+            <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+              Profile Information
+            </h3>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase">
-                Name
+              <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                Display Name
               </label>
-              <Input
+              <input
                 defaultValue={session?.user.name || ""}
                 disabled
-                className="bg-secondary/40 text-sm"
+                className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#8fa095] cursor-not-allowed"
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase">
+              <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
                 Email Address
               </label>
-              <Input
+              <input
                 defaultValue={session?.user.email || ""}
                 disabled
-                className="bg-secondary/40 text-sm"
+                className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#8fa095] cursor-not-allowed"
               />
             </div>
-          </Card>
-
-          <Card className="p-6 space-y-4 border-red-500/20 bg-red-500/5">
-            <div className="flex items-center gap-3 text-red-400">
-              <AlertTriangle className="h-5 w-5" />
-              <h3 className="text-base font-bold">Danger Zone</h3>
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Deleting your account will permanently wipe your collections, custom rating systems,
-              and private reviews. This action cannot be undone.
-            </p>
-            <Button variant="destructive" size="sm">
-              Delete Account
-            </Button>
-          </Card>
+          </div>
         </div>
       )}
 
-      {/* TAB 3: DATA & SPREADSHEET IMPORTER */}
+      {/* TAB 3: DATA & IMPORTER */}
       {activeTab === "data" && (
         <div className="max-w-2xl space-y-6">
-          <Card className="p-6 space-y-4 border-border/80 bg-card/80">
+          <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-4">
             <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-                <FileSpreadsheet className="h-5 w-5" />
+              <div className="h-9 w-9 rounded-lg bg-[#1b2520] border border-[#3b4c40] flex items-center justify-center text-[#89d5d5]">
+                <FileSpreadsheet size={18} />
               </div>
               <div>
-                <h3 className="text-base font-bold text-white">
+                <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
                   Aubrey&apos;s Black Mirror Importer
                 </h3>
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-[#8fa095]">
                   Import ratings and weights directly from Aubrey&apos;s Spreadsheet format.
                 </p>
               </div>
             </div>
 
-            <div className="p-4 rounded-xl border border-dashed border-border/80 bg-secondary/20 text-center space-y-3">
-              <p className="text-xs text-muted-foreground">
+            <div className="p-4 rounded-lg border border-dashed border-[#303b34] bg-[#111613] text-center space-y-3">
+              <p className="text-xs text-[#8fa095]">
                 Paste CSV or JSON export from the original spreadsheet:
               </p>
               <textarea
                 rows={5}
                 placeholder="Episode, Season, Music, Acting, Cinematography, Writing, Vibes, Notes..."
-                className="w-full rounded-lg border border-border bg-input/50 p-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono"
+                className="w-full rounded-lg border border-[#303b34] bg-[#18211d] p-3 text-xs text-[#f1f0e9] placeholder:text-[#6d7e74] focus:outline-none focus:border-[#89d5d5] font-mono resize-none"
               />
               <div className="flex justify-end">
-                <Button size="sm" className="font-semibold">
+                <button className="px-4 py-2 rounded bg-[#d8e2d8] hover:bg-[#edf5ed] text-[#102523] text-xs font-semibold">
                   Import Spreadsheet Ratings
-                </Button>
+                </button>
               </div>
             </div>
-          </Card>
+          </div>
 
-          <Card className="p-6 space-y-3 border-border/80 bg-card/80">
-            <h3 className="text-base font-bold text-white">Export Your Data</h3>
-            <p className="text-xs text-muted-foreground">
+          <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-3">
+            <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+              Export Your Data
+            </h3>
+            <p className="text-xs text-[#8fa095]">
               Download your complete library, rating histories, and reviews in JSON format.
             </p>
-            <Button variant="outline" size="sm" className="gap-2">
-              <Download className="h-4 w-4" />
-              Export JSON
-            </Button>
-          </Card>
+            <button className="inline-flex items-center gap-1.5 px-4 py-2 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold transition-colors">
+              <Download size={14} />
+              <span>Export JSON</span>
+            </button>
+          </div>
         </div>
       )}
     </div>

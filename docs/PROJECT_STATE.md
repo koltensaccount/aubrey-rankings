@@ -2,12 +2,12 @@
 
 ## Current Architecture
 - **Framework**: Next.js 16 (App Router) + React 19 + TypeScript
-- **Styling**: Tailwind CSS + shadcn/ui design patterns + Motion
+- **Styling**: Modern Cinema Editorial design system (Barlow Condensed bold display typography + Inter interface/body, dark neutral palette `#111514`, artwork cyan/teal accents `#89d5d5`, authentic ClearLOGO artwork integration)
 - **Database**: PostgreSQL (v16) with Drizzle ORM
 - **Authentication**: Better Auth with email/password, session persistence, and transactional user seeding
 - **Integrations**: TMDB API (server-side authenticated metadata, caching & artwork), Resend (transactional email)
 - **Deployment Target**: Ubuntu 24.04 via Docker Compose (`aubrey-db`, `aubrey-web`), loopback-bound to `127.0.0.1:3200` for Cloudflare Tunnel ingress at `aubrey.koltensserver.com`
-- **Session Management**: Dedicated persistent Codex session (`01a14b81-6943-7fc0-bb32-2000bed5159d`)
+- **Session Management**: Dedicated persistent Codex session (`01a14c00-e0fb-7d72-9c6e-38aec95276da`)
 
 ## Important Decisions & Security Hardening
 1. **Multi-tenant isolation**: All collection, rating, custom score, and image records are strictly isolated to `userId`.
@@ -25,9 +25,17 @@
 - [x] Phase 5: Aubrey's Black Mirror historical rating importer and episode matcher
 - [x] Phase 6: Production multi-stage Dockerfile, Docker Compose stack, automated backup/restore scripts, deployment runbook
 - [x] Phase 7: Live production deployment to Ubuntu server (`koltensserver`), persistent database initialization, volume configuration, automated backups with off-server sync, and continuous deployment pipeline
-- [x] Codex Checkpoint A: Authentication & database integrity review and resolution
-- [x] Codex Checkpoint C: Production deployment security, recovery, and resilience review and resolution
-- [x] Private GitHub repository initialized and synchronized (`koltensaccount/aubrey-rankings`)
+- [x] Stage 1 (Production UI): Unified Modern Cinema Editorial UI across all application pages (Home/Feed, Ranking Detail, Profile, Settings, Auth, Create Ranking) with locked Barlow Condensed + Inter typography
+
+## Upcoming Implementation Stages
+- **Stage 2**: Google Sign-in and Usernames (Better Auth Google OAuth, unique normalized usernames with server-side validation, username onboarding flow, profile settings, verified Resend email integration).
+- **Stage 3**: Letterboxd ZIP Importer (repeatable, duplicate-safe import from official user-data ZIP export, TMDB movie matching, rating scale preservation without losing source fidelity).
+
+## Long-Term Product Roadmap (Post Stage 3)
+- **Stage 4 — Privacy & Public Profiles**: Private (default), unlisted, and public rankings, shareable URLs, public user profiles, pinned rankings, public reviews, privacy-aware search.
+- **Stage 5 — Social Platform**: Following / followers, social activity dispatch feed, likes, comments, user discovery, notifications, and moderation/abuse protection.
+- **Stage 6 — Advanced Rankings**: Side-by-side user ranking comparisons, category score comparison, disagreement indexes, shareable ranking cards.
+- **Stage 7 — Advanced Personalization**: Automatic artwork-based accent colors, manual accent overrides, custom editorial ranking covers.
 
 ## Automated Test Coverage
 - `src/tests/scoring.test.ts`: Weighted scoring calculations, decimal weights, edge cases, zero weights, completeness checks (All pass)

@@ -4,17 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { signUp } from "@/lib/auth-client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card";
-import { Sparkles, AlertCircle } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -50,78 +40,91 @@ export default function SignUpPage() {
   };
 
   return (
-    <div className="min-h-[calc(100vh-8rem)] flex items-center justify-center p-4">
-      <Card className="w-full max-w-md border-border/80 bg-card/90">
-        <CardHeader className="text-center space-y-2">
-          <div className="mx-auto w-12 h-12 rounded-2xl bg-gradient-to-tr from-amber-600 to-yellow-400 flex items-center justify-center text-stone-950 font-black text-2xl shadow-lg shadow-amber-500/20">
-            A
-          </div>
-          <CardTitle className="text-2xl font-bold tracking-tight">Create your account</CardTitle>
-          <CardDescription>
+    <div className="min-h-[calc(100vh-12rem)] flex items-center justify-center p-4">
+      <div className="w-full max-w-md rounded-xl border border-[#303b34] bg-[#141a17] p-8 shadow-2xl space-y-6">
+        <div className="text-center space-y-2">
+          <Link href="/" className="ar-brand justify-center">
+            aubrey<span>rankings</span>
+            <i />
+          </Link>
+          <h1 className="font-display text-3xl font-bold uppercase tracking-tight text-[#f1f0e9] pt-2">
+            Create Account
+          </h1>
+          <p className="text-xs text-[#9aa79e]">
             Join Aubrey Rankings to build custom ratings and rank media collections.
-          </CardDescription>
-        </CardHeader>
-        <form onSubmit={handleSubmit}>
-          <CardContent className="space-y-4">
-            {error && (
-              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                <span>{error}</span>
-              </div>
-            )}
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Full Name
-              </label>
-              <Input
-                placeholder="Aubrey"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-                disabled={loading}
-              />
+          </p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          {error && (
+            <div className="p-3 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2">
+              <AlertCircle size={15} className="shrink-0 mt-0.5" />
+              <span>{error}</span>
             </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Email Address
-              </label>
-              <Input
-                type="email"
-                placeholder="aubrey@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                disabled={loading}
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Password
-              </label>
-              <Input
-                type="password"
-                placeholder="••••••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={8}
-                disabled={loading}
-              />
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col gap-4">
-            <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Creating Account..." : "Create Account"}
-            </Button>
-            <p className="text-xs text-center text-muted-foreground">
-              Already have an account?{" "}
-              <Link href="/login" className="text-amber-400 hover:underline font-medium">
-                Sign In
-              </Link>
-            </p>
-          </CardFooter>
+          )}
+
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+              Full Name
+            </label>
+            <input
+              type="text"
+              placeholder="Aubrey"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              required
+              disabled={loading}
+              className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5] transition-colors"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+              Email Address
+            </label>
+            <input
+              type="email"
+              placeholder="aubrey@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              disabled={loading}
+              className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5] transition-colors"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+              Password (min 8 characters)
+            </label>
+            <input
+              type="password"
+              placeholder="••••••••••••"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              minLength={8}
+              disabled={loading}
+              className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5] transition-colors"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full mt-2 py-3 rounded bg-[#89d5d5] hover:bg-[#a5dfdf] text-[#102523] text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50"
+          >
+            {loading ? "Creating Account..." : "Create Account"}
+          </button>
+
+          <p className="text-xs text-center text-[#8fa095] pt-2">
+            Already have an account?{" "}
+            <Link href="/login" className="text-[#89d5d5] hover:underline font-medium">
+              Sign in
+            </Link>
+          </p>
         </form>
-      </Card>
+      </div>
     </div>
   );
 }
