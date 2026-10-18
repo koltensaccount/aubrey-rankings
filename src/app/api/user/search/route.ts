@@ -7,18 +7,27 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const q = searchParams.get("q")?.trim();
+  const rawQ = searchParams.get("q")?.trim();
 
-  if (!q || q.length < 2) {
+  if (!rawQ || rawQ.length < 2) {
+    return NextResponse.json({ users: [] });
+  }
+
+  const q = rawQ.startsWith("@") ? rawQ.slice(1).trim() : rawQ;
+  if (!q || q.length < 1) {
     return NextResponse.json({ users: [] });
   }
 
   try {
     const matches = await db.query.user.findMany({
-      where: and(isNotNull(user.username), ne(user.username,""), or(
-        ilike(user.name, `%${q}%`),
-        ilike(user.username, `%${q}%`)
-      )),
+      where: and(
+        isNotNull(user.username),
+        ne(user.username, ""),
+        or(
+          ilike(user.name, `%${q}%`),
+          ilike(user.username, `%${q}%`)
+        )
+      ),
       columns: {
         id: true,
         name: true,
@@ -32,6 +41,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ users: matches });
   } catch (error: any) {
     console.error("[User Search Error]", error);
-    return NextResponse.json({ users: [] });
+    return NextResponse.json(
+      { error: "Failed to search users", users: [] },
+      { status: 500 }
+    );
   }
 }

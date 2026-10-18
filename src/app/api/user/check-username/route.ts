@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
 import { user } from "@/db/schema";
-import { sql } from "drizzle-orm";
+import { sql, and, ne } from "drizzle-orm";
 import { validateUsername } from "@/lib/username";
+import { getServerSession } from "@/lib/server-session";
 
 export async function GET(req: NextRequest) {
   try {
@@ -25,12 +26,20 @@ export async function GET(req: NextRequest) {
     }
 
     const normalized = validation.normalized;
+    const session = await getServerSession();
 
-    // Check if taken in database (case-insensitive)
+    // Check if taken in database (case-insensitive), excluding current user if authenticated
     const existing = await db
       .select({ id: user.id })
       .from(user)
-      .where(sql`LOWER(${user.username}) = LOWER(${normalized})`)
+      .where(
+        session?.user?.id
+          ? and(
+              sql`LOWER(${user.username}) = LOWER(${normalized})`,
+              ne(user.id, session.user.id)
+            )
+          : sql`LOWER(${user.username}) = LOWER(${normalized})`
+      )
       .limit(1);
 
     if (existing.length > 0) {

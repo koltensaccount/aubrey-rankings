@@ -30,7 +30,7 @@ export default function SignUpPage() {
       if (res.error) {
         setError(res.error.message || "Failed to create account. Please try again.");
       } else {
-        router.push("/");
+        router.push("/onboarding");
         router.refresh();
       }
     } catch (err: any) {

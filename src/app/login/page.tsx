@@ -43,7 +43,25 @@ function LoginFormContent() {
       if (res.error) {
         setError(res.error.message || "Invalid email or password.");
       } else {
-        router.push("/");
+        try {
+          const profileRes = await fetch("/api/user/profile");
+          if (profileRes.ok) {
+            const profileData = await profileRes.json();
+            if (!profileData?.user?.username) {
+              router.push("/onboarding");
+              router.refresh();
+              return;
+            }
+          }
+        } catch {
+          // If profile check fails, fallback to user payload
+        }
+        const user = res.data?.user as any;
+        if (user && !user.username) {
+          router.push("/onboarding");
+        } else {
+          router.push("/");
+        }
         router.refresh();
       }
     } catch (err: any) {

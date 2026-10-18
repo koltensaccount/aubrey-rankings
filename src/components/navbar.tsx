@@ -141,6 +141,17 @@ export function Navbar() {
           )}
         </div>
       </div>
+      {session && !(session.user as any)?.username && pathname !== "/onboarding" && (
+        <div className="bg-primary/10 border-t border-primary/20 py-2 px-4 text-center text-xs text-foreground flex items-center justify-center gap-2">
+          <span>Complete your profile to unlock public rankings and social discovery.</span>
+          <Link
+            href="/onboarding"
+            className="font-semibold text-primary underline hover:text-primary-hover inline-flex items-center gap-0.5"
+          >
+            Choose your handle →
+          </Link>
+        </div>
+      )}
     </header>
   );
 }

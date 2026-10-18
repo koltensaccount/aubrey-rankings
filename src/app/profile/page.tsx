@@ -21,6 +21,10 @@ export default async function ProfilePage() {
     where: (u, { eq }) => eq(u.id, session.user.id),
   });
 
+  if (!dbUser?.username || dbUser.username.trim() === "") {
+    redirect("/onboarding");
+  }
+
   // Load real user data
   const userCollections = await db.query.collections.findMany({
     where: (c, { eq }) => eq(c.userId, session.user.id),

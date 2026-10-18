@@ -12,30 +12,38 @@ export default function ExplorePage() {
 
   const [tmdbResults, setTmdbResults] = useState<any[]>([]);
   const [userResults, setUserResults] = useState<any[]>([]);
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!query.trim() || query.trim().length < 2) {
       setTmdbResults([]);
       setUserResults([]);
+      setSearchError(null);
       return;
     }
 
     const timer = setTimeout(async () => {
       setLoading(true);
+      setSearchError(null);
       try {
         const [tmdbRes, userRes] = await Promise.all([
           fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=all`).then((r) =>
             r.ok ? r.json() : { results: [] }
           ),
-          fetch(`/api/user/search?q=${encodeURIComponent(query)}`).then((r) =>
-            r.ok ? r.json() : { users: [] }
-          ),
+          fetch(`/api/user/search?q=${encodeURIComponent(query)}`).then(async (r) => {
+            if (!r.ok) {
+              const err = await r.json().catch(() => ({}));
+              throw new Error(err?.error || "Failed to search community members");
+            }
+            return r.json();
+          }),
         ]);
 
         setTmdbResults(tmdbRes.results || []);
         setUserResults(userRes.users || []);
-      } catch (err) {
+      } catch (err: any) {
         console.error("Explore search failed", err);
+        setSearchError(err?.message || "Search request encountered an error.");
       } finally {
         setLoading(false);
       }
@@ -146,6 +154,16 @@ export default function ExplorePage() {
                 })}
               </div>
             </section>
+          )}
+
+          {activeTab === "people" && userResults.length === 0 && !loading && (
+            <div className="p-8 rounded-xl border border-border bg-card text-center space-y-2">
+              <Users className="w-8 h-8 text-muted-foreground/50 mx-auto stroke-[1.5]" />
+              <p className="text-sm font-semibold text-foreground">No curators found</p>
+              <p className="text-xs text-muted-foreground">
+                {searchError || `No community members found matching "${query}". Curators must complete username onboarding to appear in search.`}
+              </p>
+            </div>
           )}
 
           {/* Media Results */}

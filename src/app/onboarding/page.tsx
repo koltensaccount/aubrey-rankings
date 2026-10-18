@@ -37,14 +37,21 @@ export default function OnboardingPage() {
         fetch("/api/user/profile")
           .then((res) => res.json())
           .then((data) => {
-            if (data?.user?.username) {
+            if (data?.user?.username && data.user.username.trim()) {
               router.push("/profile");
+            } else if (data?.user) {
+              if (data.user.name && !displayName) {
+                setDisplayName(data.user.name);
+              }
+              if (data.user.bio && !bio) {
+                setBio(data.user.bio);
+              }
             }
           })
           .catch(() => {});
       }
     }
-  }, [session, isPending, router]);
+  }, [session, isPending, router, displayName, bio]);
 
   // Debounce username availability check
   useEffect(() => {

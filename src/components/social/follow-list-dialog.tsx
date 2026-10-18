@@ -216,12 +216,15 @@ export function FollowListDialog({
                           )}
                         </Link>
                       ) : (
-                        <div className="w-10 h-10 rounded-full overflow-hidden border border-border bg-muted flex-shrink-0 flex items-center justify-center text-foreground font-display font-bold text-sm">
+                        <div
+                          className="w-10 h-10 rounded-full overflow-hidden border border-border/80 bg-muted/60 flex-shrink-0 flex items-center justify-center text-muted-foreground font-display font-bold text-sm"
+                          title="This curator has not completed public profile onboarding yet"
+                        >
                           {item.image ? (
                             <img
                               src={item.image}
                               alt={item.name}
-                              className="w-full h-full object-cover"
+                              className="w-full h-full object-cover opacity-80"
                             />
                           ) : (
                             initial
@@ -239,7 +242,10 @@ export function FollowListDialog({
                             {item.name || (item.username ? `@${item.username}` : "Member")}
                           </Link>
                         ) : (
-                          <span className="block font-medium text-foreground text-sm truncate">
+                          <span
+                            className="block font-medium text-foreground text-sm truncate"
+                            title="This curator has not completed public profile onboarding yet"
+                          >
                             {item.name || "Member"}
                           </span>
                         )}
@@ -248,8 +254,8 @@ export function FollowListDialog({
                           {hasValidUsername ? (
                             <span className="truncate">@{item.username}</span>
                           ) : (
-                            <span className="text-muted-foreground/60 italic text-[11px]">
-                              Curator
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground bg-muted px-1.5 py-0.5 rounded border border-border/60">
+                              Awaiting Onboarding
                             </span>
                           )}
                         </div>
