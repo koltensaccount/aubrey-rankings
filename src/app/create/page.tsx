@@ -153,7 +153,7 @@ function CreateRankingContent() {
           <Tv className={`h-5 w-5 mb-3 ${rankingType === "tv_show" ? "text-[#89d5d5]" : "text-[#8fa095]"}`} />
           <h3 className="font-display text-xl font-bold uppercase text-[#f1f0e9]">TV Show</h3>
           <p className="text-xs text-[#8fa095] mt-1">
-            Rank every episode across all seasons (e.g. Black Mirror, Succession).
+            Rank every episode across all seasons (e.g. Severance, Succession).
           </p>
         </button>
 
@@ -189,7 +189,7 @@ function CreateRankingContent() {
           }`}
         >
           <ListPlus className={`h-5 w-5 mb-3 ${rankingType === "custom" ? "text-[#89d5d5]" : "text-[#8fa095]"}`} />
-          <h3 className="font-display text-xl font-bold uppercase text-[#f1f0e9]">Custom Index</h3>
+          <h3 className="font-display text-xl font-bold uppercase text-[#f1f0e9]">Custom Ranking</h3>
           <p className="text-xs text-[#8fa095] mt-1">
             Mix movies, episodes, and personal entries into custom lists.
           </p>
@@ -305,7 +305,7 @@ function CreateRankingContent() {
               Collection Title
             </label>
             <input
-              placeholder="e.g. Modern Dystopian Sci-Fi: The Master Index"
+              placeholder="e.g. Sci-Fi Anthology Essentials"
               value={customTitle}
               onChange={(e) => setCustomTitle(e.target.value)}
               className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"

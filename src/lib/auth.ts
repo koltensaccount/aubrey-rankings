@@ -1,4 +1,5 @@
 import { betterAuth } from "better-auth";
+import { nextCookies } from "better-auth/next-js";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "@/db";
 import * as schema from "@/db/schema";
@@ -16,8 +17,8 @@ export async function seedDefaultRatingSystem(userId: string) {
     await tx.insert(ratingSystems).values({
       id: systemId,
       userId,
-      name: "Aubrey's Correct Rating System",
-      description: "Default weighted scale inspired by Aubrey's ratings (Scale 1–10).",
+      name: "Standard Rubric",
+      description: "Default balanced 5-part rubric (Scale 1–10).",
       scale: 10,
       isDefault: true,
       isSystemTemplate: false,
@@ -53,6 +54,15 @@ export async function seedDefaultRatingSystem(userId: string) {
 }
 
 export const auth = betterAuth({
+  plugins: [nextCookies()],
+  account: {
+    accountLinking: {
+      enabled: true,
+      trustedProviders: ["google"],
+      requireLocalEmailVerified: false,
+      updateUserInfoOnLink: true,
+    },
+  },
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: {

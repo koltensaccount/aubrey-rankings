@@ -28,7 +28,7 @@ export default function RootLayout({
                 AUBREY RANKINGS
               </span>
               <span className="text-[#6d7e74]">·</span>
-              <span className="text-[#9aa79e]">Modern Cinema Editorial</span>
+              <span className="text-[#9aa79e]">Weighted Media Rubrics & Rankings</span>
             </div>
             <p className="text-[11px] text-[#78887e]">
               This product uses the TMDB API but is not endorsed or certified by TMDB.

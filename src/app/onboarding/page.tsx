@@ -129,13 +129,13 @@ export default function OnboardingPage() {
           </Link>
           <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border border-[#89d5d5]/30 bg-[#89d5d5]/10 text-[10px] font-semibold uppercase tracking-widest text-[#89d5d5] mt-3">
             <Sparkles size={11} />
-            Citizen Registry
+            Choose a Username
           </div>
           <h1 className="font-display text-3xl sm:text-4xl font-bold uppercase tracking-tight text-[#f1f0e9] pt-1">
             Claim Your Handle
           </h1>
           <p className="text-xs text-[#9aa79e] max-w-sm mx-auto leading-relaxed">
-            Choose your unique public handle. This will identify your ranked canons, reviews, and community dispatches across Aubrey Rankings.
+            Choose your unique public handle. This will identify your ranked collections, critiques, and profile across Aubrey Rankings.
           </p>
         </div>
 

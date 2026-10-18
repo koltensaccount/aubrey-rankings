@@ -65,7 +65,9 @@ export async function PATCH(req: NextRequest) {
       updates.bio = bio.trim().slice(0, 500); // Max 500 characters
     }
 
-    if (typeof image === "string") {
+    if (image === null || image === "") {
+      updates.image = null;
+    } else if (typeof image === "string") {
       updates.image = image.trim();
     }
 

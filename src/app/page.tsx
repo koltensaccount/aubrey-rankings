@@ -30,7 +30,7 @@ export default async function HomePage() {
 
             <div className="relative z-10 max-w-2xl space-y-6">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1b2520] border border-[#3b4c40] text-xs font-semibold text-[#89d5d5] uppercase tracking-wider">
-                <span>Modern Cinema Editorial</span>
+                <span>Rank What You Watch</span>
               </div>
 
               {/* Aubrey Rankings Brand Mark */}
@@ -41,9 +41,9 @@ export default async function HomePage() {
               </div>
 
               <h1 className="font-display text-5xl sm:text-7xl lg:text-8xl tracking-tight text-[#f1f0e9] leading-[0.92] uppercase">
-                EVERY EPISODE,
+                Rank What
                 <br />
-                <span className="text-[#89d5d5]">RANKED AND CALIBRATED.</span>
+                <span className="text-[#89d5d5]">You Watch.</span>
               </h1>
 
               <p className="text-base sm:text-lg text-[#b1bfb7] leading-relaxed max-w-xl">
@@ -64,13 +64,6 @@ export default async function HomePage() {
                 >
                   Sign in
                 </Link>
-                <Link
-                  href="/prototype"
-                  className="px-5 py-3.5 rounded text-[#89d5d5] hover:text-[#cef6f0] text-sm font-semibold transition-colors flex items-center gap-1.5"
-                >
-                  <span>Explore prototype</span>
-                  <ArrowRight size={15} />
-                </Link>
               </div>
             </div>
           </div>
@@ -86,7 +79,7 @@ export default async function HomePage() {
             </div>
 
             <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-3">
-              <span className="text-xs text-[#89d5d5] font-semibold uppercase tracking-wider block">Director Canons</span>
+              <span className="text-xs text-[#89d5d5] font-semibold uppercase tracking-wider block">Franchises & Sagas</span>
               <h3 className="font-display text-2xl uppercase text-[#f1f0e9]">Franchises & Auteurs</h3>
               <p className="text-xs text-[#9aa79e] leading-relaxed">
                 Rank complete director sagas from David Fincher, Christopher Nolan, or Denis Villeneuve with official key art.
@@ -97,7 +90,7 @@ export default async function HomePage() {
               <span className="text-xs text-[#89d5d5] font-semibold uppercase tracking-wider block">Custom Collections</span>
               <h3 className="font-display text-2xl uppercase text-[#f1f0e9]">Personal Indexes</h3>
               <p className="text-xs text-[#9aa79e] leading-relaxed">
-                Mix movies, single episodes, and miniseries in custom collections like &quot;Modern Dystopian Sci-Fi: The Master Index&quot;.
+                Mix movies, single episodes, and miniseries in custom collections like &quot;Sci-Fi Anthology Essentials&quot;.
               </p>
             </div>
           </div>
@@ -176,7 +169,7 @@ export default async function HomePage() {
         {/* Community / Feed Header */}
         <header className="ar-communityHeading">
           <div>
-            <span className="text-[11px] text-[#8fa095] uppercase tracking-wider block">Library & Dispatch</span>
+            <span className="text-[11px] text-[#8fa095] uppercase tracking-wider block">Community Activity</span>
             <h1 className="font-display text-4xl sm:text-5xl uppercase text-[#f1f0e9] tracking-tight mt-1">
               Your Feed
             </h1>
@@ -201,7 +194,7 @@ export default async function HomePage() {
             <strong className="text-[#89d5d5] font-semibold">{meanScore}</strong> mean score
           </span>
           <span className="text-[#435248]">·</span>
-          <span className="text-[#89d5d5] ml-auto font-medium">5-part weighted rubric</span>
+          <span className="text-[#89d5d5] ml-auto font-medium">Weighted Rubric</span>
         </div>
 
         {/* =========================================================================
@@ -224,7 +217,7 @@ export default async function HomePage() {
                 className="px-4 py-2.5 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#f1f0e9] border border-[#3b4c40] text-xs font-semibold flex items-center gap-2 transition-colors"
               >
                 <Tv className="h-4 w-4 text-[#89d5d5]" />
-                <span>Rank Black Mirror</span>
+                <span>Rank a TV Series</span>
               </Link>
               <Link
                 href="/create?type=movie_franchise"

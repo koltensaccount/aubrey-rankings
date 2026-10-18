@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, use } from "react";
+import { useState, useEffect, useMemo, use, useRef } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -22,6 +22,8 @@ import {
   Edit3,
   Check,
   X,
+  Image as ImageIcon,
+  ChevronRight,
 } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { RatingDialog } from "@/components/rating-dialog";
@@ -70,13 +72,26 @@ export default function CollectionDetailPage({
   const [showRubricModal, setShowRubricModal] = useState(false);
   const [editingRubricCategories, setEditingRubricCategories] = useState<any[]>([]);
   const [savingRubric, setSavingRubric] = useState(false);
+  const [customizeForCollectionOnly, setCustomizeForCollectionOnly] = useState(true);
 
-  // Add Entries Modal
+  // Banner Customization Modal
+  const [showBannerModal, setShowBannerModal] = useState(false);
+  const [bannerUrlInput, setBannerUrlInput] = useState("");
+  const [bannerUploading, setBannerUploading] = useState(false);
+  const [savingBanner, setSavingBanner] = useState(false);
+  const bannerFileRef = useRef<HTMLInputElement>(null);
+
+  // Add Entries Modal & TV Drilldown
   const [showAddModal, setShowAddModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearchingTmdb, setIsSearchingTmdb] = useState(false);
   const [addingMediaId, setAddingMediaId] = useState<number | null>(null);
+  const [selectedTvShow, setSelectedTvShow] = useState<any | null>(null);
+  const [drilldownSeason, setDrilldownSeason] = useState<any | null>(null);
+  const [loadingTvDetails, setLoadingTvDetails] = useState(false);
+  const [loadingSeasonData, setLoadingSeasonData] = useState(false);
+  const [tvSeasonData, setTvSeasonData] = useState<any | null>(null);
 
   const handleOpenRubricModal = () => {
     if (!collection?.defaultRatingSystem?.categories) return;
@@ -90,32 +105,202 @@ export default function CollectionDetailPage({
     if (!collection?.defaultRatingSystem?.id) return;
     setSavingRubric(true);
     try {
-      const res = await fetch(`/api/rating-systems/${collection.defaultRatingSystem.id}`, {
+      if (customizeForCollectionOnly) {
+        // Step 1: Duplicate the current rubric
+        const dupRes = await fetch(`/api/rating-systems/${collection.defaultRatingSystem.id}/duplicate`, {
+          method: "POST",
+        });
+        if (!dupRes.ok) throw new Error("Failed to create collection rubric");
+        const dupData = await dupRes.json();
+        const newSystemId = dupData.ratingSystem.id;
+
+        // Step 2: Apply the updated categories and title
+        const patchRes = await fetch(`/api/rating-systems/${newSystemId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: `${collectionTitle} Rubric`,
+            categories: editingRubricCategories.map((c, idx) => ({
+              id: c.id,
+              name: c.name,
+              weight: c.weight,
+              isRequired: c.isRequired,
+              sortOrder: idx + 1,
+            })),
+          }),
+        });
+        if (!patchRes.ok) throw new Error("Failed to update collection rubric");
+        const patchData = await patchRes.json();
+
+        // Step 3: Assign to this collection
+        await fetch(`/api/collections/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ defaultRatingSystemId: newSystemId }),
+        });
+
+        setCollection((prev: any) => ({
+          ...prev,
+          defaultRatingSystem: patchData.ratingSystem,
+        }));
+        setShowRubricModal(false);
+      } else {
+        const res = await fetch(`/api/rating-systems/${collection.defaultRatingSystem.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            categories: editingRubricCategories.map((c, idx) => ({
+              id: c.id,
+              name: c.name,
+              weight: c.weight,
+              isRequired: c.isRequired,
+              sortOrder: idx + 1,
+            })),
+          }),
+        });
+
+        if (res.ok) {
+          const data = await res.json();
+          setCollection((prev: any) => ({
+            ...prev,
+            defaultRatingSystem: data.ratingSystem,
+          }));
+          setShowRubricModal(false);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to save rubric", err);
+      alert("Failed to save rubric adjustments");
+    } finally {
+      setSavingRubric(false);
+    }
+  };
+
+  const handleBannerUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setBannerUploading(true);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("type", "backdrop");
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to upload banner");
+      }
+
+      setBannerUrlInput(data.url);
+    } catch (err: any) {
+      alert(err?.message || "Failed to upload banner image");
+    } finally {
+      setBannerUploading(false);
+    }
+  };
+
+  const handleSaveBanner = async () => {
+    setSavingBanner(true);
+    try {
+      const res = await fetch(`/api/collections/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          categories: editingRubricCategories.map((c, idx) => ({
-            id: c.id,
-            name: c.name,
-            weight: c.weight,
-            isRequired: c.isRequired,
-            sortOrder: idx + 1,
-          })),
+          backdropImage: bannerUrlInput.trim() || null,
+        }),
+      });
+
+      if (res.ok) {
+        setCollection((prev: any) => ({
+          ...prev,
+          backdropImage: bannerUrlInput.trim() || null,
+        }));
+        setShowBannerModal(false);
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to update banner");
+      }
+    } catch (err) {
+      console.error("Failed to update banner", err);
+      alert("Failed to update banner");
+    } finally {
+      setSavingBanner(false);
+    }
+  };
+
+  const handleSelectTvShow = async (showItem: any) => {
+    setSelectedTvShow(showItem);
+    setDrilldownSeason(null);
+    setTvSeasonData(null);
+    setLoadingTvDetails(true);
+    try {
+      const res = await fetch(`/api/tmdb/tv/${showItem.id}`);
+      if (res.ok) {
+        const data = await res.json();
+        setSelectedTvShow(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch TV details", err);
+    } finally {
+      setLoadingTvDetails(false);
+    }
+  };
+
+  const handleSelectSeason = async (season: any) => {
+    setDrilldownSeason(season);
+    setLoadingSeasonData(true);
+    try {
+      const res = await fetch(`/api/tmdb/tv/${selectedTvShow.id}/season/${season.season_number}`);
+      if (res.ok) {
+        const data = await res.json();
+        setTvSeasonData(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch season data", err);
+    } finally {
+      setLoadingSeasonData(false);
+    }
+  };
+
+  const handleAddTvEpisode = async (ep: any) => {
+    setAddingMediaId(ep.id);
+    try {
+      const res = await fetch(`/api/collections/${id}/entries`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tmdbId: selectedTvShow.id,
+          mediaType: "episode",
+          seasonNumber: ep.season_number,
+          episodeNumber: ep.episode_number,
         }),
       });
 
       if (res.ok) {
         const data = await res.json();
-        setCollection((prev: any) => ({
-          ...prev,
-          defaultRatingSystem: data.ratingSystem,
-        }));
-        setShowRubricModal(false);
+        if (data.entry) {
+          setCollection((prev: any) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              entries: [...(prev.entries || []), data.entry],
+            };
+          });
+        }
+      } else {
+        const errData = await res.json();
+        alert(errData.error || "Failed to add episode");
       }
     } catch (err) {
-      console.error("Failed to save rubric", err);
+      console.error(err);
+      alert("Failed to add episode to ranking");
     } finally {
-      setSavingRubric(false);
+      setAddingMediaId(null);
     }
   };
 
@@ -129,7 +314,12 @@ export default function CollectionDetailPage({
     const timer = setTimeout(async () => {
       setIsSearchingTmdb(true);
       try {
-        const typeParam = collection?.collectionType === "tv_show" ? "tv" : "movie";
+        const typeParam =
+          collection?.collectionType === "tv_show"
+            ? "tv"
+            : collection?.collectionType === "movie_franchise"
+              ? "movie"
+              : "all";
         const res = await fetch(
           `/api/tmdb/search?q=${encodeURIComponent(searchQuery)}&type=${typeParam}`
         );
@@ -148,6 +338,12 @@ export default function CollectionDetailPage({
   }, [showAddModal, searchQuery, collection?.collectionType]);
 
   const handleAddTmdbItem = async (item: any) => {
+    // If it's a TV show, open the seasons drilldown!
+    if (item.media_type === "tv" || (!item.title && item.name)) {
+      handleSelectTvShow(item);
+      return;
+    }
+
     setAddingMediaId(item.id);
     try {
       const res = await fetch(`/api/collections/${id}/entries`, {
@@ -478,15 +674,29 @@ export default function CollectionDetailPage({
                 <span>Compare</span>
               </Link>
               {isOwner && (
-                <button
-                  type="button"
-                  onClick={() => setShowDeleteModal(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/30 transition-colors cursor-pointer"
-                  title="Delete this entire ranking collection"
-                >
-                  <Trash2 size={12} />
-                  <span>Delete</span>
-                </button>
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBannerUrlInput(collection.backdropImage || "");
+                      setShowBannerModal(true);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#17201c] hover:bg-[#1f2b26] text-[#8fa095] hover:text-[#89d5d5] border border-[#3b4c40] transition-colors cursor-pointer"
+                    title="Customize ranking banner artwork"
+                  >
+                    <ImageIcon size={12} className="text-[#89d5d5]" />
+                    <span>Banner</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShowDeleteModal(true)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/30 transition-colors cursor-pointer"
+                    title="Delete this entire ranking collection"
+                  >
+                    <Trash2 size={12} />
+                    <span>Delete</span>
+                  </button>
+                </>
               )}
               <span className="text-[11px] font-mono text-[#89d5d5]">
                 {collection.collectionType === "tv_show"
@@ -695,6 +905,10 @@ export default function CollectionDetailPage({
             {processedEntries.map((entry: any, index: number) => {
               const media = entry.mediaItem;
               const hasScore = entry.score !== null;
+              const isMovie =
+                media.mediaType === "movie" ||
+                collection.collectionType === "movie_franchise" ||
+                (!media.seasonNumber && Boolean(media.posterPath));
 
               return (
                 <div
@@ -706,13 +920,13 @@ export default function CollectionDetailPage({
                     {index < 9 ? `0${index + 1}` : index + 1}
                   </span>
 
-                  {/* 16:9 Cinematic Still Card with blurred background for portrait posters */}
-                  <div className="w-24 sm:w-36 shrink-0">
+                  {/* Cinematic Card: 2:3 Portrait for Movies, 16:9 for Episodes */}
+                  <div className={isMovie ? "w-[84px] sm:w-[96px] shrink-0" : "w-28 sm:w-36 shrink-0"}>
                     <CinematicMediaCard
                       stillPath={media.stillPath}
                       posterPath={media.posterPath}
                       title={media.title}
-                      aspect="video"
+                      aspect={isMovie ? "poster" : "video"}
                     />
                   </div>
 
@@ -789,7 +1003,13 @@ export default function CollectionDetailPage({
                       stillPath={media.stillPath}
                       posterPath={media.posterPath}
                       title={media.title}
-                      aspect={collection.collectionType === "movie_franchise" ? "poster" : "video"}
+                      aspect={
+                        collection.collectionType === "movie_franchise" ||
+                        media.mediaType === "movie" ||
+                        !media.seasonNumber
+                          ? "poster"
+                          : "video"
+                      }
                     />
                     <div className="absolute top-3 left-3 px-2 py-0.5 rounded bg-black/80 font-display text-lg text-[#f1f0e9]">
                       #{index < 9 ? `0${index + 1}` : index + 1}
@@ -817,7 +1037,7 @@ export default function CollectionDetailPage({
                         className="flex-1 py-2 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                       >
                         <Sliders size={13} />
-                        <span>{hasScore ? "Adjust Score" : "Score Episode"}</span>
+                        <span>{hasScore ? "Adjust Score" : "Rate"}</span>
                       </button>
                       {isOwner && (
                         <button
@@ -985,6 +1205,26 @@ export default function CollectionDetailPage({
               ))}
             </div>
 
+            {/* Scope Option */}
+            <div className="p-3 rounded-lg bg-[#18211d] border border-[#303b34] space-y-1.5">
+              <label className="flex items-center gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={customizeForCollectionOnly}
+                  onChange={(e) => setCustomizeForCollectionOnly(e.target.checked)}
+                  className="rounded border-[#303b34] text-[#89d5d5] focus:ring-0 accent-[#89d5d5]"
+                />
+                <span className="text-xs font-semibold text-[#f1f0e9]">
+                  Customize for this ranking only
+                </span>
+              </label>
+              <p className="text-[11px] text-[#8fa095] pl-6 leading-relaxed">
+                {customizeForCollectionOnly
+                  ? "Creates a dedicated rubric for this ranking so your other collections remain untouched."
+                  : "Updates this rating system globally across all rankings that share it."}
+              </p>
+            </div>
+
             <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#28342d]">
               <button
                 type="button"
@@ -1024,10 +1264,18 @@ export default function CollectionDetailPage({
             <div className="flex items-center justify-between pb-3 border-b border-[#28342d]">
               <div>
                 <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
-                  Add Entry to Ranking
+                  {drilldownSeason
+                    ? `${selectedTvShow?.name || "TV Show"} · ${drilldownSeason.name}`
+                    : selectedTvShow
+                      ? `${selectedTvShow.name || "TV Show"} · Seasons`
+                      : "Add Entry to Ranking"}
                 </h3>
                 <p className="text-xs text-[#8fa095] mt-0.5">
-                  Search TMDB to add items directly into this ranking.
+                  {drilldownSeason
+                    ? "Select individual episodes to add to your ranking."
+                    : selectedTvShow
+                      ? "Choose a season to view and rate its episodes."
+                      : "Search TMDB to add movies or TV episodes directly into this ranking."}
                 </p>
               </div>
               <button
@@ -1036,6 +1284,8 @@ export default function CollectionDetailPage({
                   setShowAddModal(false);
                   setSearchQuery("");
                   setSearchResults([]);
+                  setSelectedTvShow(null);
+                  setDrilldownSeason(null);
                 }}
                 className="text-[#8fa095] hover:text-[#f1f0e9] p-1 cursor-pointer"
               >
@@ -1043,103 +1293,410 @@ export default function CollectionDetailPage({
               </button>
             </div>
 
-            {/* Search Box */}
-            <div className="relative">
-              <Search
-                size={16}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8fa095]"
-              />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search movies or TV shows (e.g. Alien, Severance)..."
-                autoFocus
-                className="w-full h-11 pl-9 pr-4 rounded-lg bg-[#18211d] border border-[#303b34] text-xs text-[#f1f0e9] placeholder-[#6c7d73] focus:outline-none focus:border-[#89d5d5] transition-colors"
-              />
-              {isSearchingTmdb && (
-                <Loader2
-                  size={16}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#89d5d5] animate-spin"
-                />
-              )}
-            </div>
+            {/* Level 3: Episode Selection */}
+            {drilldownSeason && selectedTvShow ? (
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDrilldownSeason(null);
+                    setTvSeasonData(null);
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs text-[#89d5d5] hover:underline cursor-pointer"
+                >
+                  <ArrowLeft size={13} />
+                  <span>Back to Seasons</span>
+                </button>
 
-            {/* Results List */}
-            <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
-              {searchResults.length === 0 && searchQuery.trim().length >= 2 && !isSearchingTmdb && (
-                <div className="py-8 text-center text-xs text-[#8fa095]">
-                  No matching titles found on TMDB.
-                </div>
-              )}
+                {loadingSeasonData ? (
+                  <div className="py-12 flex flex-col items-center justify-center gap-2 text-xs text-[#8fa095]">
+                    <Loader2 size={20} className="animate-spin text-[#89d5d5]" />
+                    <span>Loading episodes...</span>
+                  </div>
+                ) : (
+                  <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
+                    {tvSeasonData?.episodes?.map((ep: any) => {
+                      const isAlreadyIn = (collection.entries || []).some(
+                        (e: any) =>
+                          e.mediaItem?.seasonNumber === ep.season_number &&
+                          e.mediaItem?.episodeNumber === ep.episode_number &&
+                          e.mediaItem?.title === ep.name
+                      );
+                      const isAdding = addingMediaId === ep.id;
 
-              {searchResults.map((item) => {
-                const title = item.title || item.name;
-                const year = (item.release_date || item.first_air_date || "").split("-")[0];
-                const isAlreadyIn = (collection.entries || []).some(
-                  (e: any) => e.mediaItem?.tmdbId === item.id
-                );
-                const isAdding = addingMediaId === item.id;
-
-                return (
-                  <div
-                    key={item.id}
-                    className="p-3 rounded-lg border border-[#28342d] bg-[#111613] flex items-center justify-between gap-3 hover:border-[#3b4c40] transition-colors"
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-14 bg-black rounded overflow-hidden shrink-0 border border-[#28342d]">
-                        {item.poster_path ? (
-                          <img
-                            src={getTmdbImageUrl(item.poster_path, "w185")}
-                            alt={title}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-[10px] text-[#6c7d73]">
-                            —
+                      return (
+                        <div
+                          key={ep.id}
+                          className="p-3 rounded-lg border border-[#28342d] bg-[#111613] flex items-center justify-between gap-3 hover:border-[#3b4c40] transition-colors"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-16 h-10 bg-black rounded overflow-hidden shrink-0 border border-[#28342d]">
+                              {ep.still_path ? (
+                                <img
+                                  src={getTmdbImageUrl(ep.still_path, "w300")}
+                                  alt={ep.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-[10px] text-[#6c7d73]">
+                                  Ep {ep.episode_number}
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="font-semibold text-xs text-[#f1f0e9] truncate">
+                                Ep {ep.episode_number}: {ep.name}
+                              </h4>
+                              {ep.air_date && (
+                                <span className="text-[10px] text-[#8fa095] block mt-0.5">
+                                  {ep.air_date.split("-")[0]}
+                                </span>
+                              )}
+                            </div>
                           </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleAddTvEpisode(ep)}
+                            disabled={isAlreadyIn || isAdding}
+                            className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                              isAlreadyIn
+                                ? "bg-[#18211d] text-[#6c7d73] border border-[#2b3730] cursor-not-allowed"
+                                : "bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40]"
+                            }`}
+                          >
+                            {isAdding ? (
+                              <>
+                                <Loader2 size={12} className="animate-spin" />
+                                <span>Adding...</span>
+                              </>
+                            ) : isAlreadyIn ? (
+                              <>
+                                <Check size={12} />
+                                <span>Added</span>
+                              </>
+                            ) : (
+                              <>
+                                <Plus size={12} />
+                                <span>Add Episode</span>
+                              </>
+                            )}
+                          </button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ) : selectedTvShow ? (
+              /* Level 2: Season Selection */
+              <div className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedTvShow(null);
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs text-[#89d5d5] hover:underline cursor-pointer"
+                >
+                  <ArrowLeft size={13} />
+                  <span>Back to Search</span>
+                </button>
+
+                {loadingTvDetails ? (
+                  <div className="py-12 flex flex-col items-center justify-center gap-2 text-xs text-[#8fa095]">
+                    <Loader2 size={20} className="animate-spin text-[#89d5d5]" />
+                    <span>Loading seasons...</span>
+                  </div>
+                ) : (
+                  <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
+                    {selectedTvShow.seasons
+                      ?.filter((s: any) => s.season_number > 0)
+                      .map((season: any) => (
+                        <div
+                          key={season.id}
+                          className="p-3 rounded-lg border border-[#28342d] bg-[#111613] flex items-center justify-between gap-3 hover:border-[#3b4c40] transition-colors"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-14 bg-black rounded overflow-hidden shrink-0 border border-[#28342d]">
+                              {season.poster_path ? (
+                                <img
+                                  src={getTmdbImageUrl(season.poster_path, "w185")}
+                                  alt={season.name}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center text-[10px] text-[#6c7d73]">
+                                  S{season.season_number}
+                                </div>
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="font-semibold text-xs text-[#f1f0e9] truncate">
+                                {season.name}
+                              </h4>
+                              <span className="text-[10px] text-[#8fa095] block mt-0.5">
+                                {season.episode_count} Episodes
+                              </span>
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleSelectSeason(season)}
+                            className="px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] transition-all cursor-pointer shrink-0"
+                          >
+                            <span>View Episodes</span>
+                            <ChevronRight size={13} />
+                          </button>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* Level 1: Search Box & General Results */
+              <>
+                <div className="relative">
+                  <Search
+                    size={16}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8fa095]"
+                  />
+                  <input
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Search movies or TV shows (e.g. Alien, Severance)..."
+                    autoFocus
+                    className="w-full h-11 pl-9 pr-4 rounded-lg bg-[#18211d] border border-[#303b34] text-xs text-[#f1f0e9] placeholder-[#6c7d73] focus:outline-none focus:border-[#89d5d5] transition-colors"
+                  />
+                  {isSearchingTmdb && (
+                    <Loader2
+                      size={16}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-[#89d5d5] animate-spin"
+                    />
+                  )}
+                </div>
+
+                <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
+                  {searchResults.length === 0 && searchQuery.trim().length >= 2 && !isSearchingTmdb && (
+                    <div className="py-8 text-center text-xs text-[#8fa095]">
+                      No matching titles found on TMDB.
+                    </div>
+                  )}
+
+                  {searchResults.map((item) => {
+                    const title = item.title || item.name;
+                    const year = (item.release_date || item.first_air_date || "").split("-")[0];
+                    const isTv = item.media_type === "tv" || (!item.title && item.name);
+                    const isAlreadyIn = (collection.entries || []).some(
+                      (e: any) => e.mediaItem?.tmdbId === item.id
+                    );
+                    const isAdding = addingMediaId === item.id;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-3 rounded-lg border border-[#28342d] bg-[#111613] flex items-center justify-between gap-3 hover:border-[#3b4c40] transition-colors"
+                      >
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-14 bg-black rounded overflow-hidden shrink-0 border border-[#28342d]">
+                            {item.poster_path ? (
+                              <img
+                                src={getTmdbImageUrl(item.poster_path, "w185")}
+                                alt={title}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center text-[10px] text-[#6c7d73]">
+                                —
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <h4 className="font-semibold text-xs text-[#f1f0e9] truncate">
+                              {title}
+                            </h4>
+                            <span className="text-[10px] text-[#8fa095] block mt-0.5">
+                              {year ? `${year} · ` : ""}{isTv ? "TV Series" : "Movie"}
+                            </span>
+                          </div>
+                        </div>
+
+                        {isTv ? (
+                          <button
+                            type="button"
+                            onClick={() => handleSelectTvShow(item)}
+                            className="px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] transition-all cursor-pointer shrink-0"
+                          >
+                            <span>Select Episodes</span>
+                            <ChevronRight size={13} />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleAddTmdbItem(item)}
+                            disabled={isAlreadyIn || isAdding}
+                            className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                              isAlreadyIn
+                                ? "bg-[#18211d] text-[#6c7d73] border border-[#2b3730] cursor-not-allowed"
+                                : "bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40]"
+                            }`}
+                          >
+                            {isAdding ? (
+                              <>
+                                <Loader2 size={12} className="animate-spin" />
+                                <span>Adding...</span>
+                              </>
+                            ) : isAlreadyIn ? (
+                              <>
+                                <Check size={12} />
+                                <span>Added</span>
+                              </>
+                            ) : (
+                              <>
+                                <Plus size={12} />
+                                <span>Add</span>
+                              </>
+                            )}
+                          </button>
                         )}
                       </div>
-                      <div className="min-w-0">
-                        <h4 className="font-semibold text-xs text-[#f1f0e9] truncate">
-                          {title}
-                        </h4>
-                        <span className="text-[10px] text-[#8fa095] block mt-0.5">
-                          {year ? `${year} · ` : ""}{item.media_type === "tv" ? "TV Show" : "Movie"}
-                        </span>
-                      </div>
-                    </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
-                    <button
-                      type="button"
-                      onClick={() => handleAddTmdbItem(item)}
-                      disabled={isAlreadyIn || isAdding}
-                      className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
-                        isAlreadyIn
-                          ? "bg-[#18211d] text-[#6c7d73] border border-[#2b3730] cursor-not-allowed"
-                          : "bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40]"
-                      }`}
-                    >
-                      {isAdding ? (
-                        <>
-                          <Loader2 size={12} className="animate-spin" />
-                          <span>Adding...</span>
-                        </>
-                      ) : isAlreadyIn ? (
-                        <>
-                          <Check size={12} />
-                          <span>Added</span>
-                        </>
-                      ) : (
-                        <>
-                          <Plus size={12} />
-                          <span>Add to Ranking</span>
-                        </>
-                      )}
-                    </button>
+      {/* Banner Customization Modal */}
+      {showBannerModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-xl bg-[#141a17] border border-[#303b34] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#28342d]">
+              <div>
+                <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+                  Ranking Header Banner
+                </h3>
+                <p className="text-xs text-[#8fa095] mt-0.5">
+                  Upload a custom backdrop image or specify an image URL.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowBannerModal(false)}
+                className="text-[#8fa095] hover:text-[#f1f0e9] p-1 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Current Banner Preview */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                Preview
+              </label>
+              <div className="aspect-[21/9] rounded-lg overflow-hidden bg-black border border-[#303b34] relative">
+                {bannerUrlInput ? (
+                  <img
+                    src={bannerUrlInput}
+                    alt="Banner preview"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex flex-col items-center justify-center text-xs text-[#6c7d73] gap-1">
+                    <ImageIcon size={20} className="text-[#3b4c40]" />
+                    <span>No custom banner set (using default)</span>
                   </div>
-                );
-              })}
+                )}
+              </div>
+            </div>
+
+            {/* Upload File */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                Upload Custom Image
+              </label>
+              <input
+                type="file"
+                ref={bannerFileRef}
+                onChange={handleBannerUpload}
+                accept="image/jpeg,image/png,image/webp"
+                className="hidden"
+              />
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => bannerFileRef.current?.click()}
+                  disabled={bannerUploading}
+                  className="px-4 py-2 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {bannerUploading ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" />
+                      <span>Uploading...</span>
+                    </>
+                  ) : (
+                    <>
+                      <ImageIcon size={13} />
+                      <span>Choose Image File</span>
+                    </>
+                  )}
+                </button>
+                {bannerUrlInput && (
+                  <button
+                    type="button"
+                    onClick={() => setBannerUrlInput("")}
+                    className="px-3 py-2 text-xs text-[#8fa095] hover:text-red-400 transition-colors cursor-pointer"
+                  >
+                    Clear Banner
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Or Paste URL */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                Or Image URL
+              </label>
+              <input
+                type="url"
+                value={bannerUrlInput}
+                onChange={(e) => setBannerUrlInput(e.target.value)}
+                placeholder="https://..."
+                className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#28342d]">
+              <button
+                type="button"
+                onClick={() => setShowBannerModal(false)}
+                disabled={savingBanner}
+                className="px-4 py-2 text-xs text-[#9aa79e] hover:text-[#f1f0e9] transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveBanner}
+                disabled={savingBanner || bannerUploading}
+                className="px-5 py-2.5 rounded bg-[#89d5d5] hover:bg-[#a5e2e2] text-[#102523] text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {savingBanner ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check size={13} />
+                    <span>Apply Banner</span>
+                  </>
+                )}
+              </button>
             </div>
           </div>
         </div>

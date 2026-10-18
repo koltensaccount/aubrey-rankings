@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { artworkOverrides } from "@/db/schema";
+import { artworkOverrides, user } from "@/db/schema";
 import { nanoid } from "@/lib/utils";
 import sharp from "sharp";
 import fs from "fs/promises";
 import path from "path";
+import { eq } from "drizzle-orm";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"];
@@ -19,11 +20,12 @@ export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
+    const uploadType = formData.get("type") as string | null; // "avatar" | "backdrop" | "media"
     const mediaItemId = formData.get("mediaItemId") as string | null;
 
-    if (!file || !mediaItemId) {
+    if (!file) {
       return NextResponse.json(
-        { error: "File and mediaItemId are required" },
+        { error: "Image file is required" },
         { status: 400 }
       );
     }
@@ -54,48 +56,137 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Ensure uploads directory exists
-    const uploadsDir = path.join(process.cwd(), "public", "uploads");
-    await fs.mkdir(uploadsDir, { recursive: true });
+    // 1. Avatar upload
+    if (uploadType === "avatar") {
+      const avatarsDir = path.join(process.cwd(), "public", "uploads", "avatars");
+      await fs.mkdir(avatarsDir, { recursive: true });
 
-    // Generate secure randomized filename
-    const filename = `${session.user.id}_${Date.now()}_${nanoid(8)}.webp`;
-    const targetPath = path.join(uploadsDir, filename);
+      const filename = `${session.user.id}_${Date.now()}_${nanoid(6)}.webp`;
+      const targetPath = path.join(avatarsDir, filename);
 
-    // Convert to webp and resize if overly large for efficient bandwidth
-    await sharp(buffer)
-      .resize({ width: 1200, height: 1800, fit: "inside", withoutEnlargement: true })
-      .webp({ quality: 85 })
-      .toFile(targetPath);
+      await sharp(buffer)
+        .resize(400, 400, { fit: "cover" })
+        .webp({ quality: 85 })
+        .toFile(targetPath);
 
-    const customArtworkUrl = `/uploads/${filename}`;
+      const avatarUrl = `/uploads/avatars/${filename}`;
 
-    // Upsert into artwork_overrides
-    const overrideId = `art_${Date.now()}_${nanoid(6)}`;
-    await db
-      .insert(artworkOverrides)
-      .values({
-        id: overrideId,
-        userId: session.user.id,
-        mediaItemId,
-        customArtworkUrl,
-      })
-      .onConflictDoUpdate({
-        target: [artworkOverrides.userId, artworkOverrides.mediaItemId],
-        set: {
-          customArtworkUrl,
+      // Update user record in database
+      await db
+        .update(user)
+        .set({
+          image: avatarUrl,
           updatedAt: new Date(),
-        },
-      });
+        })
+        .where(eq(user.id, session.user.id));
 
-    return NextResponse.json({
-      success: true,
-      customArtworkUrl,
-    });
+      return NextResponse.json({
+        success: true,
+        url: avatarUrl,
+        image: avatarUrl,
+      });
+    }
+
+    // 2. Backdrop / Banner upload
+    if (uploadType === "backdrop" || uploadType === "banner") {
+      const backdropsDir = path.join(process.cwd(), "public", "uploads", "backdrops");
+      await fs.mkdir(backdropsDir, { recursive: true });
+
+      const filename = `${session.user.id}_${Date.now()}_${nanoid(6)}.webp`;
+      const targetPath = path.join(backdropsDir, filename);
+
+      await sharp(buffer)
+        .resize({ width: 1920, height: 1080, fit: "inside", withoutEnlargement: true })
+        .webp({ quality: 85 })
+        .toFile(targetPath);
+
+      const backdropUrl = `/uploads/backdrops/${filename}`;
+
+      return NextResponse.json({
+        success: true,
+        url: backdropUrl,
+      });
+    }
+
+    // 3. Media Item Artwork Override
+    if (mediaItemId) {
+      const uploadsDir = path.join(process.cwd(), "public", "uploads");
+      await fs.mkdir(uploadsDir, { recursive: true });
+
+      const filename = `${session.user.id}_${Date.now()}_${nanoid(8)}.webp`;
+      const targetPath = path.join(uploadsDir, filename);
+
+      await sharp(buffer)
+        .resize({ width: 1200, height: 1800, fit: "inside", withoutEnlargement: true })
+        .webp({ quality: 85 })
+        .toFile(targetPath);
+
+      const customArtworkUrl = `/uploads/${filename}`;
+
+      const overrideId = `art_${Date.now()}_${nanoid(6)}`;
+      await db
+        .insert(artworkOverrides)
+        .values({
+          id: overrideId,
+          userId: session.user.id,
+          mediaItemId,
+          customArtworkUrl,
+        })
+        .onConflictDoUpdate({
+          target: [artworkOverrides.userId, artworkOverrides.mediaItemId],
+          set: {
+            customArtworkUrl,
+            updatedAt: new Date(),
+          },
+        });
+
+      return NextResponse.json({
+        success: true,
+        customArtworkUrl,
+        url: customArtworkUrl,
+      });
+    }
+
+    return NextResponse.json(
+      { error: "Invalid upload request. Must specify upload type or mediaItemId." },
+      { status: 400 }
+    );
   } catch (error: any) {
     console.error("[Upload Error]", error);
     return NextResponse.json(
       { error: error?.message || "Failed to process image upload" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const session = await getServerSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const type = searchParams.get("type");
+
+    if (type === "avatar") {
+      await db
+        .update(user)
+        .set({
+          image: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(user.id, session.user.id));
+
+      return NextResponse.json({ success: true, image: null });
+    }
+
+    return NextResponse.json({ error: "Unsupported delete target" }, { status: 400 });
+  } catch (error: any) {
+    console.error("[Upload Delete Error]", error);
+    return NextResponse.json(
+      { error: "Failed to delete asset" },
       { status: 500 }
     );
   }

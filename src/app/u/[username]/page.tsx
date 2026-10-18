@@ -140,7 +140,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                 <div className="flex flex-wrap items-center gap-4 text-[11px] text-[#6c7d73] pt-1">
                   <span className="flex items-center gap-1.5">
                     <Calendar size={13} />
-                    Citizen since {formattedJoinDate}
+                    Member since {formattedJoinDate}
                   </span>
                   <span className="flex items-center gap-1.5">
                     <Layers size={13} />

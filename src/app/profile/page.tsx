@@ -68,6 +68,8 @@ export default async function ProfilePage() {
   const displayUsername = dbUser?.username || session.user.email?.split("@")[0] || "critic";
   const displayBio = dbUser?.bio || "Evaluating media by narrative rigor, visual texture, and weighted rubrics.";
 
+  const avatarUrl = dbUser?.image || session.user.image;
+
   return (
     <div className="ar-homeContent ar-profilePage">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-20">
@@ -76,7 +78,13 @@ export default async function ProfilePage() {
             ========================================================================= */}
         <header className="ar-profileHeader">
           <div className="ar-profileBioRow">
-            <div className="ar-profileAvatar">{initial}</div>
+            <div className="ar-profileAvatar overflow-hidden">
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                initial
+              )}
+            </div>
             <div className="ar-profileIdentity">
               <div className="ar-profileNameLine">
                 <h1>{displayName}</h1>
@@ -134,7 +142,7 @@ export default async function ProfilePage() {
               <strong>{meanScore}</strong> mean score
             </span>
             <span className="ar-dot">·</span>
-            <span className="ar-profileRubricSummary">5-part weighted rubric</span>
+            <span className="ar-profileRubricSummary">Weighted Rubric</span>
           </div>
         </header>
 
@@ -316,7 +324,7 @@ export default async function ProfilePage() {
                       <div className="ar-postScore">
                         <span>★ {rev.calculatedOverallScore ? rev.calculatedOverallScore.toFixed(1) : "—"}</span>
                         <i />
-                        <small>5-part weighted score</small>
+                        <small>Weighted score</small>
                       </div>
                     </div>
                     {rev.mediaItem?.stillPath && (

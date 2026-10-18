@@ -63,6 +63,7 @@ export default function SignUpPage() {
       const res = await signIn.social({
         provider: "google",
         callbackURL: "/onboarding",
+        errorCallbackURL: "/login?error=oauth_error",
       });
       if (res?.error) {
         setError(
@@ -125,14 +126,13 @@ export default function SignUpPage() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-
           <div className="space-y-1.5">
             <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
               Full Name
             </label>
             <input
               type="text"
-              placeholder="Aubrey"
+              placeholder="Your Name"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
@@ -147,7 +147,7 @@ export default function SignUpPage() {
             </label>
             <input
               type="email"
-              placeholder="aubrey@example.com"
+              placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required

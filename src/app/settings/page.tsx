@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useSession, signOut, authClient } from "@/lib/auth-client";
 import {
@@ -22,6 +22,7 @@ import {
   Copy,
   Star,
   Sparkles,
+  Camera,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -35,6 +36,8 @@ export default function SettingsPage() {
   const [newCategoryName, setNewCategoryName] = useState("");
   const [newCategoryWeight, setNewCategoryWeight] = useState("5");
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [systemToDelete, setSystemToDelete] = useState<any | null>(null);
+  const [deletingSystemLoading, setDeletingSystemLoading] = useState(false);
 
   // Profile editing state
   const [profileName, setProfileName] = useState("");
@@ -42,6 +45,8 @@ export default function SettingsPage() {
   const [initialUsername, setInitialUsername] = useState("");
   const [profileBio, setProfileBio] = useState("");
   const [profileImage, setProfileImage] = useState("");
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileSuccess, setProfileSuccess] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
@@ -379,16 +384,76 @@ export default function SettingsPage() {
   };
 
   const handleDeleteSystem = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this rating rubric?")) return;
+    setDeletingSystemLoading(true);
     try {
       const res = await fetch(`/api/rating-systems/${id}`, {
         method: "DELETE",
       });
       if (res.ok) {
-        fetchRatingSystems();
+        setSystemToDelete(null);
+        await fetchRatingSystems();
+      } else {
+        const err = await res.json();
+        alert(err.error || "Failed to delete rating system");
       }
     } catch (err) {
       console.error(err);
+      alert("Failed to delete rating system");
+    } finally {
+      setDeletingSystemLoading(false);
+    }
+  };
+
+  const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setAvatarUploading(true);
+    setProfileError(null);
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("type", "avatar");
+
+      const res = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to upload avatar");
+      }
+
+      setProfileImage(data.url);
+      setProfileSuccess(true);
+      setTimeout(() => setProfileSuccess(false), 3500);
+    } catch (err: any) {
+      setProfileError(err?.message || "Failed to upload avatar image");
+    } finally {
+      setAvatarUploading(false);
+      if (avatarInputRef.current) avatarInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveAvatar = async () => {
+    setAvatarUploading(true);
+    setProfileError(null);
+    try {
+      const res = await fetch("/api/upload?type=avatar", {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to remove avatar");
+      }
+      setProfileImage("");
+      setProfileSuccess(true);
+      setTimeout(() => setProfileSuccess(false), 3500);
+    } catch (err: any) {
+      setProfileError(err?.message || "Failed to remove avatar");
+    } finally {
+      setAvatarUploading(false);
     }
   };
 
@@ -553,12 +618,12 @@ export default function SettingsPage() {
                         <Copy size={11} />
                         <span>Duplicate</span>
                       </button>
-                      {ratingSystems.length > 1 && (
+                      {ratingSystems.length > 1 && !sys.isDefault && (
                         <button
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handleDeleteSystem(sys.id);
+                            setSystemToDelete(sys);
                           }}
                           className="text-[#8fa095] hover:text-red-400 transition-colors p-0.5 cursor-pointer"
                           title="Delete Rubric"
@@ -717,6 +782,30 @@ export default function SettingsPage() {
                     <span>Add Category</span>
                   </button>
                 </div>
+
+                {/* Danger Zone: Delete Rubric */}
+                {ratingSystems.length > 1 && (
+                  <div className="pt-4 border-t border-[#28342d] flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                    <div>
+                      <span className="font-semibold text-red-400 block">Delete Rating System</span>
+                      <span className="text-[#8fa095] text-[11px]">
+                        {editingSystem.isDefault
+                          ? "This is currently your default rubric. Set another rubric as default before deleting."
+                          : "Permanently delete this rubric. Collections using it will revert to your default rubric."}
+                      </span>
+                    </div>
+                    {!editingSystem.isDefault && (
+                      <button
+                        type="button"
+                        onClick={() => setSystemToDelete(editingSystem)}
+                        className="px-4 py-2 rounded bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer self-start sm:self-auto"
+                      >
+                        <Trash2 size={13} />
+                        <span>Delete Rubric</span>
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="p-12 text-center border border-dashed border-[#303b34] rounded-xl text-xs text-[#8fa095]">
@@ -761,6 +850,65 @@ export default function SettingsPage() {
                 Profile updated successfully.
               </div>
             )}
+
+            {/* Profile Photo Upload */}
+            <div className="space-y-2 pb-2">
+              <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                Profile Photo
+              </label>
+              <div className="flex items-center gap-4">
+                <div className="h-16 w-16 rounded-full bg-[#1b2520] border-2 border-[#3b4c40] flex items-center justify-center text-[#89d5d5] font-display text-2xl font-bold shrink-0 overflow-hidden relative group">
+                  {profileImage ? (
+                    <img
+                      src={profileImage}
+                      alt="Avatar"
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <span>{(profileName || session?.user.name || "A").charAt(0).toUpperCase()}</span>
+                  )}
+                  {avatarUploading && (
+                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+                      <Loader2 size={18} className="animate-spin text-[#89d5d5]" />
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <input
+                    type="file"
+                    ref={avatarInputRef}
+                    onChange={handleAvatarUpload}
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden"
+                  />
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => avatarInputRef.current?.click()}
+                      disabled={avatarUploading}
+                      className="px-3.5 py-1.5 rounded-md bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                    >
+                      <Camera size={13} />
+                      <span>{avatarUploading ? "Uploading..." : "Upload Photo"}</span>
+                    </button>
+                    {profileImage && (
+                      <button
+                        type="button"
+                        onClick={handleRemoveAvatar}
+                        disabled={avatarUploading}
+                        className="px-3 py-1.5 rounded-md text-[#8fa095] hover:text-red-400 hover:bg-red-500/10 text-xs font-medium transition-colors cursor-pointer"
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-[10px] text-[#6c7d73]">
+                    Square avatar recommended. JPEG, PNG, or WebP up to 5MB.
+                  </p>
+                </div>
+              </div>
+            </div>
 
             {/* Username Field */}
             <div className="space-y-1.5">
@@ -1144,6 +1292,53 @@ export default function SettingsPage() {
               <Download size={14} />
               <span>Export JSON</span>
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Rating System Confirmation Modal */}
+      {systemToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl bg-[#141a17] border border-red-500/30 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-red-400">
+              <AlertTriangle className="h-6 w-6 shrink-0" />
+              <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+                Delete Rating System
+              </h3>
+            </div>
+            <p className="text-xs text-[#9aa79e] leading-relaxed">
+              Are you sure you want to permanently delete{" "}
+              <strong className="text-[#f1f0e9]">{systemToDelete.name}</strong>?
+              Any collections or entries currently using this rubric will automatically be reassigned to your default rating system. This action cannot be undone.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setSystemToDelete(null)}
+                disabled={deletingSystemLoading}
+                className="px-4 py-2 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#f1f0e9] text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDeleteSystem(systemToDelete.id)}
+                disabled={deletingSystemLoading}
+                className="px-4 py-2 rounded bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+              >
+                {deletingSystemLoading ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={13} />
+                    <span>Delete System</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       )}

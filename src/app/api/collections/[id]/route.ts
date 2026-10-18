@@ -197,6 +197,10 @@ export async function PATCH(
       updateData.customCoverImage = typeof body.customCoverImage === "string" ? body.customCoverImage : null;
     }
 
+    if (body.backdropImage !== undefined) {
+      updateData.backdropImage = typeof body.backdropImage === "string" ? body.backdropImage : null;
+    }
+
     await db.update(collections).set(updateData).where(and(eq(collections.id, id), eq(collections.userId, session.user.id)));
 
     return NextResponse.json({ success: true });

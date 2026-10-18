@@ -97,11 +97,19 @@ export function Navbar() {
 
               <Link
                 href="/profile"
-                className="ar-avatar"
+                className="ar-avatar overflow-hidden"
                 aria-label="Your profile"
                 title={session.user.name || session.user.email}
               >
-                {initial}
+                {session.user.image ? (
+                  <img
+                    src={session.user.image}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  initial
+                )}
               </Link>
 
               <button

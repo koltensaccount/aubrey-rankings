@@ -192,3 +192,24 @@ h1, h2, h3, h4 {
   .ar-reviewBody { gap: 16px; }
   .ar-reviewBody > img { width: 64px; height: 90px; }
 }
+
+/* =========================================================================
+   AUTOFILL OVERRIDES — Preserve dark cinematic inputs against browser defaults
+   ========================================================================= */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+textarea:-webkit-autofill,
+textarea:-webkit-autofill:hover,
+textarea:-webkit-autofill:focus,
+select:-webkit-autofill,
+select:-webkit-autofill:hover,
+select:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 1000px #18211d inset !important;
+  -webkit-text-fill-color: #f1f0e9 !important;
+  box-shadow: 0 0 0 1000px #18211d inset !important;
+  color: #f1f0e9 !important;
+  transition: background-color 5000s ease-in-out 0s;
+  caret-color: #f1f0e9 !important;
+}
+
