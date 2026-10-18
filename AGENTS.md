@@ -8,21 +8,39 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# Aubrey Rankings — Architectural Agent Guidelines
+# Aubrey Rankings — Core Engineering Guidelines
 
-## 1. Single Source of Truth for Design Tokens
-- The authoritative palettes are declared in `src/lib/theme.ts` (`PALETTE.dark`, `PALETTE.light`) and mirrored in `src/app/globals.css`.
-- Extensible tokens (`--radius-card`, `--radius-dialog`, `--radius-button`, `--radius-input`, `--radius-comment`, `--shadow-card`, `--shadow-dialog`, `--border-card`) must always be used instead of hardcoded arbitrary border radii or hex shadows.
-- Verify tokens with `npx tsx scripts/check-design-system.ts`. Never introduce hardcoded hex colors (`#141a17`, `#303b34`, `#102523`, etc.) into presentation components.
+## 1. Core Engineering Principles
 
-## 2. Component Modularity Standard
-- Avoid monolithic page components exceeding 500 lines.
-- Complex views (e.g. `src/app/collection/[id]/`, `src/app/settings/`, `src/components/rating/`) must be decomposed into focused subcomponents under their dedicated `components/` directories.
+1. **Correctness Before Appearance**: Scoring formulas, database integrity, access controls, and privacy boundaries always take precedence over decorative UI.
+2. **Simplicity Before Abstraction**: Keep components direct and readable. Do not introduce speculative abstractions or micro-frameworks for simple operations.
+3. **One Authoritative Implementation Per Business Rule**: Every domain rule must live in one central location (e.g. `src/lib/safety.ts` for safety & blocking, `src/lib/scoring.ts` for scoring math, `src/lib/admin.ts` for admin checks). Never duplicate authorization or business logic.
+4. **No Unnecessary Rewrites**: Make the smallest coherent change that solves the problem. Preserve existing working code, comments, docstrings, and structure.
+5. **Type-Safe Feature Boundaries**: Keep data types, API payloads, and Drizzle relations strictly typed without using `any` or loose casts. Verify with `npx tsc --noEmit`.
+6. **Semantic Design Tokens**: Use approved CSS variables (`--radius-card`, `--radius-button`, `--color-primary`, etc.) from `src/lib/theme.ts` and `src/app/globals.css`. Never introduce arbitrary hardcoded dark hex colors.
+7. **Preserve Historical User Data**: Never delete, truncate, or overwrite real user data, production rankings, or existing Letterboxd imports. Database migrations must be forward-compatible and additive.
+8. **Verify Affected User Journeys**: Test both ends of every interaction (e.g. ranking owner vs. visitor, author vs. commenter, blocker vs. blocked).
+9. **Never Claim Unverified Deployment Success**: Always verify against live endpoints (`curl -fsS https://aubrey.koltensserver.com/api/health`) before declaring a release successful.
 
-## 3. Strict Functional Correctness
-- **Scoring Formulas**: Never modify `calculateWeightedAverage`, score normalization, or rubric decimal weighting formulas without explicit instructions.
-- **Privacy Enforcement**: `visibility === 'private'` strictly overrides legacy `isPublic: true`. Always check `col.visibility !== 'private'` before exposing collections, ratings, or activity feed items.
-- **Data Protection**: Never delete, mutate, or reseed real production users (`Aubrey`, `@koltensaccount`). Never store session cookies or private auth tokens in public manifests.
+---
 
-## 4. Verification Workflow
-- Always run `npx tsx scripts/check-design-system.ts`, `npm test`, and `npm run build` before committing.
+## 2. Contributor Quality Workflow
+
+For every task, follow this lightweight cycle:
+1. **Understand the task**: Read existing relevant code before modifying anything.
+2. **Identify affected boundaries**: Check `docs/ARCHITECTURE.md` to see domain ownership and relevant test suites.
+3. **Make the smallest coherent change**: Stay focused on the problem. Do not refactor unrelated files.
+4. **Run focused tests**: Execute the specific test file covering the modified feature (`npx tsx --test src/tests/<name>.test.ts`).
+5. **Run release checks**: For non-trivial changes, verify design tokens (`npx tsx scripts/check-design-system.ts`) and TypeScript types (`npx tsc --noEmit`).
+6. **Review the diff**: Inspect `git diff` to ensure no debug code, accidental reformatting, or unneeded files are staged.
+7. **Report verified results**: State clearly what changed and provide the exact test commands and outputs.
+
+---
+
+## 3. Specialized Agent Skills
+
+Detailed procedural runbooks are partitioned into on-demand skills under `.agents/skills/`:
+- `verify-feature`: Run targeted tests, token checks, and type validation for affected modules.
+- `design-system-change`: Adjusting theme palettes, radius tokens, or component overrides without breaking design system guarantees.
+- `safe-database-migration`: Writing atomic schema migrations, updating Drizzle schema, and verifying rollback isolation.
+- `release-verification`: Pre-flight checklist, GitHub Actions monitoring, container deployment, and live health verification.
