@@ -434,19 +434,21 @@ export default async function HomePage() {
                 </div>
               </section>
             )}
+          </div>
+        )}
 
-            {/* COMMUNITY FEED & DISCOVERY */}
-            <section className="space-y-4 pt-6">
-              <div className="pb-2">
-                <span className="text-[11px] text-muted-foreground uppercase tracking-wider block">Community Activity</span>
-                <h2 className="font-display text-3xl uppercase font-bold text-foreground tracking-tight mt-0.5">
-                  Live Stream
-                </h2>
-              </div>
-              <CommunityFeed isAuthenticated={true} />
-            </section>
+        {/* COMMUNITY FEED & DISCOVERY */}
+        <section className="space-y-4 pt-6">
+          <div className="pb-2">
+            <span className="text-[11px] text-muted-foreground uppercase tracking-wider block">Community Activity</span>
+            <h2 className="font-display text-3xl uppercase font-bold text-foreground tracking-tight mt-0.5">
+              Live Stream
+            </h2>
+          </div>
+          <CommunityFeed isAuthenticated={true} />
+        </section>
 
-            {/* SAVED RANKINGS (BOOKMARKS) */}
+        {/* SAVED RANKINGS (BOOKMARKS) */}
             {accessibleSavedCollections.length > 0 && (
               <section className="space-y-4 pt-6">
                 <div className="flex items-center justify-between pb-2 border-b border-border">
@@ -542,8 +544,6 @@ export default async function HomePage() {
                 </div>
               </section>
             )}
-          </div>
-        )}
       </div>
     </div>
   );
