@@ -99,8 +99,8 @@ export async function GET(request: NextRequest) {
     const isTier = col.defaultRatingSystem?.type === "tier";
     const scoredList = col.entries.map((entry) => {
       const rating = ratingsMap.get(entry.mediaItemId);
-      const score = rating?.calculatedOverallScore ?? null;
-      const tier = rating?.tier ?? null;
+      const score = isTier ? null : (rating?.calculatedOverallScore ?? null);
+      const tier = isTier ? (rating?.tier ?? null) : null;
       return {
         mediaItemId: entry.mediaItemId,
         title: entry.mediaItem?.title || "Untitled",

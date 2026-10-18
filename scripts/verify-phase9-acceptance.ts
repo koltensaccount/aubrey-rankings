@@ -567,6 +567,7 @@ async function waitForServer(url: string, timeoutMs = 15000): Promise<void> {
     });
 
     assert.equal(compareData.metrics.overlappingCount, 2, "2 overlapping titles (2001, Blade Runner)");
+    assert.equal(compareData.metrics.meanScoreDifference, null, "Mixed tier/numerical comparison must not fabricate a numerical score gap");
     assert.ok(compareData.metrics.spearmanCorrelation !== null, "Spearman correlation must be computed");
     assert.ok(compareData.metrics.concordancePercentage !== null, "Concordance percentage must be computed");
 
