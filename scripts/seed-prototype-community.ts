@@ -255,28 +255,47 @@ async function api(endpoint: string, options: { method?: string; body?: any; coo
 
     if (cred && cred.password) {
       // Try to sign in with existing credentials
-      const signInRes = await api("/api/auth/sign-in/email", {
+      let signInRes = await api("/api/auth/sign-in/email", {
         method: "POST",
         body: { email: cred.email, password: cred.password },
       });
+      if (signInRes.status === 429) {
+        console.log(`[Rate Limited on Sign-In] Waiting 30s before retrying sign-in for ${acct.name}...`);
+        await new Promise((r) => setTimeout(r, 30000));
+        signInRes = await api("/api/auth/sign-in/email", {
+          method: "POST",
+          body: { email: cred.email, password: cred.password },
+        });
+      }
       if (signInRes.status === 200 && signInRes.cookie) {
         cookie = signInRes.cookie;
         userId = signInRes.data?.user?.id || cred.id;
         console.log(`[Signed In] ${acct.name} (@${acct.username}) -> ID: ${userId}`);
+      } else {
+        console.warn(`Sign-in for ${acct.name} returned status ${signInRes.status}: ${JSON.stringify(signInRes.data)}`);
       }
     }
 
     if (!cookie) {
-      // Create new account
+      // Create new account with rate limit retry
       const password = randomBytes(24).toString("base64url") + "!Aa9";
       console.log(`[Registering] ${acct.name} (${acct.email})...`);
-      const signUpRes = await api("/api/auth/sign-up/email", {
+
+      let signUpRes = await api("/api/auth/sign-up/email", {
         method: "POST",
         body: { name: acct.name, email: acct.email, password },
       });
 
+      if (signUpRes.status === 429) {
+        console.log("Rate limited by Better Auth. Waiting 35 seconds before retrying signup...");
+        await new Promise((r) => setTimeout(r, 35000));
+        signUpRes = await api("/api/auth/sign-up/email", {
+          method: "POST",
+          body: { name: acct.name, email: acct.email, password },
+        });
+      }
+
       if (signUpRes.status !== 200) {
-        // If email already exists, attempt password reset or reuse
         console.warn(`Sign-up returned ${signUpRes.status}: ${JSON.stringify(signUpRes.data)}`);
         throw new Error(`Failed to initialize ${acct.name}`);
       }
@@ -293,6 +312,10 @@ async function api(endpoint: string, options: { method?: string; body?: any; coo
       };
       credentials[acct.key] = cred;
 
+      // Save credentials immediately to disk
+      fs.writeFileSync(CREDENTIALS_FILE, JSON.stringify(credentials, null, 2), { mode: 0o600 });
+      fs.chmodSync(CREDENTIALS_FILE, 0o600);
+
       // Complete onboarding and appearance
       await api("/api/user/profile", {
         method: "PATCH",
@@ -306,6 +329,8 @@ async function api(endpoint: string, options: { method?: string; body?: any; coo
       });
 
       console.log(`[Registered & Onboarded] ${acct.name} (@${acct.username}) -> ID: ${userId}`);
+      // Polite pause between registrations to avoid tripping rate limits
+      await new Promise((r) => setTimeout(r, 2000));
     } else {
       // Ensure bio and appearance settings are synchronized
       await api("/api/user/profile", {
@@ -364,8 +389,9 @@ async function api(endpoint: string, options: { method?: string; body?: any; coo
       body: createPayload,
     });
     assert.equal(createRes.status, 200, `Failed to create collection ${title}: ${JSON.stringify(createRes.data)}`);
-    console.log(`-> Created collection "${title}" (${createRes.data.collection.id})`);
-    return createRes.data.collection;
+    const collectionId = createRes.data?.id || createRes.data?.collection?.id;
+    console.log(`-> Created collection "${title}" (${collectionId})`);
+    return { id: collectionId, title };
   }
 
   // -------------------------------------------------------------------------
@@ -402,10 +428,31 @@ async function api(endpoint: string, options: { method?: string; body?: any; coo
     url: `${BASE_URL}/collection/${aubreyCol.id}`,
   };
 
+  // Helper to map category names to rating system category IDs
+  function mapCategoriesToScores(categories: any[], scoreInputs: Record<string, number>) {
+    const scores: Record<string, number> = {};
+    for (const [key, value] of Object.entries(scoreInputs)) {
+      const match = categories.find((c: any) => {
+        const n = c.name.toLowerCase();
+        if (key === "writing") return n.includes("writing");
+        if (key === "acting") return n.includes("acting");
+        if (key === "cinematography") return n.includes("cinemat");
+        if (key === "sound" || key === "music") return n.includes("sound") || n.includes("music");
+        if (key === "vibes") return n.includes("vibe") || n.includes("dread") || n.includes("resonance");
+        return false;
+      });
+      if (match) scores[match.id] = value;
+    }
+    return scores;
+  }
+
   // Add the 8 key Black Mirror episodes to Aubrey's ranking
   console.log("Adding and rating 8 Black Mirror episodes for Aubrey (Demo)...");
   const colDetailsAubrey = await api(`/api/collections/${aubreyCol.id}`, { cookie: userSessions.aubrey.cookie });
-  const existingEntriesAubrey = colDetailsAubrey.data?.entries || [];
+  const collectionAubrey = colDetailsAubrey.data?.collection || colDetailsAubrey.data || {};
+  const existingEntriesAubrey = collectionAubrey.entries || [];
+  const systemAubrey = collectionAubrey.defaultRatingSystem;
+  const keptAubreyEntryIds = new Set<string>();
 
   for (const item of BLACK_MIRROR_ITEMS) {
     let entry = existingEntriesAubrey.find(
@@ -415,7 +462,6 @@ async function api(endpoint: string, options: { method?: string; body?: any; coo
     );
 
     if (!entry) {
-      // Add episode entry
       const addRes = await api(`/api/collections/${aubreyCol.id}/entries`, {
         method: "POST",
         cookie: userSessions.aubrey.cookie,
@@ -432,23 +478,28 @@ async function api(endpoint: string, options: { method?: string; body?: any; coo
     }
 
     if (entry?.mediaItemId) {
-      // Submit rating & review text
+      keptAubreyEntryIds.add(entry.id);
+      const scores = mapCategoriesToScores(systemAubrey?.categories || [], item.categories);
       await api("/api/ratings", {
         method: "POST",
         cookie: userSessions.aubrey.cookie,
         body: {
           mediaItemId: entry.mediaItemId,
           collectionId: aubreyCol.id,
-          calculatedOverallScore: item.score,
+          ratingSystemId: systemAubrey?.id,
           reviewText: item.review,
-          categoryScores: [
-            { categoryName: "Writing", score: item.categories.writing },
-            { categoryName: "Acting", score: item.categories.acting },
-            { categoryName: "Cinematography", score: item.categories.cinematography },
-            { categoryName: "Music", score: item.categories.music },
-            { categoryName: "Vibes", score: item.categories.vibes },
-          ],
+          scores,
         },
+      });
+    }
+  }
+
+  // Prune any extraneous unrated episodes so Aubrey's ranking has exactly the 8 prototype episodes
+  for (const entry of existingEntriesAubrey) {
+    if (!keptAubreyEntryIds.has(entry.id)) {
+      await api(`/api/collections/${aubreyCol.id}/entries/${entry.id}`, {
+        method: "DELETE",
+        cookie: userSessions.aubrey.cookie,
       });
     }
   }
@@ -479,7 +530,9 @@ async function api(endpoint: string, options: { method?: string; body?: any; coo
 
   console.log("Adding and rating 5 Nolan films for Julian Vance (Demo)...");
   const colDetailsJulian = await api(`/api/collections/${julianCol.id}`, { cookie: userSessions.julian.cookie });
-  const existingEntriesJulian = colDetailsJulian.data?.entries || [];
+  const collectionJulian = colDetailsJulian.data?.collection || colDetailsJulian.data || {};
+  const existingEntriesJulian = collectionJulian.entries || [];
+  const systemJulian = collectionJulian.defaultRatingSystem;
 
   for (const film of NOLAN_FILMS) {
     let entry = existingEntriesJulian.find((e: any) => e.mediaItem?.tmdbId === film.tmdbId);
@@ -498,21 +551,16 @@ async function api(endpoint: string, options: { method?: string; body?: any; coo
     }
 
     if (entry?.mediaItemId) {
+      const scores = mapCategoriesToScores(systemJulian?.categories || [], film.categories);
       await api("/api/ratings", {
         method: "POST",
         cookie: userSessions.julian.cookie,
         body: {
           mediaItemId: entry.mediaItemId,
           collectionId: julianCol.id,
-          calculatedOverallScore: film.score,
+          ratingSystemId: systemJulian?.id,
           reviewText: film.review,
-          categoryScores: [
-            { categoryName: "Writing", score: film.categories.writing },
-            { categoryName: "Acting", score: film.categories.acting },
-            { categoryName: "Cinematography", score: film.categories.cinematography },
-            { categoryName: "Sound Design", score: film.categories.music },
-            { categoryName: "Emotional Resonance", score: film.categories.vibes },
-          ],
+          scores,
         },
       });
     }
@@ -544,7 +592,9 @@ async function api(endpoint: string, options: { method?: string; body?: any; coo
 
   console.log("Adding and rating 5 Fincher films for Marcus Chen (Demo)...");
   const colDetailsMarcus = await api(`/api/collections/${marcusCol.id}`, { cookie: userSessions.marcus.cookie });
-  const existingEntriesMarcus = colDetailsMarcus.data?.entries || [];
+  const collectionMarcus = colDetailsMarcus.data?.collection || colDetailsMarcus.data || {};
+  const existingEntriesMarcus = collectionMarcus.entries || [];
+  const systemMarcus = collectionMarcus.defaultRatingSystem;
 
   for (const film of FINCHER_FILMS) {
     let entry = existingEntriesMarcus.find((e: any) => e.mediaItem?.tmdbId === film.tmdbId);
@@ -563,21 +613,16 @@ async function api(endpoint: string, options: { method?: string; body?: any; coo
     }
 
     if (entry?.mediaItemId) {
+      const scores = mapCategoriesToScores(systemMarcus?.categories || [], film.categories);
       await api("/api/ratings", {
         method: "POST",
         cookie: userSessions.marcus.cookie,
         body: {
           mediaItemId: entry.mediaItemId,
           collectionId: marcusCol.id,
-          calculatedOverallScore: film.score,
+          ratingSystemId: systemMarcus?.id,
           reviewText: film.review,
-          categoryScores: [
-            { categoryName: "Writing", score: film.categories.writing },
-            { categoryName: "Acting", score: film.categories.acting },
-            { categoryName: "Cinematography", score: film.categories.cinematography },
-            { categoryName: "Editing & Sound", score: film.categories.music },
-            { categoryName: "Atmosphere", score: film.categories.vibes },
-          ],
+          scores,
         },
       });
     }
