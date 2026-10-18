@@ -389,13 +389,19 @@ export const comments = pgTable(
     collectionId: text("collection_id")
       .notNull()
       .references(() => collections.id, { onDelete: "cascade" }),
+    parentId: text("parent_id").references((): any => comments.id, {
+      onDelete: "cascade",
+    }),
     content: text("content").notNull(),
+    isSpoiler: boolean("is_spoiler").notNull().default(false),
+    isEdited: boolean("is_edited").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => [
     index("idx_comments_collection").on(table.collectionId, table.createdAt),
     index("idx_comments_user").on(table.userId),
+    index("idx_comments_parent").on(table.parentId),
   ]
 );
 
@@ -597,7 +603,7 @@ export const savedRankingsRelations = relations(savedRankings, ({ one }) => ({
   }),
 }));
 
-export const commentsRelations = relations(comments, ({ one }) => ({
+export const commentsRelations = relations(comments, ({ one, many }) => ({
   user: one(user, {
     fields: [comments.userId],
     references: [user.id],
@@ -605,6 +611,14 @@ export const commentsRelations = relations(comments, ({ one }) => ({
   collection: one(collections, {
     fields: [comments.collectionId],
     references: [collections.id],
+  }),
+  parent: one(comments, {
+    fields: [comments.parentId],
+    references: [comments.id],
+    relationName: "replies",
+  }),
+  replies: many(comments, {
+    relationName: "replies",
   }),
 }));
 

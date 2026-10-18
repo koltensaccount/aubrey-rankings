@@ -46,20 +46,47 @@ export async function GET(request: NextRequest) {
     },
   });
 
+  const formatComment = (item: (typeof list)[0]) => ({
+    id: item.id,
+    content: item.content,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    parentId: item.parentId,
+    isSpoiler: item.isSpoiler,
+    isEdited: item.isEdited,
+    isAuthor: session ? session.user.id === item.userId : false,
+    isCollectionOwner: session ? session.user.id === col.userId : false,
+    author: {
+      id: item.user.id,
+      name: item.user.name,
+      username: item.user.username,
+      image: item.user.image,
+    },
+  });
+
+  // Organize into top-level comments and 1-level replies
+  const repliesByParentId = new Map<string, ReturnType<typeof formatComment>[]>();
+  const topLevelComments: (ReturnType<typeof formatComment> & { replies: ReturnType<typeof formatComment>[] })[] = [];
+
+  for (const item of list) {
+    if (item.parentId) {
+      const existing = repliesByParentId.get(item.parentId) || [];
+      existing.push(formatComment(item));
+      repliesByParentId.set(item.parentId, existing);
+    }
+  }
+
+  for (const item of list) {
+    if (!item.parentId) {
+      topLevelComments.push({
+        ...formatComment(item),
+        replies: repliesByParentId.get(item.id) || [],
+      });
+    }
+  }
+
   return NextResponse.json({
-    comments: list.map((item) => ({
-      id: item.id,
-      content: item.content,
-      createdAt: item.createdAt,
-      isAuthor: session ? session.user.id === item.userId : false,
-      isCollectionOwner: session ? session.user.id === col.userId : false,
-      author: {
-        id: item.user.id,
-        name: item.user.name,
-        username: item.user.username,
-        image: item.user.image,
-      },
-    })),
+    comments: topLevelComments,
   });
 }
 
@@ -69,10 +96,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  try { requireRateLimit(`social-comments:${session.user.id}`,20); } catch { return NextResponse.json({error:"Too many requests"},{status:429}); }
+  try {
+    requireRateLimit(`social-comments:${session.user.id}`, 20);
+  } catch {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
+  }
+
   const body = await request.json().catch(() => ({}));
-  if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({error:"Invalid request"},{status:400});
-  const { collectionId, content } = body;
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    return NextResponse.json({ error: "Invalid request" }, { status: 400 });
+  }
+
+  const { collectionId, content, parentId, isSpoiler } = body;
 
   if (!collectionId) {
     return NextResponse.json({ error: "collectionId required" }, { status: 400 });
@@ -105,12 +140,53 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Cannot comment on a private collection" }, { status: 403 });
   }
 
+  let validParentId: string | null = null;
+  let parentComment: any = null;
+
+  if (parentId) {
+    if (typeof parentId !== "string") {
+      return NextResponse.json({ error: "Invalid parent comment ID" }, { status: 400 });
+    }
+
+    parentComment = await db.query.comments.findFirst({
+      where: (c, { eq }) => eq(c.id, parentId),
+      with: {
+        user: {
+          columns: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
+      },
+    });
+
+    if (!parentComment || parentComment.collectionId !== collectionId) {
+      return NextResponse.json({ error: "Parent comment not found in this collection" }, { status: 400 });
+    }
+
+    // Enforce 1-level threading: cannot reply to a reply
+    if (parentComment.parentId) {
+      return NextResponse.json(
+        { error: "Nested replies are not supported; you can only reply directly to top-level comments" },
+        { status: 400 }
+      );
+    }
+
+    validParentId = parentComment.id;
+  }
+
   const newId = randomUUID();
+  const spoilerFlag = Boolean(isSpoiler);
+
   await db.insert(comments).values({
     id: newId,
     userId: session.user.id,
     collectionId,
+    parentId: validParentId,
     content: trimmedContent,
+    isSpoiler: spoilerFlag,
+    isEdited: false,
   });
 
   const created = await db.query.comments.findFirst({
@@ -131,23 +207,67 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Failed to create comment" }, { status: 500 });
   }
 
-  // Trigger notification if commenter is not the ranking owner
-  if (col.userId !== session.user.id) {
-    await createNotification({
-      recipientUserId: col.userId,
-      actorUserId: session.user.id,
-      notificationType: "comment",
-      collectionId: col.id,
-      metadata: {
-        actorName: created.user.name || session.user.name || "Someone",
-        actorUsername: created.user.username || null,
-        actorImage: created.user.image || session.user.image || null,
-        collectionTitle: col.title,
-        commentPreview: trimmedContent.slice(0, 100),
-        message: `${created.user.name || session.user.name || "Someone"} commented on your ranking "${col.title}": "${trimmedContent.slice(0, 80)}${trimmedContent.length > 80 ? "…" : ""}"`,
-        targetUrl: `/collection/${col.id}`,
-      },
-    });
+  const actorName = created.user.name || session.user.name || "Someone";
+  const commentSnippet = trimmedContent.slice(0, 80) + (trimmedContent.length > 80 ? "…" : "");
+
+  // Notification logic
+  if (validParentId && parentComment) {
+    // Notify the parent comment's author if not replying to oneself
+    if (parentComment.userId !== session.user.id) {
+      await createNotification({
+        recipientUserId: parentComment.userId,
+        actorUserId: session.user.id,
+        notificationType: "comment",
+        collectionId: col.id,
+        metadata: {
+          actorName,
+          actorUsername: created.user.username || null,
+          actorImage: created.user.image || session.user.image || null,
+          collectionTitle: col.title,
+          commentPreview: trimmedContent.slice(0, 100),
+          message: `${actorName} replied to your comment on "${col.title}": "${commentSnippet}"`,
+          targetUrl: `/collection/${col.id}`,
+        },
+      });
+    }
+
+    // Also notify ranking owner if owner is neither the replier nor the parent comment author
+    if (col.userId !== session.user.id && col.userId !== parentComment.userId) {
+      await createNotification({
+        recipientUserId: col.userId,
+        actorUserId: session.user.id,
+        notificationType: "comment",
+        collectionId: col.id,
+        metadata: {
+          actorName,
+          actorUsername: created.user.username || null,
+          actorImage: created.user.image || session.user.image || null,
+          collectionTitle: col.title,
+          commentPreview: trimmedContent.slice(0, 100),
+          message: `${actorName} commented on your ranking "${col.title}": "${commentSnippet}"`,
+          targetUrl: `/collection/${col.id}`,
+        },
+      });
+    }
+  } else {
+    // Top-level comment: notify ranking owner if commenter is not the ranking owner
+    if (col.userId !== session.user.id) {
+      await createNotification({
+        recipientUserId: col.userId,
+        actorUserId: session.user.id,
+        notificationType: "comment",
+        collectionId: col.id,
+        metadata: {
+          actorName,
+          actorUsername: created.user.username || null,
+          actorImage: created.user.image || session.user.image || null,
+          collectionTitle: col.title,
+          commentPreview: trimmedContent.slice(0, 100),
+          message: `${actorName} commented on your ranking "${col.title}": "${commentSnippet}"`,
+          targetUrl: `/collection/${col.id}`,
+        },
+      });
+    }
   }
 
   return NextResponse.json({
@@ -155,6 +275,10 @@ export async function POST(request: NextRequest) {
       id: created.id,
       content: created.content,
       createdAt: created.createdAt,
+      updatedAt: created.updatedAt,
+      parentId: created.parentId,
+      isSpoiler: created.isSpoiler,
+      isEdited: created.isEdited,
       isAuthor: true,
       isCollectionOwner: isOwner,
       author: {
@@ -163,6 +287,7 @@ export async function POST(request: NextRequest) {
         username: created.user.username,
         image: created.user.image,
       },
+      replies: [],
     },
   });
 }
