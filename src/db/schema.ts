@@ -168,6 +168,7 @@ export const collections = pgTable(
     collectionType: text("collection_type").notNull(), // 'tv_show' | 'movie_franchise' | 'custom'
     tmdbId: integer("tmdb_id"), // Linked TMDB show or collection ID if applicable
     isPublic: boolean("is_public").notNull().default(false),
+    visibility: text("visibility").notNull().default("private"), // 'private' | 'unlisted' | 'public'
     shareSlug: text("share_slug").unique(),
     defaultRatingSystemId: text("default_rating_system_id").references(
       () => ratingSystems.id,

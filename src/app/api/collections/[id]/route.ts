@@ -44,27 +44,43 @@ export async function GET(
       return NextResponse.json({ error: "Collection not found" }, { status: 404 });
     }
 
-    // Access control: if not public and not owner, reject
-    if (!col.isPublic && (!session || session.user.id !== col.userId)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    // Access control:
+    // If private: ONLY the owner can access. Others receive 404.
+    const isOwner = session ? session.user.id === col.userId : false;
+    const isPrivate = col.visibility === "private" || (!col.isPublic && col.visibility !== "unlisted");
+
+    if (isPrivate && !isOwner) {
+      return NextResponse.json({ error: "Collection not found" }, { status: 404 });
     }
 
-    // Fetch user's ratings for this collection
-    let userRatings: any[] = [];
-    if (session) {
-      userRatings = await db.query.ratings.findMany({
-        where: (r, { eq, and }) =>
-          and(eq(r.userId, session.user.id), eq(r.collectionId, col.id)),
-        with: {
-          categoryScores: true,
-        },
-      });
+    // Fetch ratings:
+    // If owner: fetch their ratings including personal notes.
+    // If visitor: fetch owner's ratings for this collection, but STRIP personal notes!
+    let collectionRatings: any[] = [];
+    const targetUserId = isOwner ? session!.user.id : col.userId;
+
+    const rawRatings = await db.query.ratings.findMany({
+      where: (r, { eq, and }) =>
+        and(eq(r.userId, targetUserId), eq(r.collectionId, col.id)),
+      with: {
+        categoryScores: true,
+      },
+    });
+
+    if (isOwner) {
+      collectionRatings = rawRatings;
+    } else {
+      // Securely strip personal notes for visitors and guests
+      collectionRatings = rawRatings.map((r) => ({
+        ...r,
+        personalNotes: null,
+      }));
     }
 
     return NextResponse.json({
       collection: col,
-      ratings: userRatings,
-      isOwner: session ? session.user.id === col.userId : false,
+      ratings: collectionRatings,
+      isOwner,
     });
   } catch (error: any) {
     console.error("[Get Collection Detail Error]", error);
@@ -114,12 +130,26 @@ export async function PATCH(
       updateData.description = typeof body.description === "string" ? body.description : null;
     }
 
+    if (body.visibility !== undefined) {
+      if (!["private", "unlisted", "public"].includes(body.visibility)) {
+        return NextResponse.json(
+          { error: "Visibility must be 'private', 'unlisted', or 'public'" },
+          { status: 400 }
+        );
+      }
+      updateData.visibility = body.visibility;
+      updateData.isPublic = body.visibility === "public" || body.visibility === "unlisted";
+    }
+
     // Security Fix: Strict boolean validation against coercion
     if (body.isPublic !== undefined) {
       if (typeof body.isPublic !== "boolean") {
         return NextResponse.json({ error: "isPublic must be an explicit boolean" }, { status: 400 });
       }
       updateData.isPublic = body.isPublic;
+      if (body.visibility === undefined) {
+        updateData.visibility = body.isPublic ? "public" : "private";
+      }
     }
 
     if (body.isPinned !== undefined) {

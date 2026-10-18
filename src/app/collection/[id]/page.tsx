@@ -11,6 +11,8 @@ import {
   CheckCircle2,
   Calendar,
   Share2,
+  Lock,
+  Globe,
 } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { RatingDialog } from "@/components/rating-dialog";
@@ -27,6 +29,9 @@ export default function CollectionDetailPage({
 
   const [collection, setCollection] = useState<any | null>(null);
   const [ratingsMap, setRatingsMap] = useState<Record<string, any>>({});
+  const [isOwner, setIsOwner] = useState(false);
+  const [visibility, setVisibility] = useState<"private" | "unlisted" | "public">("private");
+  const [visibilityUpdating, setVisibilityUpdating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -40,6 +45,24 @@ export default function CollectionDetailPage({
   // Rating Modal
   const [selectedItemForRating, setSelectedItemForRating] = useState<any | null>(null);
 
+  const handleVisibilityChange = async (newVisibility: "private" | "unlisted" | "public") => {
+    setVisibilityUpdating(true);
+    try {
+      const res = await fetch(`/api/collections/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ visibility: newVisibility }),
+      });
+      if (res.ok) {
+        setVisibility(newVisibility);
+      }
+    } catch (err) {
+      console.error("Failed to update visibility", err);
+    } finally {
+      setVisibilityUpdating(false);
+    }
+  };
+
   useEffect(() => {
     async function fetchCollection() {
       try {
@@ -50,6 +73,8 @@ export default function CollectionDetailPage({
         }
         const data = await res.json();
         setCollection(data.collection);
+        setIsOwner(data.isOwner || false);
+        setVisibility(data.collection.visibility || (data.collection.isPublic ? "public" : "private"));
 
         // Build ratings map
         const map: Record<string, any> = {};
@@ -208,8 +233,8 @@ export default function CollectionDetailPage({
         </div>
 
         <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 space-y-6">
-          {/* Breadcrumb row */}
-          <div className="flex items-center justify-between text-xs text-[#8fa095]">
+          {/* Breadcrumb & Visibility row */}
+          <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[#8fa095]">
             <Link
               href="/"
               className="inline-flex items-center gap-1.5 text-[#8fa095] hover:text-[#f1f0e9] transition-colors"
@@ -217,9 +242,55 @@ export default function CollectionDetailPage({
               <ArrowLeft size={13} />
               <span>Back to Feed</span>
             </Link>
-            <span className="text-[11px] font-mono text-[#89d5d5]">
-              {collection.type === "tv_show" ? "TV Anthology" : "Canon"} · {totalEntries} Entries
-            </span>
+
+            <div className="flex items-center gap-3">
+              {isOwner && (
+                <div className="flex items-center gap-1 p-1 rounded-md bg-[#18211d] border border-[#303b34]">
+                  <button
+                    type="button"
+                    onClick={() => handleVisibilityChange("private")}
+                    disabled={visibilityUpdating}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer ${
+                      visibility === "private"
+                        ? "bg-[#303b34] text-[#f1f0e9]"
+                        : "text-[#6c7d73] hover:text-[#9aa79e]"
+                    }`}
+                  >
+                    <Lock size={10} />
+                    Private
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleVisibilityChange("unlisted")}
+                    disabled={visibilityUpdating}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer ${
+                      visibility === "unlisted"
+                        ? "bg-[#303b34] text-[#89d5d5]"
+                        : "text-[#6c7d73] hover:text-[#9aa79e]"
+                    }`}
+                  >
+                    <Share2 size={10} />
+                    Unlisted
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleVisibilityChange("public")}
+                    disabled={visibilityUpdating}
+                    className={`px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wider transition-all flex items-center gap-1 cursor-pointer ${
+                      visibility === "public"
+                        ? "bg-[#89d5d5] text-[#111514]"
+                        : "text-[#6c7d73] hover:text-[#9aa79e]"
+                    }`}
+                  >
+                    <Globe size={10} />
+                    Public
+                  </button>
+                </div>
+              )}
+              <span className="text-[11px] font-mono text-[#89d5d5]">
+                {collection.collectionType === "tv_show" ? "TV Anthology" : "Canon"} · {totalEntries} Entries
+              </span>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-end">
@@ -236,7 +307,7 @@ export default function CollectionDetailPage({
               )}
 
               <h1 className="font-display text-4xl sm:text-6xl lg:text-7xl tracking-tight text-[#f1f0e9] leading-[0.95] uppercase">
-                {collection.name}
+                {collection.title || collection.name}
               </h1>
 
               {collection.description && (

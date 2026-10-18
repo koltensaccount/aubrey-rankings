@@ -28,9 +28,10 @@
 - [x] Stage 1 (Production UI): Unified Modern Cinema Editorial UI across all application pages (Home/Feed, Ranking Detail, Profile, Settings, Auth, Create Ranking) with locked Barlow Condensed + Inter typography
 - [x] Stage 2 (Accounts & Identity): Google OAuth provider, normalized lowercase unique usernames (3–20 chars, reserved keywords protection), case-insensitive unique DB index, `/onboarding` flow, live availability checking API, Settings profile editor, and Resend transactional email integration.
 - [x] Stage 3 (Letterboxd Importer): Repeatable, non-destructive Letterboxd ZIP archive importer (`ratings.csv`, `watched.csv`, `diary.csv`, `reviews.csv`), star rating scale preservation (0.5 to 5.0), duplicate protection, preview breakdown, and Settings UI.
+- [x] Stage 4 (Privacy & Public Profiles): Private (default), Unlisted, and Public visibility engine; server-side authorization enforcement; real-time owner visibility toggle; personal notes security stripping; public profile pages at `/u/[username]`.
 
 ## Active Implementation Stage
-- **Stage 4 — Privacy & Public Profiles**: Public profiles at `/u/[username]` displaying user metadata, avatar, bio, pinned ranking, public collections, reviews; Private (default), Unlisted, and Public ranking visibility states with server-side authorization enforcement.
+- **Stage 5 — Social Features**: Following/unfollowing relationships, likes on public collections, public commentary with owner moderation controls, community dispatch activity feed (Following vs. For You).
 
 ## Long-Term Product Roadmap (Post Stage 3)
 - **Stage 4 — Privacy & Public Profiles**: Private (default), unlisted, and public rankings, shareable URLs, public user profiles, pinned rankings, public reviews, privacy-aware search.
