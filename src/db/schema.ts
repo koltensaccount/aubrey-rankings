@@ -578,4 +578,24 @@ export const feedActivitiesRelations = relations(feedActivities, ({ one }) => ({
   }),
 }));
 
+export const bugReports = pgTable("bug_reports", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").references(() => user.id, { onDelete: "set null" }),
+  description: text("description").notNull(),
+  pageUrl: text("page_url").notNull(),
+  userAgent: text("user_agent"),
+  screenshotUrl: text("screenshot_url"),
+  status: text("status").notNull().default("open"), // "open" | "investigating" | "resolved"
+  adminNotes: text("admin_notes"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+export const bugReportsRelations = relations(bugReports, ({ one }) => ({
+  user: one(user, {
+    fields: [bugReports.userId],
+    references: [user.id],
+  }),
+}));
+
 

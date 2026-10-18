@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
@@ -41,9 +41,23 @@ export default function SignUpPage() {
   };
 
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [googleAvailable, setGoogleAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/providers")
+      .then((res) => res.json())
+      .then((data) => setGoogleAvailable(Boolean(data?.google)))
+      .catch(() => setGoogleAvailable(false));
+  }, []);
 
   const handleGoogleSignUp = async () => {
     setError(null);
+    if (googleAvailable === false) {
+      setError(
+        "Google Sign-Up is not configured on this instance. Please create an account with email and password."
+      );
+      return;
+    }
     setGoogleLoading(true);
     try {
       const res = await signIn.social({
@@ -96,7 +110,11 @@ export default function SignUpPage() {
           className="w-full h-11 rounded-md border border-[#303b34] bg-[#181f1b] hover:bg-[#202924] hover:border-[#414e45] text-xs font-semibold uppercase tracking-wider text-[#f1f0e9] transition-all flex items-center justify-center gap-3 cursor-pointer disabled:opacity-50"
         >
           <Image src="/brands/google-g.png" alt="" width={18} height={18.36} className="shrink-0" />
-          {googleLoading ? "Connecting..." : "Continue with Google"}
+          {googleLoading
+            ? "Connecting..."
+            : googleAvailable === false
+              ? "Continue with Google (Setup Required)"
+              : "Continue with Google"}
         </button>
 
         <div className="relative flex items-center justify-center">

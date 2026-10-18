@@ -42,15 +42,23 @@ export function Navbar() {
             >
               Feed
             </Link>
+            <Link
+              href="/explore"
+              className={`transition-colors py-1 ${
+                pathname === "/explore" ? "text-[#f1f0e9] font-semibold" : "hover:text-[#f1f0e9]"
+              }`}
+            >
+              Explore
+            </Link>
             {session && (
               <>
                 <Link
-                  href="/#library"
+                  href="/profile"
                   className={`transition-colors py-1 ${
-                    pathname === "/#library" ? "text-[#f1f0e9] font-semibold" : "hover:text-[#f1f0e9]"
+                    pathname === "/profile" ? "text-[#f1f0e9] font-semibold" : "hover:text-[#f1f0e9]"
                   }`}
                 >
-                  My Rankings
+                  My Library
                 </Link>
                 <Link
                   href="/create"
@@ -62,12 +70,6 @@ export function Navbar() {
                 </Link>
               </>
             )}
-            <Link
-              href="/prototype"
-              className="text-[#6d7e74] hover:text-[#939f98] transition-colors py-1"
-            >
-              Prototype
-            </Link>
           </nav>
         </div>
 

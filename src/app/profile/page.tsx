@@ -14,6 +14,11 @@ export default async function ProfilePage() {
     redirect("/login");
   }
 
+  // Load real user profile record
+  const dbUser = await db.query.user.findFirst({
+    where: (u, { eq }) => eq(u.id, session.user.id),
+  });
+
   // Load real user data
   const userCollections = await db.query.collections.findMany({
     where: (c, { eq }) => eq(c.userId, session.user.id),
@@ -51,14 +56,17 @@ export default async function ProfilePage() {
       ).toFixed(1)
     : "—";
 
-  const initial = session.user.name
-    ? session.user.name.charAt(0).toLowerCase()
-    : session.user.email
-      ? session.user.email.charAt(0).toLowerCase()
-      : "a";
+  const initial = (dbUser?.name || session.user.name || session.user.email || "a")
+    .charAt(0)
+    .toLowerCase();
 
+  const publishedCollections = userCollections.filter((c) => c.visibility === "public");
   const pinned = userCollections.find((c) => c.isPinned) || userCollections[0];
   const reviews = allRatings.filter((r) => r.reviewText);
+
+  const displayName = dbUser?.name || session.user.name || "Critic";
+  const displayUsername = dbUser?.username || session.user.email?.split("@")[0] || "critic";
+  const displayBio = dbUser?.bio || "Evaluating media by narrative rigor, visual texture, and weighted rubrics.";
 
   return (
     <div className="ar-homeContent ar-profilePage">
@@ -71,14 +79,14 @@ export default async function ProfilePage() {
             <div className="ar-profileAvatar">{initial}</div>
             <div className="ar-profileIdentity">
               <div className="ar-profileNameLine">
-                <h1>{session.user.name || "Critic"}</h1>
+                <h1>{displayName}</h1>
                 <span className="ar-profileHandle">
-                  @{session.user.name ? session.user.name.toLowerCase().replace(/\s+/g, "") : "critic"}
+                  @{displayUsername}
                 </span>
                 <span className="ar-profileBadge">Curator</span>
               </div>
               <p className="ar-profileBio">
-                Evaluating media by narrative rigor, visual texture, and weighted rubrics.
+                {displayBio}
               </p>
               <div className="ar-profileFollowStats">
                 <span>
@@ -86,8 +94,16 @@ export default async function ProfilePage() {
                 </span>
                 <span>·</span>
                 <span>
-                  <strong>{userCollections.length}</strong> collections published
+                  <strong>{publishedCollections.length}</strong> published rankings
                 </span>
+                {userCollections.length > publishedCollections.length && (
+                  <>
+                    <span>·</span>
+                    <span className="text-[#8fa095]">
+                      ({userCollections.length} total)
+                    </span>
+                  </>
+                )}
               </div>
             </div>
             <div className="ar-profileActions">
@@ -136,26 +152,31 @@ export default async function ProfilePage() {
               <Link href={`/collection/${pinned.id}`} className="ar-feedCover">
                 <img
                   src={
-                    pinned.title.toLowerCase().includes("black mirror")
-                      ? "/prototype-art/black-mirror-wall.jpg"
-                      : pinned.backdropImage
-                        ? pinned.backdropImage
-                        : "/prototype-art/black-mirror-wall.jpg"
+                    pinned.backdropImage
+                      ? getTmdbImageUrl(pinned.backdropImage, "original")
+                      : pinned.customCoverImage
+                        ? getTmdbImageUrl(pinned.customCoverImage, "w780")
+                        : "/placeholders/backdrop-placeholder.svg"
                   }
                   alt={pinned.title}
                 />
                 <div className="ar-feedCoverShade" />
                 <div>
                   <span>
-                    {pinned.collectionType === "tv_show" ? "TV Anthology" : "Franchise Canon"} · {pinned.entries.length} entries
+                    {pinned.collectionType === "tv_show"
+                      ? "TV Series"
+                      : pinned.collectionType === "movie_franchise"
+                        ? "Film Franchise"
+                        : "Curated Collection"}{" "}
+                    · {pinned.entries.length} entries
                   </span>
                   <h2>{pinned.title}</h2>
                 </div>
-                {pinned.title.toLowerCase().includes("black mirror") && (
+                {(pinned as any).clearLogoUrl && (
                   <img
                     className="ar-feedCoverLogo"
-                    src="/prototype-art/black-mirror-logo.png"
-                    alt="Black Mirror"
+                    src={(pinned as any).clearLogoUrl}
+                    alt={pinned.title}
                   />
                 )}
               </Link>
@@ -179,9 +200,9 @@ export default async function ProfilePage() {
                               ? getTmdbImageUrl(ep.mediaItem.stillPath, "w300")
                               : ep.mediaItem?.posterPath
                                 ? getTmdbImageUrl(ep.mediaItem.posterPath, "w300")
-                                : "/prototype-art/san-junipero.jpg"
+                                : "/placeholders/backdrop-placeholder.svg"
                           }
-                          alt={ep.mediaItem?.title || "Episode"}
+                          alt={ep.mediaItem?.title || "Item"}
                         />
                         <strong>{ep.mediaItem?.title || `Item ${idx + 1}`}</strong>
                         <small>{r?.calculatedOverallScore ? r.calculatedOverallScore.toFixed(1) : "—"}</small>
@@ -192,7 +213,7 @@ export default async function ProfilePage() {
               )}
 
               <p className="ar-pinnedDesc">
-                {pinned.description || "Weighted mathematical evaluation of writing, acting, cinematography, sound, and dread."}
+                {pinned.description || "Weighted mathematical evaluation of writing, acting, cinematography, sound, and direction."}
               </p>
               <div className="ar-socialActions">
                 <Link
@@ -214,7 +235,7 @@ export default async function ProfilePage() {
           <section className="ar-profileSection">
             <div className="ar-profileSectionHeading">
               <h2>All rankings</h2>
-              <span>{userCollections.length} published</span>
+              <span>{publishedCollections.length} published ({userCollections.length} total)</span>
             </div>
 
             <div className="ar-feedStream">
@@ -235,10 +256,13 @@ export default async function ProfilePage() {
                       <Link href={`/collection/${col.id}`} className="ar-smallRanking">
                         <img
                           src={
-                            col.customCoverImage ||
-                            (col.entries[0]?.mediaItem?.posterPath
-                              ? getTmdbImageUrl(col.entries[0].mediaItem.posterPath, "w300")
-                              : col.backdropImage || "/prototype-art/san-junipero.jpg")
+                            col.customCoverImage
+                              ? getTmdbImageUrl(col.customCoverImage, "w300")
+                              : col.entries[0]?.mediaItem?.posterPath
+                                ? getTmdbImageUrl(col.entries[0].mediaItem.posterPath, "w300")
+                                : col.backdropImage
+                                  ? getTmdbImageUrl(col.backdropImage, "w300")
+                                  : "/placeholders/backdrop-placeholder.svg"
                           }
                           alt={col.title}
                         />

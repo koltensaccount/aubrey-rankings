@@ -52,12 +52,27 @@ export function getTmdbImageUrl(
   path: string | null | undefined,
   size: TmdbImageSize = "original"
 ): string {
-  if (!path) return "/placeholder-poster.png";
-  if (path.startsWith("http://") || path.startsWith("https://") || path.startsWith("/")) {
-    if (path.startsWith("/")) return `${TMDB_IMAGE_BASE_URL}/${size}${path}`;
-    return path;
+  if (!path || typeof path !== "string" || path.trim() === "") {
+    return "/placeholders/backdrop-placeholder.svg";
   }
-  return `${TMDB_IMAGE_BASE_URL}/${size}/${path}`;
+  const clean = path.trim();
+  if (clean.startsWith("http://") || clean.startsWith("https://") || clean.startsWith("data:")) {
+    return clean;
+  }
+  if (
+    clean.startsWith("/uploads/") ||
+    clean.startsWith("/brands/") ||
+    clean.startsWith("/placeholders/") ||
+    clean.startsWith("/fonts/") ||
+    clean.startsWith("/prototype-art/") ||
+    clean.startsWith("/placeholder-")
+  ) {
+    return clean;
+  }
+  if (clean.startsWith("/")) {
+    return `${TMDB_IMAGE_BASE_URL}/${size}${clean}`;
+  }
+  return `${TMDB_IMAGE_BASE_URL}/${size}/${clean}`;
 }
 
 export interface TmdbSearchResult {

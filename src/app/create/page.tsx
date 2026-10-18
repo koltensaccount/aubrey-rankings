@@ -291,7 +291,7 @@ function CreateRankingContent() {
                 disabled={loading}
                 className="px-5 py-2.5 rounded bg-[#d8e2d8] hover:bg-[#edf5ed] text-[#102523] text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
               >
-                {loading ? "Importing & Creating..." : "Initialize Ranking"}
+                {loading ? "Importing & Creating..." : "Create Ranking"}
                 <ArrowRight size={14} />
               </button>
             </div>

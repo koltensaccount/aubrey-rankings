@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Navbar } from "@/components/navbar";
+import { BugReportButton } from "@/components/bug-report-button";
 
 export const metadata: Metadata = {
   title: "Aubrey Rankings — Cinema Journal & Weighted Critique",
@@ -18,6 +19,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col bg-[#111514] text-[#f1f0e9]">
         <Navbar />
         <main className="flex-1">{children}</main>
+        <BugReportButton />
         <footer className="border-t border-[#303b34] py-8 px-4 text-xs text-[#9aa79e] bg-[#111514]">
           <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">

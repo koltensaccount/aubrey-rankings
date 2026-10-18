@@ -20,9 +20,9 @@ export default async function HomePage() {
             {/* Background 4K Still */}
             <div className="absolute inset-0 z-0">
               <img
-                src="/prototype-art/black-mirror-wall.jpg"
+                src="/placeholders/backdrop-placeholder.svg"
                 alt="Cinema backdrop"
-                className="w-full h-full object-cover object-center opacity-30 filter saturate-75"
+                className="w-full h-full object-cover object-center opacity-40 filter saturate-75"
               />
               <div className="absolute inset-0 bg-gradient-to-r from-[#111514] via-[#111514]/85 to-transparent" />
               <div className="absolute inset-0 bg-gradient-to-t from-[#111514] via-transparent to-transparent" />
@@ -33,13 +33,11 @@ export default async function HomePage() {
                 <span>Modern Cinema Editorial</span>
               </div>
 
-              {/* Transparent ClearLOGO */}
+              {/* Aubrey Rankings Brand Mark */}
               <div className="py-1">
-                <img
-                  src="/prototype-art/black-mirror-logo.png"
-                  alt="Black Mirror"
-                  className="h-14 sm:h-16 w-auto object-contain filter drop-shadow-[0_8px_20px_rgba(0,0,0,0.9)]"
-                />
+                <span className="font-display text-3xl sm:text-4xl uppercase tracking-widest text-[#89d5d5] font-bold drop-shadow-[0_4px_12px_rgba(0,0,0,0.8)]">
+                  AUBREY RANKINGS
+                </span>
               </div>
 
               <h1 className="font-display text-5xl sm:text-7xl lg:text-8xl tracking-tight text-[#f1f0e9] leading-[0.92] uppercase">
@@ -49,8 +47,8 @@ export default async function HomePage() {
               </h1>
 
               <p className="text-base sm:text-lg text-[#b1bfb7] leading-relaxed max-w-xl">
-                Rate TV anthologies, entire director filmographies, and custom sci-fi indexes by weighted sensory rubrics:
-                Writing, Acting, Cinematography, Sound Design, and resonant dread.
+                Rate TV anthologies, entire director filmographies, and custom collections by weighted rubrics:
+                Writing, Acting, Cinematography, Sound Design, and Emotional Impact.
               </p>
 
               <div className="flex flex-wrap items-center gap-4 pt-4">
@@ -265,11 +263,11 @@ export default async function HomePage() {
                   >
                     <img
                       src={
-                        pinnedCollection.title.toLowerCase().includes("black mirror")
-                          ? "/prototype-art/black-mirror-wall.jpg"
-                          : pinnedCollection.backdropImage
-                            ? pinnedCollection.backdropImage
-                            : "/prototype-art/black-mirror-wall.jpg"
+                        pinnedCollection.backdropImage
+                          ? getTmdbImageUrl(pinnedCollection.backdropImage, "original")
+                          : pinnedCollection.customCoverImage
+                            ? getTmdbImageUrl(pinnedCollection.customCoverImage, "w780")
+                            : "/placeholders/backdrop-placeholder.svg"
                       }
                       alt={pinnedCollection.title}
                     />
@@ -277,20 +275,20 @@ export default async function HomePage() {
                     <div>
                       <span>
                         {pinnedCollection.collectionType === "tv_show"
-                          ? "TV Anthology"
+                          ? "TV Series"
                           : pinnedCollection.collectionType === "movie_franchise"
-                            ? "Movie Canon"
-                            : "Custom Collection"}{" "}
+                            ? "Film Franchise"
+                            : "Curated Collection"}{" "}
                         · {pinnedCollection.entries.length} entries
                       </span>
                       <h2>{pinnedCollection.title}</h2>
                     </div>
 
-                    {pinnedCollection.title.toLowerCase().includes("black mirror") && (
+                    {(pinnedCollection as any).clearLogoUrl && (
                       <img
                         className="ar-feedCoverLogo"
-                        src="/prototype-art/black-mirror-logo.png"
-                        alt="Black Mirror"
+                        src={(pinnedCollection as any).clearLogoUrl}
+                        alt={pinnedCollection.title}
                       />
                     )}
                   </Link>
@@ -315,7 +313,7 @@ export default async function HomePage() {
                                   ? getTmdbImageUrl(entry.mediaItem.stillPath, "w300")
                                   : entry.mediaItem?.posterPath
                                     ? getTmdbImageUrl(entry.mediaItem.posterPath, "w300")
-                                    : "/prototype-art/san-junipero.jpg"
+                                    : "/placeholders/backdrop-placeholder.svg"
                               }
                               alt={entry.mediaItem?.title || "Item"}
                             />
@@ -376,10 +374,13 @@ export default async function HomePage() {
                         >
                           <img
                             src={
-                              col.customCoverImage ||
-                              (col.entries[0]?.mediaItem?.posterPath
-                                ? getTmdbImageUrl(col.entries[0].mediaItem.posterPath, "w300")
-                                : col.backdropImage || "/prototype-art/san-junipero.jpg")
+                              col.customCoverImage
+                                ? getTmdbImageUrl(col.customCoverImage, "w300")
+                                : col.entries[0]?.mediaItem?.posterPath
+                                  ? getTmdbImageUrl(col.entries[0].mediaItem.posterPath, "w300")
+                                  : col.backdropImage
+                                    ? getTmdbImageUrl(col.backdropImage, "w300")
+                                    : "/placeholders/backdrop-placeholder.svg"
                             }
                             alt={col.title}
                           />
@@ -389,11 +390,11 @@ export default async function HomePage() {
                             </span>
                             <h2>{col.title}</h2>
                             <p className="text-xs text-[#9aa79e] line-clamp-2 my-1">
-                              {col.description || "Weighted sensory scores for narrative, direction, and sound."}
+                              {col.description || "Weighted scores for narrative, direction, and sound."}
                             </p>
                             <ol>
                               {col.entries.slice(0, 3).map((e) => (
-                                <li key={e.id}>{e.mediaItem?.title || "Episode"}</li>
+                                <li key={e.id}>{e.mediaItem?.title || "Item"}</li>
                               ))}
                             </ol>
                           </div>
@@ -406,18 +407,18 @@ export default async function HomePage() {
               </section>
             )}
 
-            {/* COMMUNITY DISPATCH & DISCOVERY */}
+            {/* COMMUNITY RANKINGS & DISCOVERY */}
             {communityCanons.length > 0 && (
               <section className="space-y-4 pt-6">
                 <div className="flex items-center justify-between pb-2 border-b border-[#28342d]">
                   <div className="flex items-center gap-2">
                     <Globe size={16} className="text-[#89d5d5]" />
                     <h2 className="font-display text-2xl uppercase text-[#f1f0e9]">
-                      Community Dispatches & Canons
+                      Community Rankings & Reviews
                     </h2>
                   </div>
                   <span className="text-xs text-[#8fa095]">
-                    {communityCanons.length} public canons
+                    {communityCanons.length} public rankings
                   </span>
                 </div>
 

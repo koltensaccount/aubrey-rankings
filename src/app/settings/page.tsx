@@ -19,6 +19,9 @@ import {
   ExternalLink,
   Film,
   KeyRound,
+  Copy,
+  Star,
+  Sparkles,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -252,15 +255,23 @@ export default function SettingsPage() {
     }
   };
 
-  const fetchRatingSystems = async () => {
+  const fetchRatingSystems = async (selectedId?: string) => {
     setLoadingSystems(true);
     try {
       const res = await fetch("/api/rating-systems");
       if (res.ok) {
         const data = await res.json();
         setRatingSystems(data);
-        if (data.length > 0 && !editingSystem) {
-          setEditingSystem(data[0]);
+        if (data.length > 0) {
+          if (selectedId) {
+            const found = data.find((s: any) => s.id === selectedId);
+            setEditingSystem(found || data[0]);
+          } else if (!editingSystem || !data.some((s: any) => s.id === editingSystem.id)) {
+            setEditingSystem(data[0]);
+          } else {
+            const current = data.find((s: any) => s.id === editingSystem.id);
+            setEditingSystem(current || data[0]);
+          }
         }
       }
     } catch (err) {
@@ -276,6 +287,16 @@ export default function SettingsPage() {
       ...editingSystem,
       categories: editingSystem.categories.map((c: any) =>
         c.id === catId ? { ...c, weight: newWeight } : c
+      ),
+    });
+  };
+
+  const handleUpdateCategoryName = (catId: string, newName: string) => {
+    if (!editingSystem) return;
+    setEditingSystem({
+      ...editingSystem,
+      categories: editingSystem.categories.map((c: any) =>
+        c.id === catId ? { ...c, name: newName } : c
       ),
     });
   };
@@ -308,29 +329,97 @@ export default function SettingsPage() {
   const handleSaveSystem = async () => {
     if (!editingSystem) return;
     try {
-      const res = await fetch("/api/rating-systems", {
-        method: "POST",
+      const isExisting = Boolean(editingSystem.id && !editingSystem.id.startsWith("temp_"));
+      const url = isExisting
+        ? `/api/rating-systems/${editingSystem.id}`
+        : "/api/rating-systems";
+      const method = isExisting ? "PATCH" : "POST";
+
+      const res = await fetch(url, {
+        method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: editingSystem.name,
-          scale: editingSystem.scale,
-          categories: editingSystem.categories.map((c: any, idx: number) => ({
+          scale: editingSystem.scale || 10,
+          isDefault: Boolean(editingSystem.isDefault),
+          categories: (editingSystem.categories || []).map((c: any, idx: number) => ({
+            id: c.id && !c.id.startsWith("temp_") ? c.id : undefined,
             name: c.name,
             weight: c.weight,
-            isRequired: c.isRequired,
+            isRequired: c.isRequired !== false,
             sortOrder: idx + 1,
           })),
         }),
       });
 
       if (res.ok) {
+        const saved = await res.json();
         setSaveSuccess(true);
         setTimeout(() => setSaveSuccess(false), 2000);
+        const savedId = saved.ratingSystem?.id || saved.id || editingSystem.id;
+        fetchRatingSystems(savedId);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDuplicateSystem = async (id: string) => {
+    try {
+      const res = await fetch(`/api/rating-systems/${id}/duplicate`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        const data = await res.json();
+        fetchRatingSystems(data.ratingSystem?.id);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteSystem = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this rating rubric?")) return;
+    try {
+      const res = await fetch(`/api/rating-systems/${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
         fetchRatingSystems();
       }
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const handleSetDefaultSystem = async (id: string) => {
+    try {
+      const res = await fetch(`/api/rating-systems/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isDefault: true }),
+      });
+      if (res.ok) {
+        fetchRatingSystems(id);
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleCreateNewSystem = () => {
+    setEditingSystem({
+      id: `temp_${Date.now()}`,
+      name: "Custom Weighted Rubric",
+      scale: 10,
+      isDefault: false,
+      categories: [
+        { id: `temp_c1`, name: "Writing & Story", weight: 8, isRequired: true, sortOrder: 1 },
+        { id: `temp_c2`, name: "Acting & Cast", weight: 7, isRequired: true, sortOrder: 2 },
+        { id: `temp_c3`, name: "Cinematography", weight: 7, isRequired: true, sortOrder: 3 },
+        { id: `temp_c4`, name: "Direction & Flow", weight: 8, isRequired: true, sortOrder: 4 },
+      ],
+    });
   };
 
   return (
@@ -389,109 +478,252 @@ export default function SettingsPage() {
 
       {/* TAB 1: RATING SYSTEMS */}
       {activeTab === "rating_systems" && (
-        <div className="space-y-6">
-          {editingSystem && (
-            <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-6">
-              <div className="flex items-center justify-between border-b border-[#28342d] pb-4">
-                <div>
-                  <h3 className="font-display text-2xl uppercase font-bold text-[#f1f0e9]">
-                    {editingSystem.name}
-                  </h3>
-                  <p className="text-xs text-[#8fa095] mt-0.5">
-                    Adjust weights to automatically recalibrate weighted averages across your library.
-                  </p>
-                </div>
-                <button
-                  onClick={handleSaveSystem}
-                  className="px-4 py-2 rounded bg-[#d8e2d8] hover:bg-[#edf5ed] text-[#102523] text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
-                >
-                  {saveSuccess ? (
-                    <>
-                      <Check size={14} />
-                      <span>Saved!</span>
-                    </>
-                  ) : (
-                    <>
-                      <Save size={14} />
-                      <span>Save Rubric</span>
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {/* Categories and Weights */}
-              <div className="space-y-3">
-                <span className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
-                  Scoring Categories & Weights
-                </span>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {editingSystem.categories?.map((cat: any) => (
-                    <div
-                      key={cat.id}
-                      className="p-3.5 rounded-lg border border-[#2b3730] bg-[#111613] flex items-center justify-between gap-4"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <span className="font-semibold text-[#f1f0e9] text-xs">
-                          {cat.name}
-                        </span>
-                        <div className="flex items-center gap-3 mt-1.5">
-                          <input
-                            type="range"
-                            min="0"
-                            max="10"
-                            step="0.5"
-                            value={cat.weight}
-                            onChange={(e) =>
-                              handleUpdateWeight(cat.id, parseFloat(e.target.value))
-                            }
-                            className="w-28 accent-[#89d5d5] cursor-pointer"
-                          />
-                          <span className="text-xs font-bold text-[#89d5d5] font-display">
-                            {cat.weight}x
-                          </span>
-                        </div>
-                      </div>
-
-                      <button
-                        onClick={() => handleRemoveCategory(cat.id)}
-                        className="text-[#8fa095] hover:text-red-400 p-1 transition-colors bg-transparent border-0 cursor-pointer"
-                        title="Remove Category"
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Add New Category Form */}
-              <div className="pt-3 border-t border-[#28342d] flex items-center gap-3">
-                <input
-                  placeholder="New category (e.g. Atmosphere, Pacing)..."
-                  value={newCategoryName}
-                  onChange={(e) => setNewCategoryName(e.target.value)}
-                  className="flex-1 h-9 px-3 text-xs rounded bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
-                />
-                <input
-                  type="number"
-                  min="1"
-                  max="10"
-                  placeholder="Weight"
-                  value={newCategoryWeight}
-                  onChange={(e) => setNewCategoryWeight(e.target.value)}
-                  className="w-20 h-9 text-center text-xs rounded bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
-                />
-                <button
-                  onClick={handleAddCategory}
-                  className="px-4 h-9 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
-                >
-                  <Plus size={14} />
-                  <span>Add</span>
-                </button>
-              </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* Left Column: List of Systems */}
+          <div className="lg:col-span-4 space-y-3">
+            <div className="flex items-center justify-between pb-1 border-b border-[#28342d]">
+              <span className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider">
+                Your Rubrics ({ratingSystems.length})
+              </span>
+              <button
+                type="button"
+                onClick={handleCreateNewSystem}
+                className="text-[11px] font-semibold text-[#89d5d5] hover:text-[#b2e8e8] flex items-center gap-1 cursor-pointer"
+              >
+                <Plus size={13} />
+                <span>New Rubric</span>
+              </button>
             </div>
-          )}
+
+            <div className="space-y-2">
+              {ratingSystems.map((sys: any) => {
+                const isSelected = editingSystem?.id === sys.id;
+                return (
+                  <div
+                    key={sys.id}
+                    onClick={() => setEditingSystem(sys)}
+                    className={`p-3.5 rounded-lg border transition-all cursor-pointer ${
+                      isSelected
+                        ? "bg-[#18221c] border-[#89d5d5]/60 shadow-lg shadow-[#89d5d5]/5"
+                        : "bg-[#141a17] border-[#2b3730] hover:border-[#3d4f43]"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <h4 className="font-display text-base font-bold uppercase tracking-tight text-[#f1f0e9] truncate">
+                            {sys.name}
+                          </h4>
+                          {sys.isDefault && (
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-[#89d5d5]/15 text-[#89d5d5] border border-[#89d5d5]/30">
+                              Default
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[11px] text-[#8fa095] mt-0.5">
+                          {sys.categories?.length || 0} categories · Scale 1–{sys.scale || 10}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-3 pt-2 border-t border-[#232d26] text-[10px]">
+                      {!sys.isDefault && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleSetDefaultSystem(sys.id);
+                          }}
+                          className="text-[#8fa095] hover:text-[#89d5d5] transition-colors flex items-center gap-1 cursor-pointer"
+                          title="Set as Default Rubric"
+                        >
+                          <Star size={11} />
+                          <span>Make Default</span>
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDuplicateSystem(sys.id);
+                        }}
+                        className="text-[#8fa095] hover:text-[#f1f0e9] transition-colors flex items-center gap-1 ml-auto cursor-pointer"
+                        title="Duplicate Rubric"
+                      >
+                        <Copy size={11} />
+                        <span>Duplicate</span>
+                      </button>
+                      {ratingSystems.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleDeleteSystem(sys.id);
+                          }}
+                          className="text-[#8fa095] hover:text-red-400 transition-colors p-0.5 cursor-pointer"
+                          title="Delete Rubric"
+                        >
+                          <Trash2 size={12} />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Right Column: Active System Editor */}
+          <div className="lg:col-span-8">
+            {editingSystem ? (
+              <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-[#28342d] pb-4">
+                  <div className="flex-1 space-y-2">
+                    <label className="text-[10px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                      Rubric Name
+                    </label>
+                    <input
+                      type="text"
+                      value={editingSystem.name || ""}
+                      onChange={(e) =>
+                        setEditingSystem({ ...editingSystem, name: e.target.value })
+                      }
+                      placeholder="e.g. Cinema Criterion, Director Filmography Rubric..."
+                      className="w-full text-lg font-display uppercase font-bold px-3 py-1.5 rounded bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                    />
+                  </div>
+
+                  <div className="flex items-end gap-3 shrink-0">
+                    <div>
+                      <label className="text-[10px] font-semibold text-[#8fa095] uppercase tracking-wider block mb-1">
+                        Scale
+                      </label>
+                      <select
+                        value={editingSystem.scale || 10}
+                        onChange={(e) =>
+                          setEditingSystem({
+                            ...editingSystem,
+                            scale: parseInt(e.target.value, 10),
+                          })
+                        }
+                        className="h-10 px-3 text-xs rounded bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                      >
+                        <option value={10}>Scale 1–10 (Standard)</option>
+                        <option value={5}>Scale 1–5</option>
+                        <option value={100}>Scale 1–100</option>
+                      </select>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSaveSystem}
+                      className="h-10 px-5 rounded bg-[#89d5d5] hover:bg-[#a5e2e2] text-[#102523] text-xs font-semibold flex items-center gap-1.5 transition-all shadow-md shadow-[#89d5d5]/10 cursor-pointer"
+                    >
+                      {saveSuccess ? (
+                        <>
+                          <Check size={14} />
+                          <span>Saved!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Save size={14} />
+                          <span>Save Rubric</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Categories and Weights */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                      Scoring Categories & Multiplier Weights
+                    </span>
+                    <span className="text-[10px] text-[#6c7d73]">
+                      Weights calibrate relative influence on the overall score
+                    </span>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {editingSystem.categories?.map((cat: any) => (
+                      <div
+                        key={cat.id}
+                        className="p-3.5 rounded-lg border border-[#2b3730] bg-[#111613] flex items-center justify-between gap-4"
+                      >
+                        <div className="flex-1 min-w-0 space-y-1.5">
+                          <input
+                            type="text"
+                            value={cat.name}
+                            onChange={(e) =>
+                              handleUpdateCategoryName(cat.id, e.target.value)
+                            }
+                            className="w-full text-xs font-semibold text-[#f1f0e9] bg-transparent border-b border-transparent hover:border-[#3b4c40] focus:border-[#89d5d5] focus:outline-none py-0.5"
+                          />
+                          <div className="flex items-center gap-3">
+                            <input
+                              type="range"
+                              min="0"
+                              max="10"
+                              step="0.5"
+                              value={cat.weight}
+                              onChange={(e) =>
+                                handleUpdateWeight(cat.id, parseFloat(e.target.value))
+                              }
+                              className="w-28 accent-[#89d5d5] cursor-pointer"
+                            />
+                            <span className="text-xs font-bold text-[#89d5d5] font-display">
+                              {cat.weight}x
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveCategory(cat.id)}
+                          className="text-[#8fa095] hover:text-red-400 p-1 transition-colors bg-transparent border-0 cursor-pointer"
+                          title="Remove Category"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Add New Category Form */}
+                <div className="pt-3 border-t border-[#28342d] flex items-center gap-3">
+                  <input
+                    placeholder="New category (e.g. Atmosphere, Pacing, Direction)..."
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    className="flex-1 h-9 px-3 text-xs rounded bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                  />
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    placeholder="Weight"
+                    value={newCategoryWeight}
+                    onChange={(e) => setNewCategoryWeight(e.target.value)}
+                    className="w-20 h-9 text-center text-xs rounded bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCategory}
+                    className="px-4 h-9 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Plus size={14} />
+                    <span>Add Category</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="p-12 text-center border border-dashed border-[#303b34] rounded-xl text-xs text-[#8fa095]">
+                Select a rubric on the left or create a new one to begin editing.
+              </div>
+            )}
+          </div>
         </div>
       )}
 

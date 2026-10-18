@@ -187,9 +187,11 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
               <Link href={`/collection/${pinnedCollection.id}`} className="ar-feedCover">
                 <img
                   src={
-                    pinnedCollection.title.toLowerCase().includes("black mirror")
-                      ? "/prototype-art/black-mirror-wall.jpg"
-                      : pinnedCollection.backdropImage || "/prototype-art/black-mirror-wall.jpg"
+                    pinnedCollection.backdropImage
+                      ? getTmdbImageUrl(pinnedCollection.backdropImage, "original")
+                      : pinnedCollection.customCoverImage
+                        ? getTmdbImageUrl(pinnedCollection.customCoverImage, "w780")
+                        : "/placeholders/backdrop-placeholder.svg"
                   }
                   alt={pinnedCollection.title}
                 />
@@ -197,17 +199,19 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                 <div>
                   <span>
                     {pinnedCollection.collectionType === "tv_show"
-                      ? "TV Anthology"
-                      : "Curated Canon"}{" "}
+                      ? "TV Series"
+                      : pinnedCollection.collectionType === "movie_franchise"
+                        ? "Film Franchise"
+                        : "Curated Collection"}{" "}
                     · {pinnedCollection.entries.length} entries
                   </span>
                   <h2>{pinnedCollection.title}</h2>
                 </div>
-                {pinnedCollection.title.toLowerCase().includes("black mirror") && (
+                {(pinnedCollection as any).clearLogoUrl && (
                   <img
                     className="ar-feedCoverLogo"
-                    src="/prototype-art/black-mirror-logo.png"
-                    alt="Black Mirror"
+                    src={(pinnedCollection as any).clearLogoUrl}
+                    alt={pinnedCollection.title}
                   />
                 )}
               </Link>
@@ -231,7 +235,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                               ? getTmdbImageUrl(ep.mediaItem.stillPath, "w300")
                               : ep.mediaItem?.posterPath
                                 ? getTmdbImageUrl(ep.mediaItem.posterPath, "w300")
-                                : "/prototype-art/san-junipero.jpg"
+                                : "/placeholders/backdrop-placeholder.svg"
                           }
                           alt={ep.mediaItem?.title || "Item"}
                         />
@@ -256,7 +260,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
         <section className="space-y-4">
           <div className="flex items-center justify-between border-b border-[#232d27] pb-2">
             <h2 className="font-display text-sm uppercase font-bold tracking-widest text-[#f1f0e9]">
-              Published Rankings & Canons ({publicCollections.length})
+              Published Rankings ({publicCollections.length})
             </h2>
           </div>
 
@@ -287,10 +291,13 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                     <Link href={`/collection/${col.id}`} className="ar-smallRanking">
                       <img
                         src={
-                          col.customCoverImage ||
-                          (col.entries[0]?.mediaItem?.posterPath
-                            ? getTmdbImageUrl(col.entries[0].mediaItem.posterPath, "w300")
-                            : col.backdropImage || "/prototype-art/san-junipero.jpg")
+                          col.customCoverImage
+                            ? getTmdbImageUrl(col.customCoverImage, "w300")
+                            : col.entries[0]?.mediaItem?.posterPath
+                              ? getTmdbImageUrl(col.entries[0].mediaItem.posterPath, "w300")
+                              : col.backdropImage
+                                ? getTmdbImageUrl(col.backdropImage, "w300")
+                                : "/placeholders/backdrop-placeholder.svg"
                         }
                         alt={col.title}
                       />

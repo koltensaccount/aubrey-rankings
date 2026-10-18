@@ -78,11 +78,8 @@ export async function GET(
       }));
     }
 
-    let clearLogoUrl = col.title.toLowerCase().includes("black mirror")
-      ? "/prototype-art/black-mirror-logo.png"
-      : null;
-
-    if (!clearLogoUrl && col.tmdbId) {
+    let clearLogoUrl: string | null = null;
+    if (col.tmdbId) {
       const mediaType = col.collectionType === "tv_show" ? "tv" : "movie";
       clearLogoUrl = await tmdb.getClearLogo(col.tmdbId, mediaType).catch(() => null);
     }

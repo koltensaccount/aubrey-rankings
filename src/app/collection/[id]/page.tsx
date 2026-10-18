@@ -18,12 +18,18 @@ import {
   Trash2,
   AlertTriangle,
   Loader2,
+  Plus,
+  Edit3,
+  Check,
+  X,
 } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { RatingDialog } from "@/components/rating-dialog";
 import { LikeButton } from "@/components/social/like-button";
 import { CommentsSection } from "@/components/social/comments-section";
 import { calibrateOklchTheme } from "@/lib/palette";
+import { CinematicArtworkBanner } from "@/components/cinematic-artwork-banner";
+import { CinematicMediaCard } from "@/components/cinematic-media-card";
 
 type SortOption = "score_desc" | "score_asc" | "order" | "title";
 type FilterOption = "all" | "rated" | "unrated";
@@ -59,6 +65,122 @@ export default function CollectionDetailPage({
 
   // Rating Modal
   const [selectedItemForRating, setSelectedItemForRating] = useState<any | null>(null);
+
+  // Rubric Adjustment Modal
+  const [showRubricModal, setShowRubricModal] = useState(false);
+  const [editingRubricCategories, setEditingRubricCategories] = useState<any[]>([]);
+  const [savingRubric, setSavingRubric] = useState(false);
+
+  // Add Entries Modal
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [isSearchingTmdb, setIsSearchingTmdb] = useState(false);
+  const [addingMediaId, setAddingMediaId] = useState<number | null>(null);
+
+  const handleOpenRubricModal = () => {
+    if (!collection?.defaultRatingSystem?.categories) return;
+    setEditingRubricCategories(
+      collection.defaultRatingSystem.categories.map((c: any) => ({ ...c }))
+    );
+    setShowRubricModal(true);
+  };
+
+  const handleSaveRubric = async () => {
+    if (!collection?.defaultRatingSystem?.id) return;
+    setSavingRubric(true);
+    try {
+      const res = await fetch(`/api/rating-systems/${collection.defaultRatingSystem.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          categories: editingRubricCategories.map((c, idx) => ({
+            id: c.id,
+            name: c.name,
+            weight: c.weight,
+            isRequired: c.isRequired,
+            sortOrder: idx + 1,
+          })),
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setCollection((prev: any) => ({
+          ...prev,
+          defaultRatingSystem: data.ratingSystem,
+        }));
+        setShowRubricModal(false);
+      }
+    } catch (err) {
+      console.error("Failed to save rubric", err);
+    } finally {
+      setSavingRubric(false);
+    }
+  };
+
+  // Live search for adding entries
+  useEffect(() => {
+    if (!showAddModal || !searchQuery.trim() || searchQuery.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearchingTmdb(true);
+      try {
+        const typeParam = collection?.collectionType === "tv_show" ? "tv" : "movie";
+        const res = await fetch(
+          `/api/tmdb/search?q=${encodeURIComponent(searchQuery)}&type=${typeParam}`
+        );
+        if (res.ok) {
+          const data = await res.json();
+          setSearchResults(data.results || []);
+        }
+      } catch (err) {
+        console.error("TMDB search error", err);
+      } finally {
+        setIsSearchingTmdb(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timer);
+  }, [showAddModal, searchQuery, collection?.collectionType]);
+
+  const handleAddTmdbItem = async (item: any) => {
+    setAddingMediaId(item.id);
+    try {
+      const res = await fetch(`/api/collections/${id}/entries`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tmdbId: item.id,
+          mediaType: item.media_type || (item.title ? "movie" : "tv"),
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.entry) {
+          setCollection((prev: any) => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              entries: [...(prev.entries || []), data.entry],
+            };
+          });
+        }
+      } else {
+        const errData = await res.json();
+        alert(errData.error || "Failed to add item");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Failed to add item to ranking");
+    } finally {
+      setAddingMediaId(null);
+    }
+  };
 
   const handleDeleteCollection = async () => {
     setDeletingCollection(true);
@@ -275,44 +397,23 @@ export default function CollectionDetailPage({
   }
 
   const collectionTitle = collection.title || collection.name || "";
-  const isBlackMirror =
-    collectionTitle.toLowerCase().includes("black mirror") ||
-    collection.tmdbId === 42009;
-
-  const backdropUrl = isBlackMirror
-    ? "/prototype-art/black-mirror-wall.jpg"
-    : (collection.backdropImage || collection.backdropPath)
-      ? getTmdbImageUrl(collection.backdropImage || collection.backdropPath, "original")
-      : "/prototype-art/black-mirror-wall.jpg";
-
   const totalEntries = collection.entries?.length || 0;
   const ratedCount = Object.keys(ratingsMap).length;
+  const rubricCategories = collection.defaultRatingSystem?.categories || [];
 
   return (
     <div className="min-h-screen pb-28">
       {/* =========================================================================
-          ATMOSPHERIC 4K HEADER WITH TRANSPARENT CLEARLOGO (Screen B Layout)
+          ATMOSPHERIC 4K HEADER WITH CINEMATIC ARTWORK BANNER (Screen B Layout)
           ========================================================================= */}
-      <header
-        className="relative overflow-hidden bg-[#101513] border-b border-[#303b34]"
-        style={{
-          ["--art-tint" as any]: calibratedTheme.primaryAccent,
-          ["--art-glow" as any]: calibratedTheme.softGlow,
-          ["--art-border" as any]: calibratedTheme.borderTone,
-        }}
+      <CinematicArtworkBanner
+        backdropPath={collection.backdropImage || collection.backdropPath}
+        posterPath={collection.customCoverImage || collection.posterPath}
+        clearLogoUrl={collection.clearLogoUrl}
+        title={collectionTitle}
+        className="border-b border-[#303b34]"
       >
-        {/* Backdrop Art with Vignette */}
-        <div className="absolute inset-0 z-0">
-          <img
-            src={backdropUrl}
-            alt={collectionTitle || "Collection Backdrop"}
-            className="w-full h-full object-cover object-top opacity-35 filter contrast-125 saturate-90"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#111514] via-[#111514]/75 to-[#111514]/30" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#111514] via-[#111514]/50 to-transparent" />
-        </div>
-
-        <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 space-y-6">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-12 space-y-6">
           {/* Breadcrumb & Visibility row */}
           <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-[#8fa095]">
             <Link
@@ -320,7 +421,7 @@ export default function CollectionDetailPage({
               className="inline-flex items-center gap-1.5 text-[#8fa095] hover:text-[#f1f0e9] transition-colors"
             >
               <ArrowLeft size={13} />
-              <span>Back to Feed</span>
+              <span>Back to Library</span>
             </Link>
 
             <div className="flex items-center gap-3">
@@ -371,7 +472,7 @@ export default function CollectionDetailPage({
               <Link
                 href={`/compare?left=${collection.id}`}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#17201c] hover:bg-[#1f2b26] text-[#8fa095] hover:text-[#89d5d5] border border-[#3b4c40] transition-colors"
-                title="Compare with another canon"
+                title="Compare with another ranking"
               >
                 <GitCompare size={12} className="text-[#89d5d5]" />
                 <span>Compare</span>
@@ -388,7 +489,12 @@ export default function CollectionDetailPage({
                 </button>
               )}
               <span className="text-[11px] font-mono text-[#89d5d5]">
-                {collection.collectionType === "tv_show" ? "TV Anthology" : "Canon"} · {totalEntries} Entries
+                {collection.collectionType === "tv_show"
+                  ? "TV Series"
+                  : collection.collectionType === "movie_franchise"
+                    ? "Film Franchise"
+                    : "Curated Collection"}{" "}
+                · {totalEntries} Entries
               </span>
             </div>
           </div>
@@ -396,18 +502,18 @@ export default function CollectionDetailPage({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-end">
             <div className="lg:col-span-8 space-y-4">
               {/* Transparent ClearLOGO */}
-              {(collection.clearLogoUrl || isBlackMirror) && (
+              {collection.clearLogoUrl && (
                 <div className="py-1">
                   <img
-                    src={collection.clearLogoUrl || "/prototype-art/black-mirror-logo.png"}
-                    alt={collection.title || collection.name || "Title Logo"}
+                    src={collection.clearLogoUrl}
+                    alt={collectionTitle}
                     className="h-16 sm:h-20 w-auto object-contain filter drop-shadow-[0_10px_24px_rgba(0,0,0,0.95)]"
                   />
                 </div>
               )}
 
               <h1 className="font-display text-4xl sm:text-6xl lg:text-7xl tracking-tight text-[#f1f0e9] leading-[0.95] uppercase">
-                {collection.title || collection.name}
+                {collectionTitle}
               </h1>
 
               {collection.description && (
@@ -421,61 +527,109 @@ export default function CollectionDetailPage({
                   <strong className="text-[#f1f0e9]">{ratedCount}</strong> of {totalEntries} rated
                 </span>
                 <span>·</span>
-                <span className="text-[#89d5d5] font-medium">5-part weighted rubric</span>
+                <span className="text-[#89d5d5] font-medium">
+                  {rubricCategories.length > 0 ? `${rubricCategories.length}-part weighted rubric` : "Weighted rubric"}
+                </span>
               </div>
             </div>
 
             {/* Rubric Breakdown Panel */}
-            <div className="lg:col-span-4 p-5 rounded-xl bg-[#141a17]/95 border border-[#303b34] space-y-2 text-xs">
-              <div className="flex justify-between items-center pb-1.5 border-b border-[#28342d] font-semibold">
+            <div className="lg:col-span-4 p-5 rounded-xl bg-[#141a17]/95 border border-[#303b34] space-y-2.5 text-xs backdrop-blur-sm">
+              <div className="flex justify-between items-center pb-2 border-b border-[#28342d] font-semibold">
                 <span className="font-display uppercase tracking-wider text-sm text-[#f1f0e9]">
-                  Weighted Rubric
+                  {collection.defaultRatingSystem?.name || "Weighted Rubric"}
                 </span>
-                <span className="text-[#89d5d5]">Scale 1–10</span>
+                <span className="text-[#89d5d5]">
+                  Scale 1–{collection.defaultRatingSystem?.scale || 10}
+                </span>
               </div>
-              <div className="flex justify-between text-[#9aa79e]"><span>Writing & Narrative</span><span className="text-[#f1f0e9] font-bold">8x</span></div>
-              <div className="flex justify-between text-[#9aa79e]"><span>Acting & Performance</span><span className="text-[#f1f0e9] font-bold">8x</span></div>
-              <div className="flex justify-between text-[#9aa79e]"><span>Cinematography & Direction</span><span className="text-[#f1f0e9] font-bold">7x</span></div>
-              <div className="flex justify-between text-[#9aa79e]"><span>Music & Sound Design</span><span className="text-[#f1f0e9] font-bold">3x</span></div>
-              <div className="flex justify-between text-[#9aa79e]"><span>Vibes & Resonant Dread</span><span className="text-[#89d5d5] font-bold">8x</span></div>
+
+              {rubricCategories.length > 0 ? (
+                rubricCategories.map((cat: any) => (
+                  <div key={cat.id} className="flex justify-between text-[#9aa79e]">
+                    <span>{cat.name}</span>
+                    <span className="text-[#f1f0e9] font-bold">{cat.weight}x</span>
+                  </div>
+                ))
+              ) : (
+                <>
+                  <div className="flex justify-between text-[#9aa79e]"><span>Writing & Story</span><span className="text-[#f1f0e9] font-bold">8x</span></div>
+                  <div className="flex justify-between text-[#9aa79e]"><span>Acting & Performance</span><span className="text-[#f1f0e9] font-bold">8x</span></div>
+                  <div className="flex justify-between text-[#9aa79e]"><span>Cinematography</span><span className="text-[#f1f0e9] font-bold">7x</span></div>
+                  <div className="flex justify-between text-[#9aa79e]"><span>Music & Sound Design</span><span className="text-[#f1f0e9] font-bold">3x</span></div>
+                  <div className="flex justify-between text-[#9aa79e]"><span>Overall Impact</span><span className="text-[#89d5d5] font-bold">8x</span></div>
+                </>
+              )}
+
+              {isOwner && collection.defaultRatingSystem && (
+                <div className="pt-2 border-t border-[#28342d] flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={handleOpenRubricModal}
+                    className="text-[11px] text-[#89d5d5] hover:text-[#b2e8e8] flex items-center gap-1 font-semibold cursor-pointer"
+                  >
+                    <Sliders size={12} />
+                    <span>Adjust Rubric Weights</span>
+                  </button>
+                  <Link
+                    href="/settings"
+                    className="text-[11px] text-[#6c7d73] hover:text-[#9aa79e] transition-colors"
+                  >
+                    Manage in Settings
+                  </Link>
+                </div>
+              )}
             </div>
           </div>
         </div>
-      </header>
+      </CinematicArtworkBanner>
 
       {/* =========================================================================
           CONTROLS BAR (Season Filter, View Modes, Sort)
           ========================================================================= */}
       <div className="sticky top-20 z-30 bg-[#111514]/95 backdrop-blur-md border-b border-[#303b34]">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 text-xs">
-          {/* Season Filter Pills */}
-          {availableSeasons.length > 0 && (
-            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 sm:pb-0">
+          {/* Left: Season Filter Pills & Add Item */}
+          <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0">
+            {isOwner && (
               <button
-                onClick={() => setSelectedSeason("all")}
-                className={`px-3 py-1.5 rounded text-xs transition-colors whitespace-nowrap ${
-                  selectedSeason === "all"
-                    ? "bg-[#89d5d5] text-[#102523] font-semibold"
-                    : "text-[#8fa095] hover:text-[#f1f0e9] hover:bg-[#1a221e]"
-                }`}
+                type="button"
+                onClick={() => setShowAddModal(true)}
+                className="px-3 py-1.5 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
               >
-                All seasons
+                <Plus size={13} />
+                <span>Add Item</span>
               </button>
-              {availableSeasons.map((s) => (
+            )}
+
+            {availableSeasons.length > 0 && (
+              <div className="flex items-center gap-1.5">
                 <button
-                  key={s}
-                  onClick={() => setSelectedSeason(s.toString())}
+                  onClick={() => setSelectedSeason("all")}
                   className={`px-3 py-1.5 rounded text-xs transition-colors whitespace-nowrap ${
-                    selectedSeason === s.toString()
+                    selectedSeason === "all"
                       ? "bg-[#89d5d5] text-[#102523] font-semibold"
                       : "text-[#8fa095] hover:text-[#f1f0e9] hover:bg-[#1a221e]"
                   }`}
                 >
-                  Season {s}
+                  All seasons
                 </button>
-              ))}
-            </div>
-          )}
+                {availableSeasons.map((s) => (
+                  <button
+                    key={s}
+                    onClick={() => setSelectedSeason(s.toString())}
+                    className={`px-3 py-1.5 rounded text-xs transition-colors whitespace-nowrap ${
+                      selectedSeason === s.toString()
+                        ? "bg-[#89d5d5] text-[#102523] font-semibold"
+                        : "text-[#8fa095] hover:text-[#f1f0e9] hover:bg-[#1a221e]"
+                    }`}
+                  >
+                    Season {s}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           {/* Right Controls: Sort & View Mode */}
           <div className="flex items-center justify-between sm:justify-end gap-3 ml-auto">
@@ -523,19 +677,24 @@ export default function CollectionDetailPage({
           ========================================================================= */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-4">
         {processedEntries.length === 0 ? (
-          <div className="text-center py-20 border border-dashed border-[#303b34] rounded-xl space-y-2">
-            <p className="text-sm text-[#9aa79e]">No items match the selected filter.</p>
+          <div className="text-center py-20 border border-dashed border-[#303b34] rounded-xl space-y-3">
+            <p className="text-sm text-[#9aa79e]">No items in this ranking collection.</p>
+            {isOwner && (
+              <button
+                type="button"
+                onClick={() => setShowAddModal(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded bg-[#89d5d5] hover:bg-[#a5e2e2] text-[#102523] text-xs font-semibold transition-all cursor-pointer"
+              >
+                <Plus size={14} />
+                <span>Add Your First Item</span>
+              </button>
+            )}
           </div>
         ) : viewMode === "list" ? (
           <div className="space-y-3">
             {processedEntries.map((entry: any, index: number) => {
               const media = entry.mediaItem;
               const hasScore = entry.score !== null;
-              const stillUrl = media.stillPath
-                ? getTmdbImageUrl(media.stillPath, "w500")
-                : media.posterPath
-                  ? getTmdbImageUrl(media.posterPath, "w500")
-                  : "/prototype-art/san-junipero.jpg";
 
               return (
                 <div
@@ -547,17 +706,18 @@ export default function CollectionDetailPage({
                     {index < 9 ? `0${index + 1}` : index + 1}
                   </span>
 
-                  {/* 16:9 Cinematic Still Card */}
-                  <div className="w-24 sm:w-36 aspect-video rounded overflow-hidden bg-black shrink-0 relative">
-                    <img
-                      src={stillUrl}
-                      alt={media.title}
-                      className="w-full h-full object-cover"
+                  {/* 16:9 Cinematic Still Card with blurred background for portrait posters */}
+                  <div className="w-24 sm:w-36 shrink-0">
+                    <CinematicMediaCard
+                      stillPath={media.stillPath}
+                      posterPath={media.posterPath}
+                      title={media.title}
+                      aspect="video"
                     />
                   </div>
 
                   {/* Title & Metadata */}
-                  <div className="flex-1 min-width-0">
+                  <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 text-[11px] text-[#8fa095]">
                       {media.seasonNumber && media.episodeNumber && (
                         <span>
@@ -618,22 +778,18 @@ export default function CollectionDetailPage({
             {processedEntries.map((entry: any, index: number) => {
               const media = entry.mediaItem;
               const hasScore = entry.score !== null;
-              const stillUrl = media.stillPath
-                ? getTmdbImageUrl(media.stillPath, "w500")
-                : media.posterPath
-                  ? getTmdbImageUrl(media.posterPath, "w500")
-                  : "/prototype-art/san-junipero.jpg";
 
               return (
                 <div
                   key={entry.id}
                   className="rounded-xl border border-[#303b34] bg-[#141a17] overflow-hidden flex flex-col justify-between group hover:border-[#425247] transition-colors"
                 >
-                  <div className="aspect-video w-full bg-black relative overflow-hidden">
-                    <img
-                      src={stillUrl}
-                      alt={media.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                  <div className="relative overflow-hidden">
+                    <CinematicMediaCard
+                      stillPath={media.stillPath}
+                      posterPath={media.posterPath}
+                      title={media.title}
+                      aspect={collection.collectionType === "movie_franchise" ? "poster" : "video"}
                     />
                     <div className="absolute top-3 left-3 px-2 py-0.5 rounded bg-black/80 font-display text-lg text-[#f1f0e9]">
                       #{index < 9 ? `0${index + 1}` : index + 1}
@@ -770,6 +926,220 @@ export default function CollectionDetailPage({
                   <span>Remove Entry</span>
                 )}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Rubric Adjustment Modal */}
+      {showRubricModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-xl bg-[#141a17] border border-[#303b34] p-6 shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-[#28342d]">
+              <div>
+                <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+                  Adjust Rubric Weights
+                </h3>
+                <p className="text-xs text-[#8fa095] mt-0.5">
+                  Calibrate the multiplier weights for each evaluation category.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRubricModal(false)}
+                className="text-[#8fa095] hover:text-[#f1f0e9] p-1 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+              {editingRubricCategories.map((cat, idx) => (
+                <div
+                  key={cat.id || idx}
+                  className="p-3 rounded-lg border border-[#2b3730] bg-[#111613] flex items-center justify-between gap-4"
+                >
+                  <span className="font-semibold text-xs text-[#f1f0e9] flex-1">
+                    {cat.name}
+                  </span>
+                  <div className="flex items-center gap-3">
+                    <input
+                      type="range"
+                      min="0"
+                      max="10"
+                      step="0.5"
+                      value={cat.weight}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value);
+                        setEditingRubricCategories((prev) =>
+                          prev.map((c, i) => (i === idx ? { ...c, weight: val } : c))
+                        );
+                      }}
+                      className="w-28 accent-[#89d5d5] cursor-pointer"
+                    />
+                    <span className="text-xs font-bold text-[#89d5d5] font-display w-8 text-right">
+                      {cat.weight}x
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-[#28342d]">
+              <button
+                type="button"
+                onClick={() => setShowRubricModal(false)}
+                disabled={savingRubric}
+                className="px-4 py-2 text-xs text-[#9aa79e] hover:text-[#f1f0e9] transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveRubric}
+                disabled={savingRubric}
+                className="px-5 py-2.5 rounded bg-[#89d5d5] hover:bg-[#a5e2e2] text-[#102523] text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {savingRubric ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check className="h-4 w-4" />
+                    <span>Save Weights</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Items Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-xl rounded-xl bg-[#141a17] border border-[#303b34] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#28342d]">
+              <div>
+                <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+                  Add Entry to Ranking
+                </h3>
+                <p className="text-xs text-[#8fa095] mt-0.5">
+                  Search TMDB to add items directly into this ranking.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowAddModal(false);
+                  setSearchQuery("");
+                  setSearchResults([]);
+                }}
+                className="text-[#8fa095] hover:text-[#f1f0e9] p-1 cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Search Box */}
+            <div className="relative">
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-[#8fa095]"
+              />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search movies or TV shows (e.g. Alien, Severance)..."
+                autoFocus
+                className="w-full h-11 pl-9 pr-4 rounded-lg bg-[#18211d] border border-[#303b34] text-xs text-[#f1f0e9] placeholder-[#6c7d73] focus:outline-none focus:border-[#89d5d5] transition-colors"
+              />
+              {isSearchingTmdb && (
+                <Loader2
+                  size={16}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[#89d5d5] animate-spin"
+                />
+              )}
+            </div>
+
+            {/* Results List */}
+            <div className="max-h-80 overflow-y-auto space-y-2 pr-1">
+              {searchResults.length === 0 && searchQuery.trim().length >= 2 && !isSearchingTmdb && (
+                <div className="py-8 text-center text-xs text-[#8fa095]">
+                  No matching titles found on TMDB.
+                </div>
+              )}
+
+              {searchResults.map((item) => {
+                const title = item.title || item.name;
+                const year = (item.release_date || item.first_air_date || "").split("-")[0];
+                const isAlreadyIn = (collection.entries || []).some(
+                  (e: any) => e.mediaItem?.tmdbId === item.id
+                );
+                const isAdding = addingMediaId === item.id;
+
+                return (
+                  <div
+                    key={item.id}
+                    className="p-3 rounded-lg border border-[#28342d] bg-[#111613] flex items-center justify-between gap-3 hover:border-[#3b4c40] transition-colors"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-10 h-14 bg-black rounded overflow-hidden shrink-0 border border-[#28342d]">
+                        {item.poster_path ? (
+                          <img
+                            src={getTmdbImageUrl(item.poster_path, "w185")}
+                            alt={title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[10px] text-[#6c7d73]">
+                            —
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <h4 className="font-semibold text-xs text-[#f1f0e9] truncate">
+                          {title}
+                        </h4>
+                        <span className="text-[10px] text-[#8fa095] block mt-0.5">
+                          {year ? `${year} · ` : ""}{item.media_type === "tv" ? "TV Show" : "Movie"}
+                        </span>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleAddTmdbItem(item)}
+                      disabled={isAlreadyIn || isAdding}
+                      className={`px-3 py-1.5 rounded text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer shrink-0 ${
+                        isAlreadyIn
+                          ? "bg-[#18211d] text-[#6c7d73] border border-[#2b3730] cursor-not-allowed"
+                          : "bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40]"
+                      }`}
+                    >
+                      {isAdding ? (
+                        <>
+                          <Loader2 size={12} className="animate-spin" />
+                          <span>Adding...</span>
+                        </>
+                      ) : isAlreadyIn ? (
+                        <>
+                          <Check size={12} />
+                          <span>Added</span>
+                        </>
+                      ) : (
+                        <>
+                          <Plus size={12} />
+                          <span>Add to Ranking</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
