@@ -66,6 +66,29 @@ export const auth = betterAuth({
       verification: schema.verification,
     },
   }),
+  user: {
+    additionalFields: {
+      username: {
+        type: "string",
+        required: false,
+        input: false,
+      },
+      bio: {
+        type: "string",
+        required: false,
+      },
+    },
+  },
+  socialProviders: {
+    ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+      ? {
+          google: {
+            clientId: process.env.GOOGLE_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+          },
+        }
+      : {}),
+  },
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,

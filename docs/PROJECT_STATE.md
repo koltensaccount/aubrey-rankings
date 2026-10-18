@@ -26,10 +26,10 @@
 - [x] Phase 6: Production multi-stage Dockerfile, Docker Compose stack, automated backup/restore scripts, deployment runbook
 - [x] Phase 7: Live production deployment to Ubuntu server (`koltensserver`), persistent database initialization, volume configuration, automated backups with off-server sync, and continuous deployment pipeline
 - [x] Stage 1 (Production UI): Unified Modern Cinema Editorial UI across all application pages (Home/Feed, Ranking Detail, Profile, Settings, Auth, Create Ranking) with locked Barlow Condensed + Inter typography
+- [x] Stage 2 (Accounts & Identity): Google OAuth provider, normalized lowercase unique usernames (3–20 chars, reserved keywords protection), case-insensitive unique DB index, `/onboarding` flow, live availability checking API, Settings profile editor, and Resend transactional email integration.
 
-## Upcoming Implementation Stages
-- **Stage 2**: Google Sign-in and Usernames (Better Auth Google OAuth, unique normalized usernames with server-side validation, username onboarding flow, profile settings, verified Resend email integration).
-- **Stage 3**: Letterboxd ZIP Importer (repeatable, duplicate-safe import from official user-data ZIP export, TMDB movie matching, rating scale preservation without losing source fidelity).
+## Active Implementation Stage
+- **Stage 3 — Letterboxd ZIP Importer**: Repeatable, duplicate-safe import from official user-data ZIP export, TMDB movie matching, rating scale preservation without losing source fidelity, import preview modal under Settings.
 
 ## Long-Term Product Roadmap (Post Stage 3)
 - **Stage 4 — Privacy & Public Profiles**: Private (default), unlisted, and public rankings, shareable URLs, public user profiles, pinned rankings, public reviews, privacy-aware search.

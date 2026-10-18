@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useSession, signOut } from "@/lib/auth-client";
 import {
   Sliders,
@@ -28,9 +29,106 @@ export default function SettingsPage() {
   const [newCategoryWeight, setNewCategoryWeight] = useState("5");
   const [saveSuccess, setSaveSuccess] = useState(false);
 
+  // Profile editing state
+  const [profileName, setProfileName] = useState("");
+  const [profileUsername, setProfileUsername] = useState("");
+  const [initialUsername, setInitialUsername] = useState("");
+  const [profileBio, setProfileBio] = useState("");
+  const [profileImage, setProfileImage] = useState("");
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileSuccess, setProfileSuccess] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [usernameChecking, setUsernameChecking] = useState(false);
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
+  const [usernameReason, setUsernameReason] = useState<string | null>(null);
+
   useEffect(() => {
     fetchRatingSystems();
+    fetchProfile();
   }, []);
+
+  const fetchProfile = async () => {
+    try {
+      const res = await fetch("/api/user/profile");
+      if (res.ok) {
+        const data = await res.json();
+        if (data.user) {
+          setProfileName(data.user.name || "");
+          setProfileUsername(data.user.username || "");
+          setInitialUsername(data.user.username || "");
+          setProfileBio(data.user.bio || "");
+          setProfileImage(data.user.image || "");
+        }
+      }
+    } catch (err) {
+      console.error("[Fetch Profile Error]", err);
+    }
+  };
+
+  useEffect(() => {
+    const trimmed = profileUsername.trim().toLowerCase();
+    if (!trimmed || trimmed === initialUsername) {
+      setUsernameAvailable(null);
+      setUsernameReason(null);
+      return;
+    }
+
+    if (trimmed.length < 3) {
+      setUsernameAvailable(false);
+      setUsernameReason("Must be at least 3 characters.");
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setUsernameChecking(true);
+      try {
+        const res = await fetch(`/api/user/check-username?username=${encodeURIComponent(trimmed)}`);
+        const json = await res.json();
+        setUsernameAvailable(json.available);
+        setUsernameReason(json.reason || null);
+      } catch (err) {
+        setUsernameAvailable(false);
+        setUsernameReason("Failed to verify handle.");
+      } finally {
+        setUsernameChecking(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [profileUsername, initialUsername]);
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (usernameAvailable === false) return;
+
+    setProfileSaving(true);
+    setProfileError(null);
+    try {
+      const res = await fetch("/api/user/profile", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: profileName.trim(),
+          username: profileUsername.trim().toLowerCase() || undefined,
+          bio: profileBio.trim(),
+          image: profileImage.trim() || undefined,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || "Failed to update profile.");
+      }
+
+      setInitialUsername(json.user?.username || profileUsername);
+      setProfileSuccess(true);
+      setTimeout(() => setProfileSuccess(false), 3000);
+    } catch (err: any) {
+      setProfileError(err?.message || "Failed to save profile.");
+    } finally {
+      setProfileSaving(false);
+    }
+  };
 
   const fetchRatingSystems = async () => {
     setLoadingSystems(true);
@@ -278,31 +376,119 @@ export default function SettingsPage() {
       {/* TAB 2: ACCOUNT & SECURITY */}
       {activeTab === "account" && (
         <div className="max-w-2xl space-y-6">
-          <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-4">
-            <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
-              Profile Information
-            </h3>
+          <form onSubmit={handleSaveProfile} className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-6">
+            <div className="flex items-center justify-between border-b border-[#232d27] pb-4">
+              <div>
+                <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+                  Profile & Identity
+                </h3>
+                <p className="text-xs text-[#8fa095] mt-0.5">
+                  Manage your public handle, display name, and community biography.
+                </p>
+              </div>
+              {initialUsername && (
+                <Link
+                  href={`/u/${initialUsername}`}
+                  className="text-xs text-[#89d5d5] hover:underline flex items-center gap-1 font-mono"
+                >
+                  <span>/u/{initialUsername}</span>
+                </Link>
+              )}
+            </div>
+
+            {profileError && (
+              <div className="p-3 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+                {profileError}
+              </div>
+            )}
+
+            {profileSuccess && (
+              <div className="p-3 rounded bg-[#89d5d5]/10 border border-[#89d5d5]/30 text-[#89d5d5] text-xs">
+                Profile updated successfully.
+              </div>
+            )}
+
+            {/* Username Field */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider flex items-center justify-between">
+                <span>Unique Handle (@username)</span>
+                <span className="text-[10px] text-[#6c7d73]">3–20 chars · a–z, 0–9, _</span>
+              </label>
+              <div className="relative flex items-center">
+                <span className="absolute left-3.5 text-[#6c7d73] font-mono text-xs select-none">
+                  @
+                </span>
+                <input
+                  type="text"
+                  value={profileUsername}
+                  onChange={(e) => setProfileUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ""))}
+                  placeholder="username"
+                  maxLength={20}
+                  className="w-full text-xs font-mono rounded-lg pl-8 pr-10 py-2.5 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                />
+                <div className="absolute right-3">
+                  {usernameChecking ? (
+                    <span className="text-[10px] text-[#8fa597] animate-pulse">verifying...</span>
+                  ) : usernameAvailable === true ? (
+                    <span className="text-[10px] text-[#89d5d5] font-semibold">Available</span>
+                  ) : usernameAvailable === false ? (
+                    <span className="text-[10px] text-red-400 font-semibold">{usernameReason || "Taken"}</span>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+
+            {/* Display Name */}
             <div className="space-y-1.5">
               <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
                 Display Name
               </label>
               <input
-                defaultValue={session?.user.name || ""}
-                disabled
-                className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#8fa095] cursor-not-allowed"
+                type="text"
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+                placeholder="Aubrey"
+                className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
               />
             </div>
+
+            {/* Bio */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider flex items-center justify-between">
+                <span>Biography</span>
+                <span className="text-[10px] text-[#6c7d73]">{profileBio.length}/300</span>
+              </label>
+              <textarea
+                value={profileBio}
+                onChange={(e) => setProfileBio(e.target.value.slice(0, 300))}
+                rows={3}
+                placeholder="Write a brief note on your rating philosophy, favorite filmmakers, or sensory preferences..."
+                className="w-full text-xs rounded-lg p-3 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5] resize-none"
+              />
+            </div>
+
+            {/* Email (Read Only) */}
             <div className="space-y-1.5">
               <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
-                Email Address
+                Account Email
               </label>
               <input
                 defaultValue={session?.user.email || ""}
                 disabled
-                className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#8fa095] cursor-not-allowed"
+                className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#6c7d73] cursor-not-allowed"
               />
             </div>
-          </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                type="submit"
+                disabled={profileSaving || usernameAvailable === false}
+                className="px-5 py-2.5 rounded-lg bg-[#89d5d5] hover:bg-[#a0dede] text-[#111514] font-display text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer"
+              >
+                {profileSaving ? "Saving..." : "Save Profile Changes"}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
