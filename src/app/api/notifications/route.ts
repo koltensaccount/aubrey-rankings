@@ -3,9 +3,10 @@ import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
 import { notifications } from "@/db/schema";
 import { eq, and, sql, desc, isNull } from "drizzle-orm";
+import { getBlockedUserIds } from "@/lib/safety";
 
 export async function GET(request: NextRequest) {
-  const session = await getServerSession();
+  const session = await getServerSession(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -14,6 +15,16 @@ export async function GET(request: NextRequest) {
   const limit = Math.min(Math.max(1, Math.floor(Number(searchParams.get("limit")) || 30)), 100);
   const unreadOnly = searchParams.get("unread") === "true";
 
+  const blockedUserIds = await getBlockedUserIds(session.user.id);
+  const blockedArray = Array.from(blockedUserIds);
+
+  const blockedFilter =
+    blockedArray.length > 0
+      ? sql`(${notifications.actorUserId} IS NULL OR ${notifications.actorUserId} NOT IN ${blockedArray})`
+      : sql`true`;
+
+  const accessibilityFilter = sql`(${notifications.collectionId} IS NULL OR EXISTS (SELECT 1 FROM collections c WHERE c.id = ${notifications.collectionId} AND (c.user_id = ${session.user.id} OR c.visibility IN ('public','unlisted'))))`;
+
   // Calculate unread count
   const unreadCountRes = await db
     .select({ count: sql<number>`count(*)` })
@@ -21,7 +32,8 @@ export async function GET(request: NextRequest) {
     .where(
       and(
         eq(notifications.recipientUserId, session.user.id),
-        sql`(${notifications.collectionId} IS NULL OR EXISTS (SELECT 1 FROM collections c WHERE c.id = ${notifications.collectionId} AND (c.user_id = ${session.user.id} OR c.visibility IN ('public','unlisted'))))`,
+        accessibilityFilter,
+        blockedFilter,
         isNull(notifications.readAt)
       )
     );
@@ -31,10 +43,15 @@ export async function GET(request: NextRequest) {
   const whereClause = unreadOnly
     ? and(
         eq(notifications.recipientUserId, session.user.id),
-        sql`(${notifications.collectionId} IS NULL OR EXISTS (SELECT 1 FROM collections c WHERE c.id = ${notifications.collectionId} AND (c.user_id = ${session.user.id} OR c.visibility IN ('public','unlisted'))))`,
+        accessibilityFilter,
+        blockedFilter,
         isNull(notifications.readAt)
       )
-    : and(eq(notifications.recipientUserId, session.user.id), sql`(${notifications.collectionId} IS NULL OR EXISTS (SELECT 1 FROM collections c WHERE c.id = ${notifications.collectionId} AND (c.user_id = ${session.user.id} OR c.visibility IN ('public','unlisted'))))`);
+    : and(
+        eq(notifications.recipientUserId, session.user.id),
+        accessibilityFilter,
+        blockedFilter
+      );
 
   const list = await db.query.notifications.findMany({
     where: whereClause,
@@ -59,7 +76,7 @@ export async function GET(request: NextRequest) {
 }
 
 export async function PATCH(request: NextRequest) {
-  const session = await getServerSession();
+  const session = await getServerSession(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -96,13 +113,22 @@ export async function PATCH(request: NextRequest) {
   }
 
   // Recalculate remaining unread count
+  const blockedUserIds = await getBlockedUserIds(session.user.id);
+  const blockedArray = Array.from(blockedUserIds);
+  const blockedFilter =
+    blockedArray.length > 0
+      ? sql`(${notifications.actorUserId} IS NULL OR ${notifications.actorUserId} NOT IN ${blockedArray})`
+      : sql`true`;
+  const accessibilityFilter = sql`(${notifications.collectionId} IS NULL OR EXISTS (SELECT 1 FROM collections c WHERE c.id = ${notifications.collectionId} AND (c.user_id = ${session.user.id} OR c.visibility IN ('public','unlisted'))))`;
+
   const unreadCountRes = await db
     .select({ count: sql<number>`count(*)` })
     .from(notifications)
     .where(
       and(
         eq(notifications.recipientUserId, session.user.id),
-        sql`(${notifications.collectionId} IS NULL OR EXISTS (SELECT 1 FROM collections c WHERE c.id = ${notifications.collectionId} AND (c.user_id = ${session.user.id} OR c.visibility IN ('public','unlisted'))))`,
+        accessibilityFilter,
+        blockedFilter,
         isNull(notifications.readAt)
       )
     );

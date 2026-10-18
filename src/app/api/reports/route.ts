@@ -67,26 +67,61 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // Verify target existence in database
+  // Verify target existence and legitimate accessibility under shared visibility policy
   let targetExists = false;
   if (targetType === "comment") {
     const c = await db.query.comments.findFirst({
       where: (c, { eq }) => eq(c.id, targetId),
-      columns: { id: true },
+      with: {
+        collection: {
+          columns: { id: true, userId: true, visibility: true, isPublic: true },
+        },
+      },
     });
-    targetExists = Boolean(c);
+    if (c && c.collection) {
+      const isColOwner = c.collection.userId === session.user.id;
+      const isCommentAuthor = c.userId === session.user.id;
+      const isPublicOrUnlisted =
+        c.collection.visibility === "public" ||
+        c.collection.visibility === "unlisted" ||
+        c.collection.isPublic;
+      // Accessible if reporter owns the collection, authored the comment, or collection is public/unlisted
+      targetExists = isColOwner || isCommentAuthor || isPublicOrUnlisted;
+    }
   } else if (targetType === "ranking") {
     const col = await db.query.collections.findFirst({
       where: (c, { eq }) => eq(c.id, targetId),
-      columns: { id: true },
+      columns: { id: true, userId: true, visibility: true, isPublic: true },
     });
-    targetExists = Boolean(col);
+    if (col) {
+      const isOwner = col.userId === session.user.id;
+      const isPublicOrUnlisted =
+        col.visibility === "public" ||
+        col.visibility === "unlisted" ||
+        col.isPublic;
+      targetExists = isOwner || isPublicOrUnlisted;
+    }
   } else if (targetType === "review") {
     const r = await db.query.ratings.findFirst({
       where: (r, { eq }) => eq(r.id, targetId),
-      columns: { id: true },
+      with: {
+        collection: {
+          columns: { id: true, userId: true, visibility: true, isPublic: true },
+        },
+      },
     });
-    targetExists = Boolean(r);
+    // A review must actually have review text (not merely an unreviewed numeric rating)
+    const hasReviewText = Boolean(r && r.reviewText && r.reviewText.trim().length > 0);
+    if (r && hasReviewText) {
+      const isAuthor = r.userId === session.user.id;
+      const isPublicOrUnlisted = Boolean(
+        r.collection &&
+          (r.collection.visibility === "public" ||
+            r.collection.visibility === "unlisted" ||
+            r.collection.isPublic)
+      );
+      targetExists = isAuthor || isPublicOrUnlisted;
+    }
   } else if (targetType === "user") {
     const u = await db.query.user.findFirst({
       where: (u, { eq }) => eq(u.id, targetId),

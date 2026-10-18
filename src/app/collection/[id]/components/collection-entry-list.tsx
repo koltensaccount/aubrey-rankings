@@ -118,20 +118,22 @@ export function CollectionEntryList({
                   )}
                 </div>
 
-                <button
-                  onClick={() => onSelectItemForRating(media)}
-                  className={`px-3 py-1.5 rounded-button text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border ${
-                    state === "rated"
-                      ? "bg-surface hover:bg-surface-elevated text-foreground border-border"
-                      : state === "in_progress"
-                        ? "bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border-amber-500/30"
-                        : "bg-primary hover:bg-primary-hover text-primary-foreground border-primary shadow-sm"
-                  }`}
-                >
-                  <Sliders size={13} />
-                  <span className="hidden sm:inline">{actionLabel}</span>
-                  <span className="sm:hidden">{state === "rated" ? "Edit" : state === "in_progress" ? "Cont." : "Rate"}</span>
-                </button>
+                {isOwner && (
+                  <button
+                    onClick={() => onSelectItemForRating(media)}
+                    className={`px-3 py-1.5 rounded-button text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border ${
+                      state === "rated"
+                        ? "bg-surface hover:bg-surface-elevated text-foreground border-border"
+                        : state === "in_progress"
+                          ? "bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                          : "bg-primary hover:bg-primary-hover text-primary-foreground border-primary shadow-sm"
+                    }`}
+                  >
+                    <Sliders size={13} />
+                    <span className="hidden sm:inline">{actionLabel}</span>
+                    <span className="sm:hidden">{state === "rated" ? "Edit" : state === "in_progress" ? "Cont." : "Rate"}</span>
+                  </button>
+                )}
 
                 {isOwner && (
                   <button
@@ -210,21 +212,21 @@ export function CollectionEntryList({
                 </h3>
               </div>
 
-              <div className="flex items-center gap-2 mt-2">
-                <button
-                  onClick={() => onSelectItemForRating(media)}
-                  className={`flex-1 py-2 rounded-button text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
-                    state === "rated"
-                      ? "bg-secondary hover:bg-surface text-foreground border border-border"
-                      : state === "in_progress"
-                        ? "bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-300 border border-amber-500/40"
-                        : "bg-primary hover:bg-primary-hover text-primary-foreground shadow-sm"
-                  }`}
-                >
-                  <Sliders size={13} />
-                  <span>{actionLabel}</span>
-                </button>
-                {isOwner && (
+              {isOwner ? (
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    onClick={() => onSelectItemForRating(media)}
+                    className={`flex-1 py-2 rounded-button text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${
+                      state === "rated"
+                        ? "bg-secondary hover:bg-surface text-foreground border border-border"
+                        : state === "in_progress"
+                          ? "bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-300 border border-amber-500/40"
+                          : "bg-primary hover:bg-primary-hover text-primary-foreground shadow-sm"
+                    }`}
+                  >
+                    <Sliders size={13} />
+                    <span>{actionLabel}</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => onSetEntryToDelete(entry)}
@@ -233,8 +235,14 @@ export function CollectionEntryList({
                   >
                     <Trash2 size={13} />
                   </button>
-                )}
-              </div>
+                </div>
+              ) : entry.userRating?.reviewText ? (
+                <div className="mt-2 pt-2 border-t border-border/50">
+                  <p className="text-xs text-muted-foreground italic line-clamp-2">
+                    &ldquo;{entry.userRating.reviewText}&rdquo;
+                  </p>
+                </div>
+              ) : null}
             </div>
           </div>
         );

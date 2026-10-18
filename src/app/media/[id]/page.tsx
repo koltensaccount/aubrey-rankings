@@ -3,72 +3,180 @@ import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { mediaItems, ratings, collections, user } from "@/db/schema";
 import { eq, and, isNotNull, ne, desc } from "drizzle-orm";
-import { getTmdbImageUrl } from "@/lib/tmdb";
+import { getTmdbImageUrl, tmdb } from "@/lib/tmdb";
 import { resolvePosterUrl } from "@/lib/artwork";
+import { getServerSession } from "@/lib/server-session";
+import { getBlockedUserIds } from "@/lib/safety";
 import { ArrowLeft, Star, Film, Tv, MessageSquare, ExternalLink } from "lucide-react";
 
 export default async function MediaDetailsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams?: Promise<{ type?: string }>;
 }) {
   const { id: mediaId } = await params;
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const requestedType = resolvedSearchParams.type?.toLowerCase();
 
-  let media = await db.query.mediaItems.findFirst({
+  let media: any = await db.query.mediaItems.findFirst({
     where: (m, { eq }) => eq(m.id, mediaId),
   });
 
   if (!media && /^\d+$/.test(mediaId)) {
     const tmdbNum = parseInt(mediaId, 10);
-    media = await db.query.mediaItems.findFirst({
-      where: (m, { eq }) => eq(m.tmdbId, tmdbNum),
-    });
+    if (requestedType === "movie" || requestedType === "tv") {
+      media = await db.query.mediaItems.findFirst({
+        where: (m, { eq, and }) =>
+          and(eq(m.tmdbId, tmdbNum), eq(m.mediaType, requestedType)),
+      });
+    } else {
+      media = await db.query.mediaItems.findFirst({
+        where: (m, { eq }) => eq(m.tmdbId, tmdbNum),
+      });
+    }
+
+    // If still not in DB, resolve from TMDB on demand WITHOUT inserting into the database
+    if (!media) {
+      try {
+        if (requestedType === "tv") {
+          const tv = await tmdb.getTvDetails(tmdbNum);
+          if (tv && (tv.name || tv.id)) {
+            media = {
+              id: `tmdb-tv-${tv.id}`,
+              tmdbId: tv.id,
+              mediaType: "tv",
+              title: tv.name || "Untitled Series",
+              overview: tv.overview || null,
+              posterPath: tv.poster_path || null,
+              backdropPath: tv.backdrop_path || null,
+              stillPath: null,
+              releaseDate: tv.first_air_date || null,
+              seasonNumber: null,
+              episodeNumber: null,
+              parentMediaId: null,
+            };
+          }
+        } else if (requestedType === "movie") {
+          const movie = await tmdb.getMovieDetails(tmdbNum);
+          if (movie && (movie.title || movie.id)) {
+            media = {
+              id: `tmdb-movie-${movie.id}`,
+              tmdbId: movie.id,
+              mediaType: "movie",
+              title: movie.title || "Untitled Film",
+              overview: movie.overview || null,
+              posterPath: movie.poster_path || null,
+              backdropPath: movie.backdrop_path || null,
+              stillPath: null,
+              releaseDate: movie.release_date || null,
+              seasonNumber: null,
+              episodeNumber: null,
+              parentMediaId: null,
+            };
+          }
+        } else {
+          // No media type specified: try movie first, then TV
+          try {
+            const movie = await tmdb.getMovieDetails(tmdbNum);
+            if (movie && (movie.title || movie.id)) {
+              media = {
+                id: `tmdb-movie-${movie.id}`,
+                tmdbId: movie.id,
+                mediaType: "movie",
+                title: movie.title || "Untitled Film",
+                overview: movie.overview || null,
+                posterPath: movie.poster_path || null,
+                backdropPath: movie.backdrop_path || null,
+                stillPath: null,
+                releaseDate: movie.release_date || null,
+                seasonNumber: null,
+                episodeNumber: null,
+                parentMediaId: null,
+              };
+            }
+          } catch {
+            const tv = await tmdb.getTvDetails(tmdbNum);
+            if (tv && (tv.name || tv.id)) {
+              media = {
+                id: `tmdb-tv-${tv.id}`,
+                tmdbId: tv.id,
+                mediaType: "tv",
+                title: tv.name || "Untitled Series",
+                overview: tv.overview || null,
+                posterPath: tv.poster_path || null,
+                backdropPath: tv.backdrop_path || null,
+                stillPath: null,
+                releaseDate: tv.first_air_date || null,
+                seasonNumber: null,
+                episodeNumber: null,
+                parentMediaId: null,
+              };
+            }
+          }
+        }
+      } catch {
+        // TMDB request failed
+      }
+    }
   }
 
   if (!media) {
     notFound();
   }
 
-  // Fetch all public ratings with reviews for this media item
-  const rawReviews = await db.query.ratings.findMany({
-    where: (r, { and, eq, isNotNull, ne }) =>
-      and(
-        eq(r.mediaItemId, media!.id),
-        isNotNull(r.reviewText),
-        ne(r.reviewText, ""),
-        isNotNull(r.collectionId)
-      ),
-    orderBy: [desc(ratings.updatedAt)],
-    columns: {
-      personalNotes: false, // Strict privacy
-    },
-    with: {
-      user: {
-        columns: {
-          id: true,
-          name: true,
-          username: true,
-          image: true,
-        },
-      },
-      collection: {
-        columns: {
-          id: true,
-          title: true,
-          visibility: true,
-        },
-      },
-      ratingSystem: {
-        columns: {
-          scale: true,
-        },
-      },
-    },
-  });
+  const session = await getServerSession();
+  const blockedUserIds = session ? await getBlockedUserIds(session.user.id) : new Set<string>();
 
-  // Filter to public collections only
+  // Fetch all public ratings with reviews for this media item (if media exists in DB)
+  const isEphemeral = typeof media.id === "string" && media.id.startsWith("tmdb-");
+  const rawReviews = isEphemeral
+    ? []
+    : await db.query.ratings.findMany({
+        where: (r, { and, eq, isNotNull, ne }) =>
+          and(
+            eq(r.mediaItemId, media!.id),
+            isNotNull(r.reviewText),
+            ne(r.reviewText, ""),
+            isNotNull(r.collectionId)
+          ),
+        orderBy: [desc(ratings.updatedAt)],
+        columns: {
+          personalNotes: false, // Strict privacy
+        },
+        with: {
+          user: {
+            columns: {
+              id: true,
+              name: true,
+              username: true,
+              image: true,
+            },
+          },
+          collection: {
+            columns: {
+              id: true,
+              title: true,
+              visibility: true,
+            },
+          },
+          ratingSystem: {
+            columns: {
+              scale: true,
+            },
+          },
+        },
+      });
+
+  // Filter to public collections only and exclude blocked users
   const publicReviews = rawReviews
-    .filter((r) => r.collection && r.collection.visibility === "public")
+    .filter(
+      (r) =>
+        r.collection &&
+        r.collection.visibility === "public" &&
+        !blockedUserIds.has(r.user.id)
+    )
     .map((r) => ({
       id: r.id,
       reviewText: r.reviewText,

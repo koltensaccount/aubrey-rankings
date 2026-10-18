@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { collections, collectionEntries, mediaItems, ratings, ratingSystems } from "@/db/schema";
-import { eq, and, asc } from "drizzle-orm";
+import { collections, collectionEntries, mediaItems, ratings, ratingSystems, follows } from "@/db/schema";
+import { eq, and, asc, sql } from "drizzle-orm";
 import { tmdb } from "@/lib/tmdb";
 
 export async function GET(
@@ -10,12 +10,20 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const session = await getServerSession();
+  const session = await getServerSession(request);
 
   try {
     const col = await db.query.collections.findFirst({
       where: (c, { eq }) => eq(c.id, id),
       with: {
+        user: {
+          columns: {
+            id: true,
+            name: true,
+            username: true,
+            image: true,
+          },
+        },
         defaultRatingSystem: {
           with: {
             categories: {
@@ -85,10 +93,47 @@ export async function GET(
       clearLogoUrl = await tmdb.getClearLogo(col.tmdbId, mediaType).catch(() => null);
     }
 
+    let isFollowing = false;
+    let followersCount = 0;
+    let followingCount = 0;
+
+    if (!isOwner && col.user) {
+      if (session) {
+        const follow = await db.query.follows.findFirst({
+          where: (f, { eq, and }) =>
+            and(eq(f.followerId, session.user.id), eq(f.followingId, col.userId)),
+          columns: { id: true },
+        });
+        isFollowing = Boolean(follow);
+      }
+
+      const [fc, fgc] = await Promise.all([
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(follows)
+          .where(eq(follows.followingId, col.userId)),
+        db
+          .select({ count: sql<number>`count(*)` })
+          .from(follows)
+          .where(eq(follows.followerId, col.userId)),
+      ]);
+      followersCount = Number(fc[0]?.count || 0);
+      followingCount = Number(fgc[0]?.count || 0);
+    }
+
     return NextResponse.json({
       collection: {
         ...col,
         clearLogoUrl,
+        isFollowing,
+        user: col.user
+          ? {
+              ...col.user,
+              isFollowing,
+              followersCount,
+              followingCount,
+            }
+          : null,
       },
       ratings: collectionRatings,
       isOwner,

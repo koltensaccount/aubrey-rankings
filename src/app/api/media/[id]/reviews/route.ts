@@ -13,31 +13,121 @@ export async function GET(
     return NextResponse.json({ error: "Media ID required" }, { status: 400 });
   }
 
+  const searchParams = request.nextUrl.searchParams;
+  const requestedType = searchParams.get("type")?.toLowerCase();
+
   // Find media item by id, or fallback to tmdbId if numeric string
-  let media = await db.query.mediaItems.findFirst({
+  let media: any = await db.query.mediaItems.findFirst({
     where: (m, { eq }) => eq(m.id, mediaId),
   });
 
   if (!media && /^\d+$/.test(mediaId)) {
     const tmdbNum = parseInt(mediaId, 10);
-    media = await db.query.mediaItems.findFirst({
-      where: (m, { eq }) => eq(m.tmdbId, tmdbNum),
-    });
+    if (requestedType === "movie" || requestedType === "tv") {
+      media = await db.query.mediaItems.findFirst({
+        where: (m, { eq, and }) =>
+          and(eq(m.tmdbId, tmdbNum), eq(m.mediaType, requestedType)),
+      });
+    } else {
+      media = await db.query.mediaItems.findFirst({
+        where: (m, { eq }) => eq(m.tmdbId, tmdbNum),
+      });
+    }
+
+    if (!media) {
+      const { tmdb } = await import("@/lib/tmdb");
+      try {
+        if (requestedType === "tv") {
+          const tv = await tmdb.getTvDetails(tmdbNum);
+          if (tv && (tv.name || tv.id)) {
+            media = {
+              id: `tmdb-tv-${tv.id}`,
+              tmdbId: tv.id,
+              mediaType: "tv",
+              title: tv.name || "Untitled Series",
+              overview: tv.overview || null,
+              posterPath: tv.poster_path || null,
+              backdropPath: tv.backdrop_path || null,
+              stillPath: null,
+              releaseDate: tv.first_air_date || null,
+              seasonNumber: null,
+              episodeNumber: null,
+            };
+          }
+        } else if (requestedType === "movie") {
+          const movie = await tmdb.getMovieDetails(tmdbNum);
+          if (movie && (movie.title || movie.id)) {
+            media = {
+              id: `tmdb-movie-${movie.id}`,
+              tmdbId: movie.id,
+              mediaType: "movie",
+              title: movie.title || "Untitled Film",
+              overview: movie.overview || null,
+              posterPath: movie.poster_path || null,
+              backdropPath: movie.backdrop_path || null,
+              stillPath: null,
+              releaseDate: movie.release_date || null,
+              seasonNumber: null,
+              episodeNumber: null,
+            };
+          }
+        } else {
+          try {
+            const movie = await tmdb.getMovieDetails(tmdbNum);
+            if (movie && (movie.title || movie.id)) {
+              media = {
+                id: `tmdb-movie-${movie.id}`,
+                tmdbId: movie.id,
+                mediaType: "movie",
+                title: movie.title || "Untitled Film",
+                overview: movie.overview || null,
+                posterPath: movie.poster_path || null,
+                backdropPath: movie.backdrop_path || null,
+                stillPath: null,
+                releaseDate: movie.release_date || null,
+                seasonNumber: null,
+                episodeNumber: null,
+              };
+            }
+          } catch {
+            const tv = await tmdb.getTvDetails(tmdbNum);
+            if (tv && (tv.name || tv.id)) {
+              media = {
+                id: `tmdb-tv-${tv.id}`,
+                tmdbId: tv.id,
+                mediaType: "tv",
+                title: tv.name || "Untitled Series",
+                overview: tv.overview || null,
+                posterPath: tv.poster_path || null,
+                backdropPath: tv.backdrop_path || null,
+                stillPath: null,
+                releaseDate: tv.first_air_date || null,
+                seasonNumber: null,
+                episodeNumber: null,
+              };
+            }
+          }
+        }
+      } catch {}
+    }
   }
 
   if (!media) {
     return NextResponse.json({ error: "Media item not found" }, { status: 404 });
   }
 
-  // Fetch all public ratings with reviews for this media item
-  const rawReviews = await db.query.ratings.findMany({
-    where: (r, { and, eq, isNotNull, ne }) =>
-      and(
-        eq(r.mediaItemId, media.id),
-        isNotNull(r.reviewText),
-        ne(r.reviewText, ""),
-        isNotNull(r.collectionId)
-      ),
+  // Fetch all public ratings with reviews for this media item (if media exists in DB)
+  const isEphemeral = typeof media.id === "string" && media.id.startsWith("tmdb-");
+  const rawReviews = isEphemeral
+    ? []
+    : await db.query.ratings.findMany({
+        where: (r, { and, eq, isNotNull, ne }) =>
+          and(
+            eq(r.mediaItemId, media.id),
+            isNotNull(r.reviewText),
+            ne(r.reviewText, ""),
+            isNotNull(r.collectionId)
+          ),
     orderBy: [desc(ratings.updatedAt)],
     columns: {
       personalNotes: false, // Strict privacy: Never expose private notes
@@ -66,7 +156,7 @@ export async function GET(
     },
   });
 
-  const session = await (await import("@/lib/server-session")).getServerSession();
+  const session = await (await import("@/lib/server-session")).getServerSession(request);
   const { getBlockedUserIds } = await import("@/lib/safety");
   const blockedUserIds = session ? await getBlockedUserIds(session.user.id) : new Set<string>();
 
