@@ -151,13 +151,61 @@ export function getAccessibleForeground(hex: string): string {
   return darkContrast >= lightContrast ? "#102523" : "#FFFFFF";
 }
 
+export const PALETTE = {
+  dark: {
+    background: "#111514",
+    card: "#141A17",
+    cardForeground: "#F1F0E9",
+    surface: "#18201C",
+    surfaceElevated: "#202A25",
+    popover: "#141A17",
+    popoverForeground: "#F1F0E9",
+    secondary: "#222C27",
+    secondaryForeground: "#E2E8E4",
+    muted: "#1C2420",
+    mutedForeground: "#8FA095",
+    border: "#28342D",
+    borderSubtle: "#202A25",
+    input: "#18201C",
+    inputBorder: "#28342D",
+    foreground: "#F1F0E9",
+  },
+  light: {
+    background: "#F7F6F0",
+    card: "#FFFFFF",
+    cardForeground: "#141A17",
+    surface: "#FFFFFF",
+    surfaceElevated: "#EBEAE3",
+    popover: "#FFFFFF",
+    popoverForeground: "#141A17",
+    secondary: "#EDECE4",
+    secondaryForeground: "#222C27",
+    muted: "#F0EEE6",
+    mutedForeground: "#66736A",
+    border: "#DBD8CC",
+    borderSubtle: "#E8E5DB",
+    input: "#FFFFFF",
+    inputBorder: "#DBD8CC",
+    foreground: "#141A17",
+  },
+} as const;
+
 /**
  * Computes a hover shade by adjusting RGB lightness slightly.
+ * Handles extreme dark colors (< 0.05 lum) by adding a lightness offset.
  */
 export function getHoverShade(hex: string): string {
   const [r, g, b] = hexToRgb(hex);
   const lum = getRelativeLuminance(r, g, b);
-  // If color is relatively bright, darken slightly for hover (e.g. 10%); if dark, lighten slightly
+
+  if (lum < 0.05) {
+    const offset = 35;
+    const clamp = (n: number) => Math.min(255, Math.max(0, n + offset));
+    const [nr, ng, nb] = [clamp(r), clamp(g), clamp(b)];
+    return `#${nr.toString(16).padStart(2, "0")}${ng.toString(16).padStart(2, "0")}${nb.toString(16).padStart(2, "0")}`.toUpperCase();
+  }
+
+  // If color is relatively bright, darken slightly for hover (e.g. 12%); if dark, lighten slightly
   const factor = lum > 0.4 ? 0.88 : 1.15;
   const clamp = (n: number) => Math.min(255, Math.max(0, Math.round(n * factor)));
   const [nr, ng, nb] = [clamp(r), clamp(g), clamp(b)];
@@ -168,40 +216,38 @@ export function getHoverShade(hex: string): string {
  * Computes an accessible accent color to be used as text/foreground on page surfaces.
  * In Dark mode, bright accents contrast well against #111514 (e.g. #89D5D5 has 11:1).
  * In Light mode (#F7F6F0), bright accents like teal (#89D5D5) have poor contrast (~1.5:1).
- * This function darkens the color while preserving the hue to guarantee WCAG AA >= 4.5:1.
+ * Uses linear interpolation to guarantee WCAG AA >= 4.5:1 even on extreme accents (#000000, #FFFFFF).
  */
 export function getAccessiblePrimaryText(accentHex: string, mode: "light" | "dark" = "dark"): string {
   const norm = normalizeHexColor(accentHex);
   const [r, g, b] = hexToRgb(norm);
-  const bg = mode === "light" ? "#F7F6F0" : "#111514";
+  const bg = mode === "light" ? PALETTE.light.background : PALETTE.dark.background;
 
   if (getContrastRatio(norm, bg) >= 4.5) {
     return norm;
   }
 
   if (mode === "light") {
-    let factor = 0.85;
-    for (let i = 0; i < 15; i++) {
-      const nr = Math.max(0, Math.round(r * factor));
-      const ng = Math.max(0, Math.round(g * factor));
-      const nb = Math.max(0, Math.round(b * factor));
+    // Darken towards black [0, 0, 0]
+    for (let t = 0.05; t <= 1.0; t += 0.05) {
+      const nr = Math.round(r * (1 - t));
+      const ng = Math.round(g * (1 - t));
+      const nb = Math.round(b * (1 - t));
       const darkened = `#${nr.toString(16).padStart(2, "0")}${ng.toString(16).padStart(2, "0")}${nb.toString(16).padStart(2, "0")}`.toUpperCase();
       if (getContrastRatio(darkened, bg) >= 4.5) {
         return darkened;
       }
-      factor -= 0.05;
     }
   } else {
-    let factor = 1.15;
-    for (let i = 0; i < 15; i++) {
-      const nr = Math.min(255, Math.round(r * factor));
-      const ng = Math.min(255, Math.round(g * factor));
-      const nb = Math.min(255, Math.round(b * factor));
+    // Lighten towards white [255, 255, 255]
+    for (let t = 0.05; t <= 1.0; t += 0.05) {
+      const nr = Math.min(255, Math.round(r + (255 - r) * t));
+      const ng = Math.min(255, Math.round(g + (255 - g) * t));
+      const nb = Math.min(255, Math.round(b + (255 - b) * t));
       const lightened = `#${nr.toString(16).padStart(2, "0")}${ng.toString(16).padStart(2, "0")}${nb.toString(16).padStart(2, "0")}`.toUpperCase();
       if (getContrastRatio(lightened, bg) >= 4.5) {
         return lightened;
       }
-      factor += 0.05;
     }
   }
 
@@ -234,56 +280,123 @@ export function getThemeTokens(accentHex: string, mode: "light" | "dark" = "dark
   const fg = getAccessibleForeground(normalized);
   const hover = getHoverShade(normalized);
   const primaryText = getAccessiblePrimaryText(normalized, mode);
-
-  if (mode === "light") {
-    return {
-      "--background": "#F5F3EF",
-      "--foreground": "#191C1B",
-      "--card": "#FFFFFF",
-      "--card-foreground": "#191C1B",
-      "--surface": "#EEEBE5",
-      "--surface-elevated": "#FFFFFF",
-      "--popover": "#FFFFFF",
-      "--popover-foreground": "#191C1B",
-      "--primary": normalized,
-      "--primary-foreground": fg,
-      "--primary-hover": hover,
-      "--primary-text": primaryText,
-      "--secondary": "#E4E1DB",
-      "--secondary-foreground": "#191C1B",
-      "--muted": "#E8E5DF",
-      "--muted-foreground": "#656A66",
-      "--border": "#DCD8D0",
-      "--border-subtle": "#E8E5DF",
-      "--input": "#FFFFFF",
-      "--input-border": "#DCD8D0",
-      "--ring": normalized,
-    };
-  }
+  const palette = mode === "light" ? PALETTE.light : PALETTE.dark;
 
   return {
-    "--background": "#111514",
-    "--foreground": "#F1F0E9",
-    "--card": "#18211D",
-    "--card-foreground": "#F1F0E9",
-    "--surface": "#1E2A25",
-    "--surface-elevated": "#23302B",
-    "--popover": "#141A17",
-    "--popover-foreground": "#F1F0E9",
+    "--background": palette.background,
+    "--foreground": palette.foreground,
+    "--card": palette.card,
+    "--card-foreground": palette.cardForeground,
+    "--surface": palette.surface,
+    "--surface-elevated": palette.surfaceElevated,
+    "--surface-raised": palette.surfaceElevated,
+    "--popover": palette.popover,
+    "--popover-foreground": palette.popoverForeground,
     "--primary": normalized,
     "--primary-foreground": fg,
     "--primary-hover": hover,
     "--primary-text": primaryText,
-    "--secondary": "#22312A",
-    "--secondary-foreground": "#F1F0E9",
-    "--muted": "#1E2A25",
-    "--muted-foreground": "#8FA095",
-    "--border": "#303B34",
-    "--border-subtle": "#25332B",
-    "--input": "#25332B",
-    "--input-border": "#303B34",
+    "--secondary": palette.secondary,
+    "--secondary-foreground": palette.secondaryForeground,
+    "--muted": palette.muted,
+    "--muted-foreground": palette.mutedForeground,
+    "--border": palette.border,
+    "--border-subtle": palette.borderSubtle,
+    "--input": palette.input,
+    "--input-border": palette.inputBorder,
     "--ring": normalized,
   };
+}
+
+/**
+ * Produces client-side inline script for instant zero-FOUC theme & accent initialization.
+ */
+export function getThemeInitScript(): string {
+  return `(function() {
+  try {
+    var storedTheme = localStorage.getItem('ar_theme:guest') || 'dark';
+    var storedAccent = localStorage.getItem('ar_accent:guest') || '#89D5D5';
+    var isDark = storedTheme === 'dark';
+    if (storedTheme === 'system') {
+      isDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    }
+    var resolved = isDark ? 'dark' : 'light';
+    var root = document.documentElement;
+    root.classList.remove('light', 'dark');
+    root.classList.add(resolved);
+    root.setAttribute('data-theme', resolved);
+
+    var hex = storedAccent.replace('#', '');
+    if (hex.length === 3) hex = hex.split('').map(function(c) { return c + c; }).join('');
+    if (/^[0-9A-Fa-f]{6}$/.test(hex)) {
+      var r = parseInt(hex.substring(0, 2), 16);
+      var g = parseInt(hex.substring(2, 4), 16);
+      var b = parseInt(hex.substring(4, 6), 16);
+      function toLinear(c) { var s = c / 255; return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4); }
+      function getLum(red, green, blue) {
+        return 0.2126 * toLinear(red) + 0.7152 * toLinear(green) + 0.0722 * toLinear(blue);
+      }
+      function getRatio(l1, l2) {
+        return (Math.max(l1, l2) + 0.05) / (Math.min(l1, l2) + 0.05);
+      }
+      var lum = getLum(r, g, b);
+      var darkBgLum = 0.0053;
+      var lightBgLum = 0.9388;
+      var darkContrast = getRatio(lum, 0.02);
+      var lightContrast = getRatio(lum, 1.0);
+      var fg = darkContrast >= lightContrast ? '#102523' : '#FFFFFF';
+
+      var hover;
+      if (lum < 0.05) {
+        var hr = Math.min(255, r + 35).toString(16).padStart(2, '0');
+        var hg = Math.min(255, g + 35).toString(16).padStart(2, '0');
+        var hb = Math.min(255, b + 35).toString(16).padStart(2, '0');
+        hover = '#' + hr + hg + hb;
+      } else {
+        var factor = lum > 0.4 ? 0.88 : 1.15;
+        function clamp(n) { return Math.min(255, Math.max(0, Math.round(n * factor))); }
+        var hr = clamp(r).toString(16).padStart(2, '0');
+        var hg = clamp(g).toString(16).padStart(2, '0');
+        var hb = clamp(b).toString(16).padStart(2, '0');
+        hover = '#' + hr + hg + hb;
+      }
+
+      var fullHex = '#' + hex.toUpperCase();
+      var primaryText = fullHex;
+      var bgLum = resolved === 'light' ? lightBgLum : darkBgLum;
+      if (getRatio(lum, bgLum) < 4.5) {
+        if (resolved === 'light') {
+          for (var t = 0.05; t <= 1.0; t += 0.05) {
+            var tr = Math.round(r * (1 - t));
+            var tg = Math.round(g * (1 - t));
+            var tb = Math.round(b * (1 - t));
+            if (getRatio(getLum(tr, tg, tb), bgLum) >= 4.5) {
+              primaryText = '#' + tr.toString(16).padStart(2, '0') + tg.toString(16).padStart(2, '0') + tb.toString(16).padStart(2, '0');
+              break;
+            }
+          }
+        } else {
+          for (var t = 0.05; t <= 1.0; t += 0.05) {
+            var tr = Math.min(255, Math.round(r + (255 - r) * t));
+            var tg = Math.min(255, Math.round(g + (255 - g) * t));
+            var tb = Math.min(255, Math.round(b + (255 - b) * t));
+            if (getRatio(getLum(tr, tg, tb), bgLum) >= 4.5) {
+              primaryText = '#' + tr.toString(16).padStart(2, '0') + tg.toString(16).padStart(2, '0') + tb.toString(16).padStart(2, '0');
+              break;
+            }
+          }
+        }
+      }
+
+      root.style.setProperty('--primary', fullHex);
+      root.style.setProperty('--primary-foreground', fg);
+      root.style.setProperty('--primary-hover', hover);
+      root.style.setProperty('--primary-text', primaryText);
+      root.style.setProperty('--ring', fullHex);
+      root.style.setProperty('--feature-accent', fullHex);
+    }
+  } catch (e) {}
+})();`;
 }
 
 /**

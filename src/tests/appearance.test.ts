@@ -5,6 +5,7 @@ import {
   normalizeHexColor,
   getContrastRatio,
   getAccessibleForeground,
+  getAccessiblePrimaryText,
   getThemeTokens,
   getProfileAccentTokens,
   DEFAULT_ACCENT_COLOR,
@@ -63,8 +64,8 @@ describe("Personalized Themes & Accent Color Engine", () => {
     });
 
     it("computes accurate contrast ratios against light backgrounds", () => {
-      // Dark text against light mode canvas (#F5F3EF)
-      const textContrastLight = getContrastRatio("#191C1B", "#F5F3EF");
+      // Dark text against light mode canvas (#F7F6F0)
+      const textContrastLight = getContrastRatio("#141A17", "#F7F6F0");
       assert.ok(
         textContrastLight >= 10,
         `Dark text on light background must exceed WCAG AAA (got ${textContrastLight}:1)`
@@ -88,6 +89,27 @@ describe("Personalized Themes & Accent Color Engine", () => {
       // Deep dark navy (#0B192C) must use white text
       const darkNavyFg = getAccessibleForeground("#0B192C");
       assert.strictEqual(darkNavyFg, "#FFFFFF");
+    });
+
+    it("guarantees >= 4.5:1 accessible text contrast for extreme and preset accents", () => {
+      const testColors = ["#000000", "#FFFFFF", "#89D5D5", "#F97316", "#9D7FE6"];
+      for (const hex of testColors) {
+        // Dark mode test
+        const darkPrimaryText = getAccessiblePrimaryText(hex, "dark");
+        const darkRatio = getContrastRatio(darkPrimaryText, "#111514");
+        assert.ok(
+          darkRatio >= 4.5,
+          `Dark mode text for ${hex} must achieve >= 4.5:1 (got ${darkRatio}:1 with ${darkPrimaryText})`
+        );
+
+        // Light mode test
+        const lightPrimaryText = getAccessiblePrimaryText(hex, "light");
+        const lightRatio = getContrastRatio(lightPrimaryText, "#F7F6F0");
+        assert.ok(
+          lightRatio >= 4.5,
+          `Light mode text for ${hex} must achieve >= 4.5:1 (got ${lightRatio}:1 with ${lightPrimaryText})`
+        );
+      }
     });
   });
 
@@ -116,6 +138,10 @@ describe("Personalized Themes & Accent Color Engine", () => {
       assert.strictEqual(tokens["--primary"], "#5BA4E6");
       assert.strictEqual(tokens["--background"], "#111514");
       assert.strictEqual(tokens["--foreground"], "#F1F0E9");
+      assert.strictEqual(tokens["--card"], "#141A17");
+      assert.strictEqual(tokens["--surface"], "#18201C");
+      assert.strictEqual(tokens["--surface-elevated"], "#202A25");
+      assert.strictEqual(tokens["--surface-raised"], "#202A25");
       assert.ok(tokens["--primary-foreground"]);
       assert.ok(tokens["--primary-hover"]);
       assert.ok(tokens["--ring"]);
@@ -124,9 +150,12 @@ describe("Personalized Themes & Accent Color Engine", () => {
     it("generates correct theme tokens for light mode", () => {
       const tokens = getThemeTokens("#5BA4E6", "light");
       assert.strictEqual(tokens["--primary"], "#5BA4E6");
-      assert.strictEqual(tokens["--background"], "#F5F3EF");
-      assert.strictEqual(tokens["--foreground"], "#191C1B");
+      assert.strictEqual(tokens["--background"], "#F7F6F0");
+      assert.strictEqual(tokens["--foreground"], "#141A17");
       assert.strictEqual(tokens["--card"], "#FFFFFF");
+      assert.strictEqual(tokens["--surface"], "#FFFFFF");
+      assert.strictEqual(tokens["--surface-elevated"], "#EBEAE3");
+      assert.strictEqual(tokens["--surface-raised"], "#EBEAE3");
     });
 
     it("generates scoped profile accent tokens without mutating global background", () => {

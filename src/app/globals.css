@@ -36,6 +36,7 @@
   --color-card-foreground: var(--card-foreground);
   --color-surface: var(--surface);
   --color-surface-elevated: var(--surface-elevated);
+  --color-surface-raised: var(--surface-elevated);
   --color-popover: var(--popover);
   --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
@@ -51,24 +52,62 @@
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   --color-border: var(--border);
+  --color-border-card: var(--border-card);
+  --color-border-dialog: var(--border-dialog);
+  --color-border-input: var(--border-input);
   --color-border-subtle: var(--border-subtle);
   --color-input: var(--input);
   --color-input-border: var(--input-border);
   --color-ring: var(--ring);
+
+  /* Semantic component radius tokens */
+  --radius-card: var(--radius-card);
+  --radius-dialog: var(--radius-dialog);
+  --radius-button: var(--radius-button);
+  --radius-input: var(--radius-input);
+  --radius-comment: var(--radius-comment);
+  --radius-badge: var(--radius-badge);
+
+  /* Semantic component shadow tokens */
+  --shadow-card: var(--shadow-card);
+  --shadow-dialog: var(--shadow-dialog);
+  --shadow-popover: var(--shadow-popover);
+  --shadow-elevated: var(--shadow-elevated);
 }
 
 /* =========================================================================
    DESIGN TOKENS — Dark (Default) & Light Themes
    ========================================================================= */
+:root {
+  /* =========================================================================
+     RADII HIERARCHY (Component-specific tokens with global fallback)
+     ========================================================================= */
+  --radius-base: 0.5rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.25rem;
+
+  --radius: var(--radius-base);
+  --radius-card: var(--radius-lg);
+  --radius-dialog: var(--radius-xl);
+  --radius-button: var(--radius-md);
+  --radius-input: var(--radius-md);
+  --radius-comment: var(--radius-card);
+  --radius-badge: var(--radius-sm);
+}
+
 :root,
 .dark {
   --background: #111514;
   --foreground: #f1f0e9;
-  --card: #181d1a;
+  --card: #141a17;
   --card-foreground: #f1f0e9;
-  --surface: #141a17;
-  --surface-elevated: #18201c;
-  --popover: #181d1a;
+  --surface: #18201c;
+  --surface-elevated: #202a25;
+  --surface-raised: #202a25;
+  --popover: #141a17;
   --popover-foreground: #f1f0e9;
   --primary: #89d5d5;
   --primary-foreground: #102523;
@@ -80,17 +119,27 @@
   --secondary: #222c27;
   --secondary-foreground: #e2e8e4;
   --muted: #1c2420;
-  --muted-foreground: #94a39b;
-  --accent: #26342d;
+  --muted-foreground: #8fa095;
+  --accent: #202a25;
   --accent-foreground: #f1f0e9;
   --destructive: #ef4444;
   --destructive-foreground: #ffffff;
-  --border: #303b34;
-  --border-subtle: #242f2b;
-  --input: #1b231f;
-  --input-border: #303b34;
+  --border: #28342d;
+  --border-subtle: #202a25;
+  --input: #18201c;
+  --input-border: #28342d;
   --ring: #89d5d5;
-  --radius: 0.5rem;
+
+  /* Component Shadows */
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.15), 0 1px 2px -1px rgb(0 0 0 / 0.15);
+  --shadow-dialog: 0 25px 50px -12px rgb(0 0 0 / 0.45);
+  --shadow-popover: 0 10px 15px -3px rgb(0 0 0 / 0.3);
+  --shadow-elevated: 0 4px 6px -1px rgb(0 0 0 / 0.2);
+
+  /* Component Borders with Fallback */
+  --border-card: var(--border);
+  --border-dialog: var(--border);
+  --border-input: var(--input-border);
 
   /* Feature / Scoped Profile accents */
   --feature-accent: var(--primary, #89d5d5);
@@ -130,7 +179,8 @@
   --card: #ffffff;
   --card-foreground: #141a17;
   --surface: #ffffff;
-  --surface-elevated: #faf9f5;
+  --surface-elevated: #ebeae3;
+  --surface-raised: #ebeae3;
   --popover: #ffffff;
   --popover-foreground: #141a17;
   --primary: #89d5d5;
@@ -144,15 +194,27 @@
   --secondary-foreground: #222c27;
   --muted: #f0eee6;
   --muted-foreground: #66736a;
-  --accent: #e8e6dc;
+  --accent: #ebeae3;
   --accent-foreground: #141a17;
   --destructive: #dc2626;
   --destructive-foreground: #ffffff;
   --border: #dbd8cc;
   --border-subtle: #e8e5db;
   --input: #ffffff;
-  --input-border: #d2cfc2;
+  --input-border: #dbd8cc;
   --ring: var(--primary, #89d5d5);
+
+  /* Component Shadows */
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.05), 0 1px 2px -1px rgb(0 0 0 / 0.05);
+  --shadow-dialog: 0 25px 50px -12px rgb(0 0 0 / 0.18);
+  --shadow-popover: 0 10px 15px -3px rgb(0 0 0 / 0.1);
+  --shadow-elevated: 0 4px 6px -1px rgb(0 0 0 / 0.08);
+
+  /* Component Borders with Fallback */
+  --border-card: var(--border);
+  --border-dialog: var(--border);
+  --border-input: var(--input-border);
+
   --feature-accent: var(--primary, #89d5d5);
 }
 
@@ -589,9 +651,9 @@ h1, h2, h3, h4 {
 :root:not(.light) input:-webkit-autofill,
 :root:not(.light) input:-webkit-autofill:hover,
 :root:not(.light) input:-webkit-autofill:focus {
-  -webkit-box-shadow: 0 0 0 1000px #18211d inset !important;
+  -webkit-box-shadow: 0 0 0 1000px #18201c inset !important;
   -webkit-text-fill-color: #f1f0e9 !important;
-  box-shadow: 0 0 0 1000px #18211d inset !important;
+  box-shadow: 0 0 0 1000px #18201c inset !important;
   color: #f1f0e9 !important;
   transition: background-color 5000s ease-in-out 0s;
   caret-color: #f1f0e9 !important;
