@@ -20,6 +20,10 @@ export async function GET(request: NextRequest) {
     targetUserId = targetUser?.id || null;
   }
 
+  if (!targetUserId && !username && session?.user?.id) {
+    targetUserId = session.user.id;
+  }
+
   if (!targetUserId) {
     return NextResponse.json({ error: "User not specified" }, { status: 400 });
   }
