@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, use, useRef } from "react";
+import { useState, useEffect, useMemo, use, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
@@ -42,6 +42,7 @@ import {
 import { CollectionRubricDialog } from "./components/collection-rubric-dialog";
 import { CollectionBannerDialog } from "./components/collection-banner-dialog";
 import { CollectionAddEntryDialog } from "./components/collection-add-entry-dialog";
+import { TierBoardEditorModal } from "./components/tier-board-editor-modal";
 import { calibrateOklchTheme } from "@/lib/palette";
 
 export default function CollectionDetailPage({
@@ -79,8 +80,12 @@ export default function CollectionDetailPage({
   // Rubric Adjustment Modal
   const [showRubricModal, setShowRubricModal] = useState(false);
   const [editingRubricCategories, setEditingRubricCategories] = useState<any[]>([]);
+  const [editingRubricTiers, setEditingRubricTiers] = useState<any[]>([]);
   const [savingRubric, setSavingRubric] = useState(false);
   const [customizeForCollectionOnly, setCustomizeForCollectionOnly] = useState(true);
+
+  // Dedicated Visual Tier-Board Editor Modal
+  const [showTierEditor, setShowTierEditor] = useState(false);
 
   // Banner Customization Modal
   const [showBannerModal, setShowBannerModal] = useState(false);
@@ -102,10 +107,17 @@ export default function CollectionDetailPage({
   const [tvSeasonData, setTvSeasonData] = useState<any | null>(null);
 
   const handleOpenRubricModal = () => {
-    if (!collection?.defaultRatingSystem?.categories) return;
-    setEditingRubricCategories(
-      collection.defaultRatingSystem.categories.map((c: any) => ({ ...c }))
-    );
+    const sys = collection?.defaultRatingSystem;
+    if (!sys) return;
+    if (sys.type === "tier") {
+      setEditingRubricTiers(
+        (sys.tiers || []).map((t: any) => ({ ...t }))
+      );
+    } else {
+      setEditingRubricCategories(
+        (sys.categories || []).map((c: any) => ({ ...c }))
+      );
+    }
     setShowRubricModal(true);
   };
 
@@ -113,6 +125,29 @@ export default function CollectionDetailPage({
     if (!collection?.defaultRatingSystem?.id) return;
     setSavingRubric(true);
     try {
+      const isTierSys = collection?.defaultRatingSystem?.type === "tier";
+      const payload: any = isTierSys
+        ? {
+            type: "tier",
+            tiers: editingRubricTiers.map((t, idx) => ({
+              id: t.id?.startsWith("tier_temp_") ? undefined : t.id,
+              name: t.name,
+              description: t.description,
+              color: t.color,
+              sortOrder: idx + 1,
+            })),
+          }
+        : {
+            type: "numerical",
+            categories: editingRubricCategories.map((c, idx) => ({
+              id: c.id,
+              name: c.name,
+              weight: c.weight,
+              isRequired: c.isRequired,
+              sortOrder: idx + 1,
+            })),
+          };
+
       if (customizeForCollectionOnly) {
         // Step 1: Duplicate the current rubric
         const dupRes = await fetch(`/api/rating-systems/${collection.defaultRatingSystem.id}/duplicate`, {
@@ -122,19 +157,13 @@ export default function CollectionDetailPage({
         const dupData = await dupRes.json();
         const newSystemId = dupData.ratingSystem.id;
 
-        // Step 2: Apply the updated categories and title
+        // Step 2: Apply the updated categories/tiers and title
         const patchRes = await fetch(`/api/rating-systems/${newSystemId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: `${collectionTitle} Rubric`,
-            categories: editingRubricCategories.map((c, idx) => ({
-              id: c.id,
-              name: c.name,
-              weight: c.weight,
-              isRequired: c.isRequired,
-              sortOrder: idx + 1,
-            })),
+            ...payload,
           }),
         });
         if (!patchRes.ok) throw new Error("Failed to update collection rubric");
@@ -156,15 +185,7 @@ export default function CollectionDetailPage({
         const res = await fetch(`/api/rating-systems/${collection.defaultRatingSystem.id}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            categories: editingRubricCategories.map((c, idx) => ({
-              id: c.id,
-              name: c.name,
-              weight: c.weight,
-              isRequired: c.isRequired,
-              sortOrder: idx + 1,
-            })),
-          }),
+          body: JSON.stringify(payload),
         });
 
         if (res.ok) {
@@ -449,35 +470,36 @@ export default function CollectionDetailPage({
     }
   };
 
-  useEffect(() => {
-    async function fetchCollection() {
-      try {
-        setLoading(true);
-        const res = await fetch(`/api/collections/${id}`);
-        if (!res.ok) {
-          throw new Error("Failed to load collection");
-        }
-        const data = await res.json();
-        setCollection(data.collection);
-        setIsOwner(data.isOwner || false);
-        setVisibility(data.collection.visibility || (data.collection.isPublic ? "public" : "private"));
-
-        // Build ratings map
-        const map: Record<string, any> = {};
-        if (Array.isArray(data.ratings)) {
-          for (const r of data.ratings) {
-            map[r.mediaItemId] = r;
-          }
-        }
-        setRatingsMap(map);
-      } catch (err: any) {
-        setError(err?.message || "An error occurred");
-      } finally {
-        setLoading(false);
+  const fetchCollection = useCallback(async () => {
+    try {
+      setLoading(true);
+      const res = await fetch(`/api/collections/${id}`);
+      if (!res.ok) {
+        throw new Error("Failed to load collection");
       }
+      const data = await res.json();
+      setCollection(data.collection);
+      setIsOwner(data.isOwner || false);
+      setVisibility(data.collection.visibility || (data.collection.isPublic ? "public" : "private"));
+
+      // Build ratings map
+      const map: Record<string, any> = {};
+      if (Array.isArray(data.ratings)) {
+        for (const r of data.ratings) {
+          map[r.mediaItemId] = r;
+        }
+      }
+      setRatingsMap(map);
+    } catch (err: any) {
+      setError(err?.message || "An error occurred");
+    } finally {
+      setLoading(false);
     }
-    fetchCollection();
   }, [id]);
+
+  useEffect(() => {
+    fetchCollection();
+  }, [fetchCollection]);
 
   // Extract available seasons if TV show
   const availableSeasons = useMemo(() => {
@@ -730,6 +752,7 @@ export default function CollectionDetailPage({
         viewMode={viewMode}
         setViewMode={setViewMode}
         isTierCollection={isTierCollection}
+        onOpenTierEditor={() => setShowTierEditor(true)}
       />
 
       {/* 3. Main Rankings Entries & Community Discussion */}
@@ -743,6 +766,7 @@ export default function CollectionDetailPage({
           onSelectItemForRating={isOwner ? setSelectedItemForRating : () => {}}
           onSetEntryToDelete={setEntryToDelete}
           onQuickAssignTier={isOwner ? handleQuickAssignTier : undefined}
+          onOpenTierEditor={() => setShowTierEditor(true)}
         />
 
         <CommentsSection collectionId={collection.id} isOwner={isOwner} />
@@ -768,13 +792,29 @@ export default function CollectionDetailPage({
       <CollectionRubricDialog
         isOpen={showRubricModal}
         onClose={() => setShowRubricModal(false)}
+        isTier={isTierCollection}
         categories={editingRubricCategories}
         onCategoriesChange={setEditingRubricCategories}
+        tiers={editingRubricTiers}
+        onTiersChange={setEditingRubricTiers}
         customizeForCollectionOnly={customizeForCollectionOnly}
         onCustomizeScopeChange={setCustomizeForCollectionOnly}
         onSave={handleSaveRubric}
         isSaving={savingRubric}
       />
+
+      {/* 5. Dedicated Visual Tier-Board Editor Modal */}
+      {isTierCollection && (
+        <TierBoardEditorModal
+          isOpen={showTierEditor}
+          onClose={() => setShowTierEditor(false)}
+          collection={collection}
+          processedEntries={processedEntries}
+          onOpenCustomizeTiers={handleOpenRubricModal}
+          onQuickAssignTier={handleQuickAssignTier}
+          onRefreshCollection={fetchCollection}
+        />
+      )}
 
       <CollectionBannerDialog
         isOpen={showBannerModal}

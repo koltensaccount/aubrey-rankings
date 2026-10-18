@@ -23,6 +23,7 @@ interface CollectionToolbarProps {
   viewMode: "list" | "editorial" | "compact" | "tier_board";
   setViewMode: (mode: "list" | "editorial" | "compact" | "tier_board") => void;
   isTierCollection?: boolean;
+  onOpenTierEditor?: () => void;
 }
 
 export function CollectionToolbar({
@@ -42,6 +43,7 @@ export function CollectionToolbar({
   viewMode,
   setViewMode,
   isTierCollection,
+  onOpenTierEditor,
 }: CollectionToolbarProps) {
   return (
     <div className="sticky top-20 z-30 bg-background/95 backdrop-blur-md border-b border-border">
@@ -56,6 +58,18 @@ export function CollectionToolbar({
             >
               <Plus size={13} />
               <span>Add Item</span>
+            </button>
+          )}
+
+          {/* Dedicated Rank Items button for Tier collections */}
+          {isOwner && isTierCollection && onOpenTierEditor && (
+            <button
+              type="button"
+              onClick={onOpenTierEditor}
+              className="px-3 py-1.5 rounded-button bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+            >
+              <Layers size={13} />
+              <span>Rank Items</span>
             </button>
           )}
 

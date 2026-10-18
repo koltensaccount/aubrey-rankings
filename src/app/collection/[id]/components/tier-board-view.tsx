@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
-import { Sliders, MoveRight, Check, Loader2 } from "lucide-react";
+import { Sliders, MoveRight, Check, Loader2, Layers } from "lucide-react";
 
 interface TierBoardViewProps {
   collection: any;
@@ -10,6 +10,7 @@ interface TierBoardViewProps {
   isOwner: boolean;
   onSelectItemForRating: (media: any) => void;
   onQuickAssignTier?: (mediaItem: any, tierId: string | null) => Promise<void>;
+  onOpenTierEditor?: () => void;
 }
 
 export function TierBoardView({
@@ -18,6 +19,7 @@ export function TierBoardView({
   isOwner,
   onSelectItemForRating,
   onQuickAssignTier,
+  onOpenTierEditor,
 }: TierBoardViewProps) {
   const tiers: any[] = collection?.defaultRatingSystem?.tiers || [];
   const [movingEntryId, setMovingEntryId] = useState<string | null>(null);
@@ -50,6 +52,33 @@ export function TierBoardView({
 
   return (
     <div className="space-y-4">
+      {/* Owner Action: Dedicated Visual Tier-Board Editor Banner */}
+      {isOwner && onOpenTierEditor && (
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-lg bg-gradient-to-r from-amber-500/10 via-card to-card border border-amber-500/20 shadow-sm">
+          <div className="flex items-center gap-3 text-left">
+            <div className="w-10 h-10 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+              <Layers size={20} />
+            </div>
+            <div>
+              <h3 className="text-sm font-bold uppercase font-display text-foreground tracking-wide">
+                Interactive Tier-Board Editor
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Drag and sort titles between tiers, reorder within rows, or manage unranked titles.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onOpenTierEditor}
+            className="w-full sm:w-auto px-4 py-2 rounded-button bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+          >
+            <Layers size={14} />
+            <span>Rank Items</span>
+          </button>
+        </div>
+      )}
+
       {/* Tier Rows */}
       {tiers.map((tier) => {
         const entriesInTier = entriesByTier[tier.id] || [];
@@ -90,18 +119,21 @@ export function TierBoardView({
               ) : (
                 entriesInTier.map((entry) => {
                   const media = entry.mediaItem;
+                  const isStill = media.mediaType === "episode" || Boolean(media.stillPath);
                   const isMoving = movingEntryId === entry.id;
                   return (
                     <div
                       key={entry.id}
-                      className="group relative w-24 sm:w-28 rounded-card overflow-hidden border border-border bg-card shadow-xs hover:border-primary/60 transition-all hover:scale-102"
+                      className={`group relative rounded-card overflow-hidden border border-border bg-card shadow-xs hover:border-primary/60 transition-all hover:scale-102 ${
+                        isStill ? "w-36 sm:w-40" : "w-24 sm:w-28"
+                      }`}
                     >
-                      <div className="relative aspect-[2/3] w-full overflow-hidden bg-surface">
+                      <div className={`relative w-full overflow-hidden bg-surface ${isStill ? "aspect-[16/9]" : "aspect-[2/3]"}`}>
                         <CinematicMediaCard
                           stillPath={media.stillPath}
                           posterPath={media.posterPath}
                           title={media.title}
-                          aspect="poster"
+                          aspect={isStill ? "video" : "poster"}
                         />
                         {isMoving && (
                           <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-20">
@@ -181,18 +213,21 @@ export function TierBoardView({
           <div className="flex-1 p-3 flex flex-wrap items-center gap-3 min-h-[110px] bg-surface/20">
             {unassignedEntries.map((entry) => {
               const media = entry.mediaItem;
+              const isStill = media.mediaType === "episode" || Boolean(media.stillPath);
               const isMoving = movingEntryId === entry.id;
               return (
                 <div
                   key={entry.id}
-                  className="group relative w-24 sm:w-28 rounded-card overflow-hidden border border-border bg-card shadow-xs hover:border-primary/60 transition-all hover:scale-102"
+                  className={`group relative rounded-card overflow-hidden border border-border bg-card shadow-xs hover:border-primary/60 transition-all hover:scale-102 ${
+                    isStill ? "w-36 sm:w-40" : "w-24 sm:w-28"
+                  }`}
                 >
-                  <div className="relative aspect-[2/3] w-full overflow-hidden bg-surface">
+                  <div className={`relative w-full overflow-hidden bg-surface ${isStill ? "aspect-[16/9]" : "aspect-[2/3]"}`}>
                     <CinematicMediaCard
                       stillPath={media.stillPath}
                       posterPath={media.posterPath}
                       title={media.title}
-                      aspect="poster"
+                      aspect={isStill ? "video" : "poster"}
                     />
                     {isMoving && (
                       <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-20">

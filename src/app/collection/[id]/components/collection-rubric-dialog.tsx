@@ -1,8 +1,20 @@
 "use client";
 
-import React from "react";
-import { Check, Loader2, X } from "lucide-react";
+import React, { useState } from "react";
+import { Check, Loader2, X, Plus, Trash2, ArrowUp, ArrowDown, Layers, Sliders } from "lucide-react";
 import { CinematicSlider } from "@/components/cinematic-slider";
+
+const COLOR_SWATCHES = [
+  "#EF4444", // Red
+  "#F97316", // Orange
+  "#F59E0B", // Amber
+  "#10B981", // Emerald
+  "#06B6D4", // Cyan
+  "#3B82F6", // Blue
+  "#8B5CF6", // Purple
+  "#EC4899", // Pink
+  "#64748B", // Slate
+];
 
 interface RubricCategory {
   id?: string;
@@ -11,11 +23,23 @@ interface RubricCategory {
   [key: string]: any;
 }
 
+interface RubricTier {
+  id?: string;
+  name: string;
+  description?: string;
+  color: string;
+  sortOrder?: number;
+  [key: string]: any;
+}
+
 interface CollectionRubricDialogProps {
   isOpen: boolean;
   onClose: () => void;
+  isTier?: boolean;
   categories: RubricCategory[];
   onCategoriesChange: React.Dispatch<React.SetStateAction<RubricCategory[]>>;
+  tiers?: RubricTier[];
+  onTiersChange?: React.Dispatch<React.SetStateAction<RubricTier[]>>;
   customizeForCollectionOnly: boolean;
   onCustomizeScopeChange: (scope: boolean) => void;
   onSave: () => void;
@@ -25,26 +49,73 @@ interface CollectionRubricDialogProps {
 export function CollectionRubricDialog({
   isOpen,
   onClose,
+  isTier = false,
   categories,
   onCategoriesChange,
+  tiers = [],
+  onTiersChange,
   customizeForCollectionOnly,
   onCustomizeScopeChange,
   onSave,
   isSaving,
 }: CollectionRubricDialogProps) {
+  const [activeColorPickerIdx, setActiveColorPickerIdx] = useState<number | null>(null);
+
   if (!isOpen) return null;
+
+  const handleAddTier = () => {
+    if (!onTiersChange) return;
+    const defaultColor = COLOR_SWATCHES[tiers.length % COLOR_SWATCHES.length];
+    onTiersChange([
+      ...tiers,
+      {
+        id: `tier_temp_${Date.now()}`,
+        name: "New Tier",
+        description: "",
+        color: defaultColor,
+        sortOrder: tiers.length + 1,
+      },
+    ]);
+  };
+
+  const handleRemoveTier = (idx: number) => {
+    if (!onTiersChange || tiers.length <= 1) return;
+    onTiersChange(tiers.filter((_, i) => i !== idx));
+  };
+
+  const handleMoveTier = (idx: number, direction: "up" | "down") => {
+    if (!onTiersChange) return;
+    const targetIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= tiers.length) return;
+    const nextTiers = [...tiers];
+    const [moved] = nextTiers.splice(idx, 1);
+    nextTiers.splice(targetIdx, 0, moved);
+    onTiersChange(nextTiers);
+  };
+
+  const handleUpdateTier = (idx: number, patch: Partial<RubricTier>) => {
+    if (!onTiersChange) return;
+    onTiersChange(tiers.map((t, i) => (i === idx ? { ...t, ...patch } : t)));
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
-      <div className="w-full max-w-lg rounded-dialog bg-card border border-border-dialog p-6 shadow-dialog space-y-5">
+      <div className="w-full max-w-xl rounded-dialog bg-card border border-border-dialog p-6 shadow-dialog space-y-5">
         <div className="flex items-center justify-between pb-3 border-b border-border">
-          <div>
-            <h3 className="font-display text-xl uppercase font-bold text-foreground">
-              Adjust Rubric Weights
-            </h3>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Calibrate the multiplier weights for each evaluation category.
-            </p>
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-primary/20 text-primary flex items-center justify-center">
+              {isTier ? <Layers size={18} /> : <Sliders size={18} />}
+            </div>
+            <div>
+              <h3 className="font-display text-xl uppercase font-bold text-foreground">
+                {isTier ? "Customize Tier Rubric" : "Adjust Rubric Weights"}
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {isTier
+                  ? "Configure tier lanes, colors, labels, and hierarchy for this collection."
+                  : "Calibrate the multiplier weights for each evaluation category."}
+              </p>
+            </div>
           </div>
           <button
             type="button"
@@ -55,35 +126,139 @@ export function CollectionRubricDialog({
           </button>
         </div>
 
-        <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
-          {categories.map((cat, idx) => (
-            <div
-              key={cat.id || idx}
-              className="p-3.5 rounded-lg border border-border bg-surface flex items-center justify-between gap-4"
-            >
-              <span className="font-semibold text-xs text-foreground flex-1">
-                {cat.name}
-              </span>
-              <div className="w-44">
-                <CinematicSlider
-                  min={0}
-                  max={10}
-                  step={0.5}
-                  value={cat.weight}
-                  onChange={(val) => {
-                    onCategoriesChange((prev) =>
-                      prev.map((c, i) => (i === idx ? { ...c, weight: val ?? 1 } : c))
-                    );
-                  }}
-                  allowUnset={false}
-                  showValue={true}
-                  valueSuffix="x"
-                  size="sm"
-                  ariaLabel={`Weight for ${cat.name}`}
-                />
+        {/* Content area: Tier Rows OR Numerical Sliders */}
+        <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
+          {isTier ? (
+            <>
+              {tiers.map((tier, idx) => (
+                <div
+                  key={tier.id || idx}
+                  className="p-3 rounded-lg border border-border bg-surface flex items-center gap-2.5 sm:gap-3"
+                >
+                  {/* Color Swatch Picker */}
+                  <div className="relative shrink-0">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setActiveColorPickerIdx((prev) => (prev === idx ? null : idx))
+                      }
+                      title="Select tier color"
+                      className="w-8 h-8 rounded-md border border-white/20 shadow-xs cursor-pointer hover:scale-105 transition-transform"
+                      style={{ backgroundColor: tier.color }}
+                    />
+                    {activeColorPickerIdx === idx && (
+                      <div className="absolute left-0 top-10 z-30 p-2 bg-card border border-border rounded-lg shadow-xl grid grid-cols-3 gap-1.5 w-32 backdrop-blur-md">
+                        {COLOR_SWATCHES.map((color) => (
+                          <button
+                            key={color}
+                            type="button"
+                            onClick={() => {
+                              handleUpdateTier(idx, { color });
+                              setActiveColorPickerIdx(null);
+                            }}
+                            className="w-7 h-7 rounded border border-white/20 hover:scale-110 transition-transform cursor-pointer"
+                            style={{ backgroundColor: color }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Tier Name Input */}
+                  <div className="w-16 sm:w-20 shrink-0">
+                    <input
+                      type="text"
+                      value={tier.name}
+                      onChange={(e) => handleUpdateTier(idx, { name: e.target.value })}
+                      maxLength={10}
+                      className="w-full bg-background border border-border rounded px-2 py-1 text-xs font-display font-bold uppercase text-foreground text-center focus:outline-none focus:border-primary"
+                      placeholder="S"
+                    />
+                  </div>
+
+                  {/* Tier Description Input */}
+                  <div className="flex-1 min-w-0">
+                    <input
+                      type="text"
+                      value={tier.description || ""}
+                      onChange={(e) => handleUpdateTier(idx, { description: e.target.value })}
+                      placeholder="Description (e.g. Masterpiece)"
+                      className="w-full bg-background border border-border rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary truncate"
+                    />
+                  </div>
+
+                  {/* Reorder and Delete Controls */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      disabled={idx === 0}
+                      onClick={() => handleMoveTier(idx, "up")}
+                      className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 cursor-pointer"
+                      title="Move tier up"
+                    >
+                      <ArrowUp size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={idx === tiers.length - 1}
+                      onClick={() => handleMoveTier(idx, "down")}
+                      className="p-1 rounded text-muted-foreground hover:text-foreground disabled:opacity-30 cursor-pointer"
+                      title="Move tier down"
+                    >
+                      <ArrowDown size={13} />
+                    </button>
+                    <button
+                      type="button"
+                      disabled={tiers.length <= 1}
+                      onClick={() => handleRemoveTier(idx)}
+                      className="p-1 rounded text-muted-foreground hover:text-destructive disabled:opacity-30 cursor-pointer ml-1"
+                      title="Delete tier"
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              <button
+                type="button"
+                onClick={handleAddTier}
+                className="w-full py-2 border border-dashed border-border rounded-lg text-xs font-semibold text-muted-foreground hover:text-foreground hover:border-border-dialog flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <Plus size={14} />
+                <span>Add Tier Row</span>
+              </button>
+            </>
+          ) : (
+            categories.map((cat, idx) => (
+              <div
+                key={cat.id || idx}
+                className="p-3.5 rounded-lg border border-border bg-surface flex items-center justify-between gap-4"
+              >
+                <span className="font-semibold text-xs text-foreground flex-1">
+                  {cat.name}
+                </span>
+                <div className="w-44">
+                  <CinematicSlider
+                    min={0}
+                    max={10}
+                    step={0.5}
+                    value={cat.weight}
+                    onChange={(val) => {
+                      onCategoriesChange((prev) =>
+                        prev.map((c, i) => (i === idx ? { ...c, weight: val ?? 1 } : c))
+                      );
+                    }}
+                    allowUnset={false}
+                    showValue={true}
+                    valueSuffix="x"
+                    size="sm"
+                    ariaLabel={`Weight for ${cat.name}`}
+                  />
+                </div>
               </div>
-            </div>
-          ))}
+            ))
+          )}
         </div>
 
         {/* Scope Option */}
@@ -106,7 +281,7 @@ export function CollectionRubricDialog({
           </p>
         </div>
 
-        <div className="flex items-center justify-end gap-3 pt-3 border-t border-border">
+        <div className="flex items-center justify-between pt-3 border-t border-border">
           <button
             type="button"
             onClick={onClose}
@@ -129,7 +304,7 @@ export function CollectionRubricDialog({
             ) : (
               <>
                 <Check className="h-4 w-4" />
-                <span>Save Weights</span>
+                <span>Save Rubric</span>
               </>
             )}
           </button>

@@ -154,3 +154,61 @@ export async function POST(
     );
   }
 }
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id: collectionId } = await params;
+  const session = await getServerSession(request);
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const col = await db.query.collections.findFirst({
+      where: (c, { eq, and }) =>
+        and(eq(c.id, collectionId), eq(c.userId, session.user.id)),
+    });
+
+    if (!col) {
+      return NextResponse.json(
+        { error: "Collection not found or access denied" },
+        { status: 404 }
+      );
+    }
+
+    const body = await request.json().catch(() => null);
+    if (!body || !Array.isArray(body.entries)) {
+      return NextResponse.json(
+        { error: "Expected an entries array" },
+        { status: 400 }
+      );
+    }
+
+    await db.transaction(async (tx) => {
+      for (const item of body.entries) {
+        if (typeof item.id === "string" && Number.isInteger(item.sortOrder)) {
+          await tx
+            .update(collectionEntries)
+            .set({ sortOrder: item.sortOrder })
+            .where(
+              and(
+                eq(collectionEntries.id, item.id),
+                eq(collectionEntries.collectionId, collectionId)
+              )
+            );
+        }
+      }
+    });
+
+    return NextResponse.json({ success: true });
+  } catch (error: any) {
+    console.error("[Reorder Collection Entries Error]", error);
+    return NextResponse.json(
+      { error: "Failed to update entry sort order" },
+      { status: 500 }
+    );
+  }
+}
+

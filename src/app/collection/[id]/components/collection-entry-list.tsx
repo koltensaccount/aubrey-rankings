@@ -14,6 +14,7 @@ interface CollectionEntryListProps {
   onSelectItemForRating: (media: any) => void;
   onSetEntryToDelete: (entry: any) => void;
   onQuickAssignTier?: (mediaItem: any, tierId: string | null) => Promise<void>;
+  onOpenTierEditor?: () => void;
 }
 
 export function CollectionEntryList({
@@ -25,6 +26,7 @@ export function CollectionEntryList({
   onSelectItemForRating,
   onSetEntryToDelete,
   onQuickAssignTier,
+  onOpenTierEditor,
 }: CollectionEntryListProps) {
   if (processedEntries.length === 0) {
     return (
@@ -52,6 +54,7 @@ export function CollectionEntryList({
         isOwner={isOwner}
         onSelectItemForRating={onSelectItemForRating}
         onQuickAssignTier={onQuickAssignTier}
+        onOpenTierEditor={onOpenTierEditor}
       />
     );
   }
