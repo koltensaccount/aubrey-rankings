@@ -61,7 +61,6 @@ async function createAccount(data: typeof testUser) {
     .set({
       username: data.username,
       emailVerified: true,
-      hasCompletedOnboarding: true,
     })
     .where(eq(user.id, u.id));
 
