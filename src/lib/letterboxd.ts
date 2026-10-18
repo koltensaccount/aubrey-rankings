@@ -22,6 +22,7 @@ export interface LetterboxdExportSummary {
  * Robust CSV Line Parser that handles escaped quotes and commas within quotes
  */
 export function parseCSV(content: string): string[][] {
+  content = content.replace(/^\uFEFF/, "");
   const rows: string[][] = [];
   const lines = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
   let currentRow: string[] = [];
@@ -60,6 +61,8 @@ export function parseCSV(content: string): string[][] {
     }
   }
 
+  if (inQuotes) throw new Error("Unterminated CSV quoted field");
+
   if (currentField.length > 0 || currentRow.length > 0) {
     currentRow.push(currentField);
     if (currentRow.some((f) => f.trim().length > 0)) {
@@ -76,13 +79,17 @@ export function parseCSV(content: string): string[][] {
 export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
   const zip = new AdmZip(zipBuffer);
   const zipEntries = zip.getEntries();
+  if (zipEntries.length > 10000 || zipEntries.reduce((size, entry) => size + entry.header.size, 0) > 100 * 1024 * 1024) {
+    throw new Error("Expanded archive exceeds permitted size");
+  }
+
 
   const filmMap = new Map<string, ParsedLetterboxdFilm>();
 
   const getOrCreateFilm = (title: string, yearStr: string, uri: string): ParsedLetterboxdFilm => {
-    const year = yearStr ? parseInt(yearStr.trim(), 10) || null : null;
+    const year = /^\d{4}$/.test(yearStr.trim()) ? Number(yearStr.trim()) : null;
     const cleanTitle = title.trim();
-    const key = uri.trim() || `${cleanTitle.toLowerCase()}::${year || ""}`;
+    const key = `${cleanTitle.toLowerCase()}::${year || ""}`;
 
     if (!filmMap.has(key)) {
       filmMap.set(key, {
@@ -95,13 +102,13 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
     return filmMap.get(key)!;
   };
 
-  let totalRatings = 0;
-  let totalReviews = 0;
-  let totalWatched = 0;
 
   for (const entry of zipEntries) {
     if (entry.isDirectory) continue;
-    const fileName = entry.entryName.toLowerCase();
+    const pathParts = entry.entryName.toLowerCase().split("/");
+    const fileName = pathParts.at(-1) ?? "";
+    if (pathParts.includes("lists") || !["ratings.csv", "watched.csv", "reviews.csv", "diary.csv"].includes(fileName)) continue;
+    if (entry.header.size > 50 * 1024 * 1024) throw new Error("CSV exceeds permitted size");
 
     // 1. Process ratings.csv
     if (fileName.endsWith("ratings.csv")) {
@@ -124,9 +131,8 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
 
           const film = getOrCreateFilm(name, year, uri);
           film.isWatched = true;
-          if (!isNaN(ratingVal) && ratingVal > 0) {
+          if (Number.isFinite(ratingVal) && ratingVal >= 0.5 && ratingVal <= 5 && Number.isInteger(ratingVal * 2)) {
             film.rating = ratingVal;
-            totalRatings++;
           }
         }
       }
@@ -153,8 +159,7 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
 
           const film = getOrCreateFilm(name, year, uri);
           film.isWatched = true;
-          totalWatched++;
-          if (date && !film.watchDate) {
+          if (isValidWatchDate(date) && !film.watchDate) {
             film.watchDate = date;
           }
         }
@@ -186,9 +191,8 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
           film.isWatched = true;
           if (review.trim()) {
             film.review = review.trim();
-            totalReviews++;
           }
-          if (!isNaN(ratingVal) && ratingVal > 0 && film.rating === undefined) {
+          if (Number.isFinite(ratingVal) && ratingVal >= 0.5 && ratingVal <= 5 && Number.isInteger(ratingVal * 2) && film.rating === undefined) {
             film.rating = ratingVal;
           }
         }
@@ -218,10 +222,10 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
 
           const film = getOrCreateFilm(name, year, uri);
           film.isWatched = true;
-          if (watchDate && !film.watchDate) {
+          if (isValidWatchDate(watchDate) && !film.watchDate) {
             film.watchDate = watchDate;
           }
-          if (!isNaN(ratingVal) && ratingVal > 0 && film.rating === undefined) {
+          if (Number.isFinite(ratingVal) && ratingVal >= 0.5 && ratingVal <= 5 && Number.isInteger(ratingVal * 2) && film.rating === undefined) {
             film.rating = ratingVal;
           }
         }
@@ -233,9 +237,15 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
 
   return {
     totalUniqueFilms: films.length,
-    totalRatings,
-    totalReviews,
-    totalWatched,
+    totalRatings: films.filter(film => film.rating !== undefined).length,
+    totalReviews: films.filter(film => !!film.review).length,
+    totalWatched: films.filter(film => film.isWatched).length,
     films,
   };
+}
+
+function isValidWatchDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }

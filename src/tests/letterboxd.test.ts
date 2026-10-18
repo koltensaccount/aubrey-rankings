@@ -44,7 +44,7 @@ describe("Letterboxd ZIP & CSV Importer", () => {
     assert.equal(summary.totalUniqueFilms, 4); // Children of Men, Blade Runner 2049, Arrival, Interstellar
     assert.equal(summary.totalRatings, 3);
     assert.equal(summary.totalReviews, 1);
-    assert.equal(summary.totalWatched, 3);
+    assert.equal(summary.totalWatched, 4); // Rated and reviewed films are watched too.
 
     const childrenOfMen = summary.films.find((f) => f.title === "Children of Men");
     assert.ok(childrenOfMen);
@@ -89,4 +89,34 @@ describe("Letterboxd ZIP & CSV Importer", () => {
     assert.equal(summary.films[0].year, 1995);
     assert.equal(summary.films[0].rating, 5.0);
   });
+});
+
+describe("Letterboxd archive edge cases", () => {
+  it("merges diary review URLs by film/year while keeping remakes separate", () => {
+    const zip = new AdmZip();
+    zip.addFile("ratings.csv", Buffer.from("Name,Year,Letterboxd URI,Rating\nSolaris,1972,https://letterboxd.com/film/solaris/,5\nSolaris,2002,https://letterboxd.com/film/solaris-2002/,4\n"));
+    zip.addFile("diary.csv", Buffer.from("Name,Year,Letterboxd URI,Watched Date\nSolaris,1972,https://letterboxd.com/user/film/solaris/1/,2026-02-30\nSolaris,1972,https://letterboxd.com/user/film/solaris/2/,2026-02-28\n"));
+    const summary = parseLetterboxdZip(zip.toBuffer());
+    assert.equal(summary.totalUniqueFilms, 2);
+    assert.equal(summary.films.find(f => f.year === 1972)?.watchDate, "2026-02-28");
+  });
+  it("handles BOM headers, rejects invalid ratings, and ignores nested custom lists", () => {
+    const zip = new AdmZip();
+    zip.addFile("ratings.csv", Buffer.from("\uFEFFName,Year,Letterboxd URI,Rating\nHeat,1995,heat,Infinity\nArrival,2016,arrival,6\nDune,2021,dune,4.5\n"));
+    zip.addFile("lists/ratings.csv", Buffer.from("Name,Year,Rating\nNot a rating,2000,5\n"));
+    const summary = parseLetterboxdZip(zip.toBuffer());
+    assert.equal(summary.totalUniqueFilms, 3); assert.equal(summary.totalRatings, 1);
+    assert.equal(summary.films.find(f => f.title === "Heat")?.rating, undefined);
+  });
+  it("bounds expanded archive size before decompressing", () => {
+    const zip = new AdmZip(); zip.addFile("ratings.csv", Buffer.from("Name\nHeat\n"));
+    const data = zip.toBuffer();
+    const central = data.indexOf(Buffer.from([0x50,0x4b,0x01,0x02]));
+    data.writeUInt32LE(101 * 1024 * 1024, central + 24);
+    assert.throws(() => parseLetterboxdZip(data), /permitted size/);
+  });
+});
+
+it("rejects truncated quoted CSV instead of partially importing it", () => {
+  assert.throws(() => parseCSV('Name,Review\nHeat,"unfinished'), /Unterminated/);
 });

@@ -7,7 +7,8 @@ import { desc, eq, inArray, and, or, sql } from "drizzle-orm";
 export async function GET(request: NextRequest) {
   const session = await getServerSession();
   const mode = request.nextUrl.searchParams.get("mode") || "discover";
-  const limit = Math.min(Math.max(Number(request.nextUrl.searchParams.get("limit") || 20), 1), 50);
+  const requestedLimit = Number(request.nextUrl.searchParams.get("limit") || 20);
+  const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(Math.floor(requestedLimit), 1), 50) : 20;
 
   if (mode === "following") {
     if (!session) {
@@ -33,12 +34,12 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Fetch public and unlisted collections from followed creators
+    // Unlisted collections are accessible by link, never discoverable in a feed.
     const followedCollections = await db.query.collections.findMany({
       where: (c, { and, inArray, or, eq }) =>
         and(
           inArray(c.userId, followingIds),
-          or(eq(c.visibility, "public"), eq(c.visibility, "unlisted"), eq(c.isPublic, true))
+          eq(c.visibility, "public")
         ),
       orderBy: [desc(collections.updatedAt)],
       limit,
@@ -75,7 +76,7 @@ export async function GET(request: NextRequest) {
   // Discover mode: all public collections across the platform
   const discoverCollections = await db.query.collections.findMany({
     where: (c, { or, eq }) =>
-      or(eq(c.visibility, "public"), eq(c.isPublic, true)),
+      eq(c.visibility, "public"),
     orderBy: [desc(collections.updatedAt)],
     limit,
     with: {

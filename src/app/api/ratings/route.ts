@@ -1,241 +1,265 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { ratings, categoryScores, ratingCategories, ratingSystems, collections } from "@/db/schema";
-import { calculateWeightedAverage, CategoryDef } from "@/lib/scoring";
+import { ratings, categoryScores, collections } from "@/db/schema";
+import { calculateWeightedAverage } from "@/lib/scoring";
+import { normalizeRatingScores } from "@/lib/rating-validation";
 import { nanoid } from "@/lib/utils";
-import { eq, and, isNull } from "drizzle-orm";
+import { eq, and, isNull, sql } from "drizzle-orm";
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession();
-  if (!session) {
+  if (!session)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const body = await request.json().catch(() => null);
+  if (!body || typeof body !== "object" || Array.isArray(body))
+    return NextResponse.json(
+      { error: "A JSON object is required" },
+      { status: 400 },
+    );
+  const {
+    mediaItemId,
+    collectionId,
+    ratingSystemId,
+    scores,
+    categoryScores: inputCategoryScores,
+    watchDate,
+    reviewText,
+    personalNotes,
+    isWatched,
+    isFavorite,
+  } = body;
+  if (
+    typeof mediaItemId !== "string" ||
+    !mediaItemId ||
+    (collectionId != null && typeof collectionId !== "string") ||
+    (ratingSystemId != null && typeof ratingSystemId !== "string") ||
+    [isWatched, isFavorite].some(
+      (value) => value !== undefined && typeof value !== "boolean",
+    ) ||
+    [reviewText, personalNotes].some(
+      (value) => value != null && typeof value !== "string",
+    )
+  ) {
+    return NextResponse.json(
+      { error: "Invalid rating fields" },
+      { status: 400 },
+    );
   }
-
-  try {
-    const body = await request.json();
-    const {
-      mediaItemId,
-      collectionId,
-      ratingSystemId,
-      scores, // { [categoryId: string]: number | null }
-      categoryScores: bodyCategoryScores, // [ { categoryId: string, score: number } ]
-      watchDate,
-      reviewText,
-      personalNotes,
-      isWatched,
-      isFavorite,
-    } = body;
-
-    if (!mediaItemId || typeof mediaItemId !== "string") {
+  let parsedWatchDate: Date | null | undefined;
+  if (watchDate !== undefined) {
+    parsedWatchDate =
+      watchDate === null
+        ? null
+        : typeof watchDate === "string"
+          ? new Date(watchDate)
+          : new Date(NaN);
+    if (
+      parsedWatchDate &&
+      (!Number.isFinite(parsedWatchDate.getTime()) ||
+        (/^\d{4}-\d{2}-\d{2}$/.test(watchDate) &&
+          parsedWatchDate.toISOString().slice(0, 10) !== watchDate))
+    ) {
       return NextResponse.json(
-        { error: "Valid mediaItemId is required" },
-        { status: 400 }
+        { error: "Invalid watch date" },
+        { status: 400 },
       );
     }
-
-    // 1. Verify collection ownership if collectionId is provided
-    if (collectionId) {
-      const col = await db.query.collections.findFirst({
-        where: (c, { eq, and }) =>
-          and(eq(c.id, collectionId), eq(c.userId, session.user.id)),
-      });
-      if (!col) {
-        return NextResponse.json(
-          { error: "Collection not found or access denied" },
-          { status: 404 }
-        );
-      }
-    }
-
-    // 2. Verify rating system ownership
-    if (ratingSystemId) {
-      const rs = await db.query.ratingSystems.findFirst({
-        where: (r, { eq, and }) =>
-          and(eq(r.id, ratingSystemId), eq(r.userId, session.user.id)),
-      });
-      if (!rs) {
-        return NextResponse.json(
-          { error: "Invalid rating system or access denied" },
-          { status: 400 }
-        );
-      }
-    }
-
-    // 3. Find existing rating (with strict collection scope vs isNull for global)
-    const existing = await db.query.ratings.findFirst({
-      where: (r, { eq, and, isNull }) =>
-        and(
-          eq(r.userId, session.user.id),
-          eq(r.mediaItemId, mediaItemId),
-          collectionId ? eq(r.collectionId, collectionId) : isNull(r.collectionId)
-        ),
-      with: {
-        categoryScores: true,
-      },
-    });
-
-    const activeRatingSystemId =
-      ratingSystemId || existing?.ratingSystemId || null;
-
-    let categoriesList: CategoryDef[] = [];
-    if (activeRatingSystemId) {
-      const categoriesFromDb = await db.query.ratingCategories.findMany({
-        where: (rc, { eq }) => eq(rc.ratingSystemId, activeRatingSystemId),
-      });
-
-      categoriesList = categoriesFromDb.map((c) => ({
-        id: c.id,
-        name: c.name,
-        weight: c.weight,
-        isRequired: c.isRequired,
-      }));
-    }
-
-    // Determine final score map
-    let finalScores: Record<string, number | null> = {};
-    if (existing?.categoryScores) {
-      for (const cs of existing.categoryScores) {
-        finalScores[cs.categoryId] = cs.score;
-      }
-    }
-
-    if (Array.isArray(bodyCategoryScores)) {
-      for (const item of bodyCategoryScores) {
-        if (
-          item?.categoryId &&
-          item.score !== undefined &&
-          item.score !== null &&
-          !isNaN(Number(item.score))
-        ) {
-          finalScores[item.categoryId] = Number(item.score);
-        }
-      }
-    }
-
-    if (scores && typeof scores === "object" && !Array.isArray(scores)) {
-      for (const [catId, val] of Object.entries(scores)) {
-        if (val === null || val === undefined || isNaN(Number(val))) {
-          delete finalScores[catId];
-        } else {
-          finalScores[catId] = Number(val);
-        }
-      }
-    }
-
-    let calculatedOverallScore = existing?.calculatedOverallScore ?? null;
-    if (
-      categoriesList.length > 0 &&
-      (scores !== undefined || bodyCategoryScores !== undefined || existing?.categoryScores)
-    ) {
-      const calcResult = calculateWeightedAverage(categoriesList, finalScores);
-      calculatedOverallScore = calcResult.weightedScore;
-    }
-
-    const ratingId = existing ? existing.id : `rate_${Date.now()}_${nanoid(6)}`;
-
-    // 4. Perform atomic transactional update
-    await db.transaction(async (tx) => {
-      if (existing) {
-        await tx
-          .update(ratings)
-          .set({
-            calculatedOverallScore,
-            ratingSystemId: activeRatingSystemId,
-            watchDate: watchDate ? new Date(watchDate) : existing.watchDate,
-            reviewText: reviewText !== undefined ? reviewText : existing.reviewText,
-            personalNotes:
-              personalNotes !== undefined ? personalNotes : existing.personalNotes,
-            isWatched:
-              isWatched !== undefined ? Boolean(isWatched) : existing.isWatched,
-            isFavorite:
-              isFavorite !== undefined ? Boolean(isFavorite) : existing.isFavorite,
-            updatedAt: new Date(),
-          })
-          .where(eq(ratings.id, existing.id));
-      } else {
-        await tx.insert(ratings).values({
-          id: ratingId,
-          userId: session.user.id,
-          mediaItemId,
-          collectionId: collectionId || null,
-          ratingSystemId: activeRatingSystemId,
-          calculatedOverallScore,
-          watchDate: watchDate ? new Date(watchDate) : null,
-          reviewText: reviewText || null,
-          personalNotes: personalNotes || null,
-          isWatched: isWatched !== undefined ? Boolean(isWatched) : true,
-          isFavorite: Boolean(isFavorite),
-        });
-      }
-
-      // Synchronize category scores if provided
-      if (scores && typeof scores === "object" && categoriesList.length > 0) {
-        // Delete any category scores no longer in finalScores
-        for (const cat of categoriesList) {
-          const scoreVal = finalScores[cat.id];
-          if (scoreVal !== undefined && scoreVal !== null) {
-            const scoreId = `cs_${ratingId}_${cat.id}`;
+  }
+  try {
+    return await db.transaction(async (tx) => {
+      // Serialize collection edits with entry removal, and concurrent saves to this rating scope.
+      const col = collectionId
+        ? (
             await tx
-              .insert(categoryScores)
-              .values({
-                id: scoreId,
-                ratingId,
-                categoryId: cat.id,
-                score: Number(scoreVal),
-                weightApplied: cat.weight,
-                updatedAt: new Date(),
-              })
-              .onConflictDoUpdate({
-                target: [categoryScores.ratingId, categoryScores.categoryId],
-                set: {
-                  score: Number(scoreVal),
-                  weightApplied: cat.weight,
-                  updatedAt: new Date(),
-                },
-              });
-          } else {
-            // Remove cleared score row
-            await tx
-              .delete(categoryScores)
+              .select()
+              .from(collections)
               .where(
                 and(
-                  eq(categoryScores.ratingId, ratingId),
-                  eq(categoryScores.categoryId, cat.id)
-                )
-              );
-          }
-        }
+                  eq(collections.id, collectionId),
+                  eq(collections.userId, session.user.id),
+                ),
+              )
+              .for("update")
+          )[0]
+        : null;
+      await tx.execute(
+        sql`select pg_advisory_xact_lock(hashtextextended(${JSON.stringify([session.user.id, collectionId || null, mediaItemId])}, 0))`,
+      );
+      if (collectionId && !col)
+        return NextResponse.json(
+          { error: "Collection not found or access denied" },
+          { status: 404 },
+        );
+      const media = await tx.query.mediaItems.findFirst({
+        where: (m, { eq }) => eq(m.id, mediaItemId),
+        columns: { id: true },
+      });
+      if (!media)
+        return NextResponse.json(
+          { error: "Media item not found" },
+          { status: 404 },
+        );
+      if (col) {
+        const entry = await tx.query.collectionEntries.findFirst({
+          where: (e, { eq, and }) =>
+            and(eq(e.collectionId, col.id), eq(e.mediaItemId, mediaItemId)),
+        });
+        if (!entry)
+          return NextResponse.json(
+            { error: "Media item is not in this collection" },
+            { status: 400 },
+          );
       }
-    });
-
-    return NextResponse.json({
-      success: true,
-      ratingId,
-      mediaItemId,
-      calculatedOverallScore,
-      rating: {
-        id: ratingId,
-        userId: session.user.id,
+      await tx
+        .select({ id: ratings.id })
+        .from(ratings)
+        .where(
+          and(
+            eq(ratings.userId, session.user.id),
+            eq(ratings.mediaItemId, mediaItemId),
+            collectionId
+              ? eq(ratings.collectionId, collectionId)
+              : isNull(ratings.collectionId),
+          ),
+        )
+        .for("update");
+      const existing = await tx.query.ratings.findFirst({
+        where: (r, { eq, and, isNull }) =>
+          and(
+            eq(r.userId, session.user.id),
+            eq(r.mediaItemId, mediaItemId),
+            collectionId
+              ? eq(r.collectionId, collectionId)
+              : isNull(r.collectionId),
+          ),
+        with: { categoryScores: true },
+      });
+      const activeRatingSystemId =
+        ratingSystemId === undefined
+          ? (existing?.ratingSystemId ?? col?.defaultRatingSystemId ?? null)
+          : ratingSystemId;
+      const system = activeRatingSystemId
+        ? await tx.query.ratingSystems.findFirst({
+            where: (r, { eq, and }) =>
+              and(
+                eq(r.id, activeRatingSystemId),
+                eq(r.userId, session.user.id),
+              ),
+            with: { categories: true },
+          })
+        : null;
+      if (activeRatingSystemId && !system)
+        return NextResponse.json(
+          { error: "Invalid rating system or access denied" },
+          { status: 400 },
+        );
+      const categories = system?.categories ?? [];
+      let finalScores: Record<string, number>;
+      try {
+        finalScores = normalizeRatingScores(
+          categories,
+          Object.fromEntries(
+            (existing?.categoryScores ?? []).map((score) => [
+              score.categoryId,
+              score.score,
+            ]),
+          ),
+          scores,
+          inputCategoryScores,
+          system?.scale ?? 10,
+        );
+      } catch (error) {
+        return NextResponse.json(
+          { error: error instanceof Error ? error.message : "Invalid scores" },
+          { status: 400 },
+        );
+      }
+      const calculatedOverallScore = calculateWeightedAverage(
+        categories,
+        finalScores,
+      ).weightedScore;
+      const ratingId = existing?.id ?? `rate_${Date.now()}_${nanoid(6)}`;
+      {
+        const values = {
+          calculatedOverallScore,
+          ratingSystemId: activeRatingSystemId,
+          watchDate:
+            parsedWatchDate === undefined
+              ? (existing?.watchDate ?? null)
+              : parsedWatchDate,
+          reviewText:
+            reviewText === undefined
+              ? (existing?.reviewText ?? null)
+              : reviewText,
+          personalNotes:
+            personalNotes === undefined
+              ? (existing?.personalNotes ?? null)
+              : personalNotes,
+          isWatched: isWatched ?? existing?.isWatched ?? true,
+          isFavorite: isFavorite ?? existing?.isFavorite ?? false,
+          updatedAt: new Date(),
+        };
+        if (existing)
+          await tx
+            .update(ratings)
+            .set(values)
+            .where(
+              and(
+                eq(ratings.id, ratingId),
+                eq(ratings.userId, session.user.id),
+              ),
+            );
+        else
+          await tx
+            .insert(ratings)
+            .values({
+              id: ratingId,
+              userId: session.user.id,
+              mediaItemId,
+              collectionId: collectionId || null,
+              ...values,
+            });
+        // Replace atomically for both input formats; remove categories from any previous system.
+        await tx
+          .delete(categoryScores)
+          .where(eq(categoryScores.ratingId, ratingId));
+        const rows = categories
+          .filter((category) => finalScores[category.id] !== undefined)
+          .map((category) => ({
+            id: `cs_${ratingId}_${category.id}`,
+            ratingId,
+            categoryId: category.id,
+            score: finalScores[category.id],
+            weightApplied: category.weight,
+          }));
+        if (rows.length) await tx.insert(categoryScores).values(rows);
+      }
+      const rating = await tx.query.ratings.findFirst({
+        where: (r, { eq }) => eq(r.id, ratingId),
+        with: { categoryScores: true },
+      });
+      return NextResponse.json({
+        success: true,
+        ratingId,
         mediaItemId,
-        collectionId: collectionId || null,
-        ratingSystemId: activeRatingSystemId,
         calculatedOverallScore,
-        reviewText: reviewText || null,
-        personalNotes: personalNotes || null,
-        isWatched: isWatched !== undefined ? Boolean(isWatched) : true,
-        isFavorite: Boolean(isFavorite),
-        categoryScores: Object.entries(finalScores).map(([categoryId, score]) => ({
-          categoryId,
-          score,
-        })),
-      },
+        rating,
+      });
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error("[Save Rating Error]", error);
+    const code =
+      (error as { code?: string; cause?: { code?: string } })?.cause?.code ??
+      (error as { code?: string })?.code;
     return NextResponse.json(
-      { error: error?.message || "Failed to save rating" },
-      { status: 500 }
+      {
+        error:
+          code === "23505"
+            ? "This rating was updated concurrently. Please retry."
+            : "Failed to save rating",
+      },
+      { status: code === "23505" ? 409 : 500 },
     );
   }
 }
@@ -252,7 +276,7 @@ export async function DELETE(request: NextRequest) {
     const mediaItemId = url.searchParams.get("mediaItemId");
     const collectionId = url.searchParams.get("collectionId");
 
-    let targetRating: any = null;
+    let targetRating: typeof ratings.$inferSelect | undefined;
 
     if (ratingId) {
       targetRating = await db.query.ratings.findFirst({
@@ -265,25 +289,34 @@ export async function DELETE(request: NextRequest) {
           and(
             eq(r.userId, session.user.id),
             eq(r.mediaItemId, mediaItemId),
-            collectionId ? eq(r.collectionId, collectionId) : isNull(r.collectionId)
+            collectionId
+              ? eq(r.collectionId, collectionId)
+              : isNull(r.collectionId),
           ),
       });
     } else {
       return NextResponse.json(
         { error: "ratingId or mediaItemId is required to delete rating" },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
     if (!targetRating) {
       return NextResponse.json(
         { error: "Rating not found or access denied" },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
     // Delete rating record (foreign key cascade removes related categoryScores)
-    await db.delete(ratings).where(eq(ratings.id, targetRating.id));
+    await db
+      .delete(ratings)
+      .where(
+        and(
+          eq(ratings.id, targetRating.id),
+          eq(ratings.userId, session.user.id),
+        ),
+      );
 
     return NextResponse.json({
       success: true,
@@ -293,8 +326,8 @@ export async function DELETE(request: NextRequest) {
   } catch (error: any) {
     console.error("[Delete Rating Error]", error);
     return NextResponse.json(
-      { error: error?.message || "Failed to delete rating" },
-      { status: 500 }
+      { error: "Failed to delete rating" },
+      { status: 500 },
     );
   }
 }

@@ -165,7 +165,7 @@ export function RatingDialog({
     setSaving(true);
 
     try {
-      const numericScoresMap: Record<string, number> = {};
+      const numericScoresMap: Record<string, number | null> = Object.fromEntries(categories.map(category => [category.id, null]));
       const categoryScoresArray = Object.entries(scores)
         .filter(([_, score]) => score !== "" && typeof score === "number")
         .map(([categoryId, score]) => {

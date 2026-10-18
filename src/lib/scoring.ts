@@ -44,13 +44,13 @@ export function calculateWeightedAverage(
     }
 
     const val = scores[cat.id];
-    if (val !== null && val !== undefined && !isNaN(val) && typeof val === "number") {
+    if (val !== null && val !== undefined && typeof val === "number" && Number.isFinite(val)) {
       totalScoredCategories++;
       if (cat.isRequired) {
         scoredRequiredCount++;
       }
 
-      const weight = Math.max(0, cat.weight);
+      const weight = Number.isFinite(cat.weight) ? Math.max(0, cat.weight) : 0;
       if (weight > 0) {
         weightedSum += val * weight;
         totalApplicableWeight += weight;

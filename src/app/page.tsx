@@ -151,7 +151,7 @@ export default async function HomePage() {
     where: (c, { and, ne, or, eq }) =>
       and(
         ne(c.userId, session.user.id),
-        or(eq(c.visibility, "public"), eq(c.isPublic, true))
+        eq(c.visibility, "public")
       ),
     orderBy: [desc(collections.updatedAt)],
     limit: 6,

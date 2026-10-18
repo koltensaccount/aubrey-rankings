@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { parseLetterboxdZip } from "@/lib/letterboxd";
-import { db } from "@/db";
-import { ratings, mediaItems } from "@/db/schema";
-import { eq, and, isNull, inArray } from "drizzle-orm";
+import { previewLetterboxdImport } from "@/lib/letterboxd-import";
 
 export async function POST(req: NextRequest) {
   try {
@@ -15,14 +13,20 @@ export async function POST(req: NextRequest) {
     const formData = await req.formData();
     const file = formData.get("file") as File | null;
 
-    if (!file) {
-      return NextResponse.json({ error: "No ZIP file uploaded." }, { status: 400 });
+    if (!(file instanceof File)) {
+      return NextResponse.json(
+        { error: "No ZIP file uploaded." },
+        { status: 400 },
+      );
     }
 
     if (!file.name.toLowerCase().endsWith(".zip")) {
       return NextResponse.json(
-        { error: "Invalid file format. Please upload an official Letterboxd ZIP archive." },
-        { status: 400 }
+        {
+          error:
+            "Invalid file format. Please upload an official Letterboxd ZIP archive.",
+        },
+        { status: 400 },
       );
     }
 
@@ -30,7 +34,7 @@ export async function POST(req: NextRequest) {
     if (file.size > 25 * 1024 * 1024) {
       return NextResponse.json(
         { error: "Archive exceeds maximum permitted size of 25MB." },
-        { status: 400 }
+        { status: 400 },
       );
     }
 
@@ -42,47 +46,28 @@ export async function POST(req: NextRequest) {
       summary = parseLetterboxdZip(buffer);
     } catch (parseErr: any) {
       return NextResponse.json(
-        { error: "Failed to parse ZIP archive. Ensure it is an uncorrupted Letterboxd export." },
-        { status: 400 }
+        {
+          error:
+            "Failed to parse ZIP archive. Ensure it is an uncorrupted Letterboxd export.",
+        },
+        { status: 400 },
       );
     }
 
     if (summary.totalUniqueFilms === 0) {
       return NextResponse.json(
-        { error: "No valid film records, ratings, or watch history found in the ZIP archive." },
-        { status: 400 }
+        {
+          error:
+            "No valid film records, ratings, or watch history found in the ZIP archive.",
+        },
+        { status: 400 },
       );
     }
 
-    // Retrieve user's existing global ratings to compute diff
-    const userRatings = await db
-      .select({
-        id: ratings.id,
-        mediaItemId: ratings.mediaItemId,
-        sourceRating: ratings.sourceRating,
-        reviewText: ratings.reviewText,
-        letterboxdUri: ratings.letterboxdUri,
-      })
-      .from(ratings)
-      .where(and(eq(ratings.userId, session.user.id), isNull(ratings.collectionId)));
-
-    const existingUriMap = new Set<string>();
-    for (const r of userRatings) {
-      if (r.letterboxdUri) {
-        existingUriMap.add(r.letterboxdUri.toLowerCase().trim());
-      }
-    }
-
-    let newCount = 0;
-    let existingCount = 0;
-
-    for (const film of summary.films) {
-      if (film.letterboxdUri && existingUriMap.has(film.letterboxdUri.toLowerCase().trim())) {
-        existingCount++;
-      } else {
-        newCount++;
-      }
-    }
+    const { newCount, existingCount } = await previewLetterboxdImport(
+      session.user.id,
+      summary.films,
+    );
 
     return NextResponse.json({
       success: true,
@@ -103,8 +88,8 @@ export async function POST(req: NextRequest) {
   } catch (error: any) {
     console.error("[Letterboxd Preview Error]", error);
     return NextResponse.json(
-      { error: error?.message || "Failed to process Letterboxd archive." },
-      { status: 500 }
+      { error: "Failed to process Letterboxd archive." },
+      { status: 500 },
     );
   }
 }

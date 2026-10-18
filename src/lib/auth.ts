@@ -52,10 +52,6 @@ export async function seedDefaultRatingSystem(userId: string) {
   });
 }
 
-const authSecret =
-  process.env.BETTER_AUTH_SECRET ||
-  "9c58715c7f3f67ff199150b1a4b2a3b25804c43657b0fd945f997ce752797c2e";
-
 export const auth = betterAuth({
   database: drizzleAdapter(db, {
     provider: "pg",
@@ -92,8 +88,9 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: false,
+    revokeSessionsOnPasswordReset: true,
     async sendResetPassword(data) {
-      await sendEmail({
+      const delivery = await sendEmail({
         to: data.user.email,
         subject: "Reset your Aubrey Rankings password",
         html: `
@@ -104,6 +101,7 @@ export const auth = betterAuth({
         `,
         text: `Reset your password at: ${data.url}`,
       });
+      if (!delivery.success) console.error("[Password Recovery] Email delivery failed; check email configuration.");
     },
   },
   databaseHooks: {
@@ -127,7 +125,6 @@ export const auth = betterAuth({
     "http://127.0.0.1:3200",
     "http://localhost:3000",
   ],
-  secret:
-    authSecret || "9c58715c7f3f67ff199150b1a4b2a3b25804c43657b0fd945f997ce752797c2e",
+  secret: process.env.BETTER_AUTH_SECRET,
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
 });

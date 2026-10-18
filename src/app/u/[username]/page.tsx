@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { db } from "@/db";
+import { getPublicReviews } from "@/lib/public-reviews";
 import { user, collections, ratings, follows } from "@/db/schema";
 import { eq, and, desc, sql, isNotNull } from "drizzle-orm";
 import { getServerSession } from "@/lib/server-session";
@@ -65,15 +66,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
       : [];
 
   // 4. Fetch recent public reviews (stripping private personal notes)
-  const publicReviews = await db.query.ratings.findMany({
-    where: (r, { eq, and, isNotNull }) =>
-      and(eq(r.userId, targetUser.id), isNotNull(r.reviewText)),
-    orderBy: [desc(ratings.updatedAt)],
-    limit: 8,
-    with: {
-      mediaItem: true,
-    },
-  });
+  const publicReviews = await getPublicReviews(targetUser.id);
 
   // 5. Fetch follow stats
   const followersCountRes = await db

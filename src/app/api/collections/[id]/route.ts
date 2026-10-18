@@ -127,7 +127,8 @@ export async function PATCH(
       );
     }
 
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "A JSON object is required" }, { status: 400 });
     const updateData: Partial<typeof collections.$inferInsert> = {
       updatedAt: new Date(),
     };
@@ -158,6 +159,9 @@ export async function PATCH(
     if (body.isPublic !== undefined) {
       if (typeof body.isPublic !== "boolean") {
         return NextResponse.json({ error: "isPublic must be an explicit boolean" }, { status: 400 });
+      }
+      if (body.visibility !== undefined && body.isPublic !== (body.visibility !== "private")) {
+        return NextResponse.json({ error: "isPublic conflicts with visibility" }, { status: 400 });
       }
       updateData.isPublic = body.isPublic;
       if (body.visibility === undefined) {
@@ -196,7 +200,7 @@ export async function PATCH(
       updateData.customCoverImage = typeof body.customCoverImage === "string" ? body.customCoverImage : null;
     }
 
-    await db.update(collections).set(updateData).where(eq(collections.id, id));
+    await db.update(collections).set(updateData).where(and(eq(collections.id, id), eq(collections.userId, session.user.id)));
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
@@ -230,7 +234,7 @@ export async function DELETE(
       );
     }
 
-    await db.delete(collections).where(eq(collections.id, id));
+    await db.delete(collections).where(and(eq(collections.id, id), eq(collections.userId, session.user.id)));
     return NextResponse.json({ success: true });
   } catch (error: any) {
     console.error("[Delete Collection Error]", error);

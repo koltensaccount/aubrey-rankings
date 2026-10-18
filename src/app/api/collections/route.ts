@@ -49,9 +49,10 @@ export async function POST(request: NextRequest) {
   }
 
   try {
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object" || Array.isArray(body)) return NextResponse.json({ error: "A JSON object is required" }, { status: 400 });
     const {
-      title,
+      title: rawTitle,
       description,
       collectionType, // 'tv_show' | 'movie_franchise' | 'custom'
       tmdbId,
@@ -59,9 +60,14 @@ export async function POST(request: NextRequest) {
       selectedSeasonNumbers,
     } = body;
 
-    if (!title || !collectionType) {
+    const title = typeof rawTitle === "string" ? rawTitle.trim() : "";
+    if (!title || !["tv_show", "movie_franchise", "custom"].includes(collectionType) ||
+        (description != null && typeof description !== "string") ||
+        (tmdbId != null && (!Number.isSafeInteger(tmdbId) || tmdbId <= 0)) ||
+        (importAllEpisodes !== undefined && typeof importAllEpisodes !== "boolean") ||
+        (selectedSeasonNumbers !== undefined && (!Array.isArray(selectedSeasonNumbers) || selectedSeasonNumbers.some((season: unknown) => typeof season !== "number" || !Number.isSafeInteger(season) || season < 0)))) {
       return NextResponse.json(
-        { error: "Title and collectionType are required" },
+        { error: "A non-empty title, valid collectionType, and valid import options are required" },
         { status: 400 }
       );
     }
@@ -235,7 +241,7 @@ export async function POST(request: NextRequest) {
   } catch (error: any) {
     console.error("[Create Collection Error]", error);
     return NextResponse.json(
-      { error: error?.message || "Failed to create collection" },
+      { error: "Failed to create collection" },
       { status: 500 }
     );
   }

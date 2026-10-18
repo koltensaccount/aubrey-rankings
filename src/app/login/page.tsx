@@ -52,13 +52,13 @@ export default function LoginPage() {
           res.error.message ||
             "Google Sign-In is not configured on this server. Please sign in with email and password."
         );
-        setGoogleLoading(false);
       }
     } catch (err: any) {
       setError(
         err?.message ||
           "Google Sign-In is currently unavailable. Please sign in with email and password."
       );
+    } finally {
       setGoogleLoading(false);
     }
   };

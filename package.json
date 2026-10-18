@@ -10,7 +10,8 @@
     "test": "tsx --test src/tests/**/*.test.ts",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "test:http": "tsx scripts/audit-http.ts"
   },
   "dependencies": {
     "@radix-ui/react-avatar": "^1.3.1",
