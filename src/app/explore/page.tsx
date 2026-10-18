@@ -306,14 +306,27 @@ export default function ExplorePage() {
                         </span>
                       </div>
                       <div className="p-3 space-y-1">
-                        <h4 className="font-semibold text-xs text-foreground line-clamp-1">{title}</h4>
-                        <span className="text-[10px] text-muted-foreground block">{year || "—"}</span>
                         <Link
-                          href={`/create?type=${isTv ? "tv_show" : "movie_franchise"}&suggest=${encodeURIComponent(title)}`}
-                          className="mt-2 w-full py-1.5 rounded-lg bg-secondary hover:bg-muted text-secondary-foreground border border-border text-[10px] font-semibold flex items-center justify-center gap-1 transition-colors"
+                          href={`/media/${m.id}`}
+                          className="font-semibold text-xs text-foreground hover:text-primary transition-colors line-clamp-1 block"
                         >
-                          <span>Start Ranking</span>
+                          {title}
                         </Link>
+                        <span className="text-[10px] text-muted-foreground block">{year || "—"}</span>
+                        <div className="flex items-center gap-1.5 pt-1.5">
+                          <Link
+                            href={`/media/${m.id}`}
+                            className="flex-1 py-1 rounded-md bg-surface hover:bg-surface-raised text-foreground border border-border text-[10px] font-semibold flex items-center justify-center transition-colors"
+                          >
+                            Reviews
+                          </Link>
+                          <Link
+                            href={`/create?type=${isTv ? "tv_show" : "movie_franchise"}&suggest=${encodeURIComponent(title)}`}
+                            className="flex-1 py-1 rounded-md bg-secondary hover:bg-muted text-secondary-foreground border border-border text-[10px] font-semibold flex items-center justify-center transition-colors"
+                          >
+                            Rank
+                          </Link>
+                        </div>
                       </div>
                     </div>
                   );

@@ -6,6 +6,7 @@ import { desc, eq, sql, and, ne, or } from "drizzle-orm";
 import { Plus, ArrowRight, Tv, Film, ListPlus, ArrowUpRight, Globe, Users, Bookmark } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { getTopRankedEntries, getRatingSummary } from "@/lib/scoring";
+import { CommunityFeed } from "@/components/social/community-feed";
 
 export default async function HomePage() {
   const session = await getServerSession();
@@ -434,102 +435,16 @@ export default async function HomePage() {
               </section>
             )}
 
-            {/* COMMUNITY RANKINGS & DISCOVERY */}
-            {communityCanons.length > 0 && (
-              <section className="space-y-4 pt-6">
-                <div className="flex items-center justify-between pb-2 border-b border-border">
-                  <div className="flex items-center gap-2">
-                    <Globe size={16} className="text-primary" />
-                    <h2 className="font-display text-2xl uppercase text-foreground">
-                      Community Rankings & Reviews
-                    </h2>
-                  </div>
-                  <span className="text-xs text-muted-foreground">
-                    {communityCanons.length} public rankings
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {communityCanons.map((col) => {
-                    const creatorInitial = (
-                      col.user.name ||
-                      col.user.username ||
-                      "U"
-                    )
-                      .charAt(0)
-                      .toUpperCase();
-
-                    return (
-                      <article
-                        key={col.id}
-                        className="rounded-xl border border-border bg-card p-5 space-y-4 hover:border-primary/40 transition-colors shadow-sm"
-                      >
-                        <div className="flex items-center justify-between">
-                          <Link
-                            href={
-                              col.user.username ? `/u/${col.user.username}` : "#"
-                            }
-                            className="flex items-center gap-2.5 text-xs group"
-                          >
-                            <div className="h-6 w-6 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center font-bold text-primary overflow-hidden">
-                              {col.user.image ? (
-                                <img
-                                  src={col.user.image}
-                                  alt={col.user.name || "User"}
-                                  className="h-full w-full object-cover"
-                                />
-                              ) : (
-                                creatorInitial
-                              )}
-                            </div>
-                            <div>
-                              <span className="font-medium text-foreground group-hover:text-primary transition-colors block leading-tight">
-                                {col.user.name || `@${col.user.username}`}
-                              </span>
-                              {col.user.username && (
-                                <span className="text-[10px] text-muted-foreground font-mono">
-                                  @{col.user.username}
-                                </span>
-                              )}
-                            </div>
-                          </Link>
-                          <span className="text-[10px] font-mono uppercase tracking-wider text-primary px-2 py-0.5 rounded bg-primary/10 border border-primary/20">
-                            {col.collectionType === "tv_show"
-                              ? "TV Series"
-                              : "Canon"}
-                          </span>
-                        </div>
-
-                        <Link
-                          href={`/collection/${col.id}`}
-                          className="block space-y-1.5 group"
-                        >
-                          <h3 className="font-display text-xl uppercase text-foreground group-hover:text-primary transition-colors">
-                            {col.title}
-                          </h3>
-                          {col.description && (
-                            <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                              {col.description}
-                            </p>
-                          )}
-                        </Link>
-
-                        <div className="flex items-center justify-between pt-2 border-t border-border text-xs text-muted-foreground">
-                          <span>{col.entries.length} items</span>
-                          <Link
-                            href={`/collection/${col.id}`}
-                            className="inline-flex items-center gap-1 text-primary hover:text-primary-hover text-xs font-semibold"
-                          >
-                            <span>Explore canon</span>
-                            <ArrowRight size={13} />
-                          </Link>
-                        </div>
-                      </article>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
+            {/* COMMUNITY FEED & DISCOVERY */}
+            <section className="space-y-4 pt-6">
+              <div className="pb-2">
+                <span className="text-[11px] text-muted-foreground uppercase tracking-wider block">Community Activity</span>
+                <h2 className="font-display text-3xl uppercase font-bold text-foreground tracking-tight mt-0.5">
+                  Live Stream
+                </h2>
+              </div>
+              <CommunityFeed isAuthenticated={true} />
+            </section>
 
             {/* SAVED RANKINGS (BOOKMARKS) */}
             {accessibleSavedCollections.length > 0 && (
