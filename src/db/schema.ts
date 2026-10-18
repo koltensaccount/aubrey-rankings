@@ -357,6 +357,28 @@ export const likes = pgTable(
   ]
 );
 
+export const savedRankings = pgTable(
+  "saved_rankings",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    collectionId: text("collection_id")
+      .notNull()
+      .references(() => collections.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uniq_user_collection_saved").on(
+      table.userId,
+      table.collectionId
+    ),
+    index("idx_saved_rankings_collection").on(table.collectionId),
+    index("idx_saved_rankings_user").on(table.userId),
+  ]
+);
+
 export const comments = pgTable(
   "comments",
   {
@@ -415,6 +437,7 @@ export const userRelations = relations(user, ({ many }) => ({
   feedActivities: many(feedActivities),
   notifications: many(notifications, { relationName: "recipient" }),
   releaseTrackingSubscriptions: many(releaseTrackingSubscriptions),
+  savedRankings: many(savedRankings),
 }));
 
 export const mediaItemsRelations = relations(mediaItems, ({ many, one }) => ({
@@ -443,6 +466,7 @@ export const collectionsRelations = relations(collections, ({ one, many }) => ({
   feedActivities: many(feedActivities),
   notifications: many(notifications),
   releaseTrackingSubscriptions: many(releaseTrackingSubscriptions),
+  savedRankings: many(savedRankings),
 }));
 
 export const collectionEntriesRelations = relations(
@@ -558,6 +582,17 @@ export const likesRelations = relations(likes, ({ one }) => ({
   }),
   collection: one(collections, {
     fields: [likes.collectionId],
+    references: [collections.id],
+  }),
+}));
+
+export const savedRankingsRelations = relations(savedRankings, ({ one }) => ({
+  user: one(user, {
+    fields: [savedRankings.userId],
+    references: [user.id],
+  }),
+  collection: one(collections, {
+    fields: [savedRankings.collectionId],
     references: [collections.id],
   }),
 }));

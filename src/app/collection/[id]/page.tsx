@@ -28,6 +28,7 @@ import {
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { RatingDialog } from "@/components/rating-dialog";
 import { LikeButton } from "@/components/social/like-button";
+import { SaveRankingButton } from "@/components/social/save-ranking-button";
 import { ReleaseTrackingToggle } from "@/components/collections/release-tracking-toggle";
 import { CommentsSection } from "@/components/social/comments-section";
 import { calibrateOklchTheme } from "@/lib/palette";
@@ -703,6 +704,7 @@ export default function CollectionDetailPage({
                 </div>
               )}
               <LikeButton collectionId={collection.id} />
+              <SaveRankingButton collectionId={collection.id} />
               <ReleaseTrackingToggle
                 collectionId={collection.id}
                 collectionType={collection.collectionType}
