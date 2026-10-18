@@ -35,10 +35,10 @@ export function CinematicMediaCard({
       <div
         className={`${
           targetAspect === "poster" ? "aspect-[2/3]" : "aspect-video"
-        } w-full rounded overflow-hidden bg-[#141a17] border border-[#28342d] flex flex-col items-center justify-center p-3 text-center text-[#6c7d73] ${className}`}
+        } w-full rounded overflow-hidden bg-card border border-border flex flex-col items-center justify-center p-3 text-center text-muted-foreground ${className}`}
       >
-        <Film size={20} className="text-[#3b4c40] mb-1.5 shrink-0" />
-        <span className="text-[10px] uppercase tracking-wider font-semibold line-clamp-2 text-[#8fa095]">
+        <Film size={20} className="text-muted-foreground/60 mb-1.5 shrink-0" />
+        <span className="text-[10px] uppercase tracking-wider font-semibold line-clamp-2 text-foreground/80">
           {title}
         </span>
       </div>
@@ -50,7 +50,7 @@ export function CinematicMediaCard({
     const src = resolveStillUrl(stillPath, "w500");
     return (
       <div
-        className={`aspect-video w-full rounded overflow-hidden bg-black relative ${className}`}
+        className={`aspect-video w-full rounded overflow-hidden bg-black relative border border-border/60 ${className}`}
       >
         <img
           src={src}
@@ -67,7 +67,7 @@ export function CinematicMediaCard({
     const src = resolvePosterUrl(posterPath, "w500");
     return (
       <div
-        className={`aspect-[2/3] w-full rounded overflow-hidden bg-black relative border border-[#28342d] ${className}`}
+        className={`aspect-[2/3] w-full rounded overflow-hidden bg-black relative border border-border/80 ${className}`}
       >
         <img
           src={src}
@@ -85,7 +85,7 @@ export function CinematicMediaCard({
     const posterSrc = resolvePosterUrl(posterPath, "w500");
     return (
       <div
-        className={`aspect-video w-full rounded overflow-hidden bg-[#0d1210] relative border border-[#28342d] ${className}`}
+        className={`aspect-video w-full rounded overflow-hidden bg-background relative border border-border ${className}`}
       >
         {/* Ambient blurred backdrop fill */}
         <img
@@ -102,7 +102,7 @@ export function CinematicMediaCard({
             src={posterSrc}
             alt={title}
             onError={() => setImgError(true)}
-            className="h-full w-auto max-w-full aspect-[2/3] object-cover rounded shadow-lg border border-[#303b34]/80"
+            className="h-full w-auto max-w-full aspect-[2/3] object-cover rounded shadow-lg border border-border"
           />
         </div>
       </div>

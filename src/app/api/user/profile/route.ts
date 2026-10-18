@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { user } from "@/db/schema";
 import { eq, sql, and, ne } from "drizzle-orm";
 import { validateUsername, normalizeUsername } from "@/lib/username";
+import { isValidHexColor, normalizeHexColor, isValidThemeMode, ThemeMode } from "@/lib/theme";
 
 export async function GET() {
   try {
@@ -20,6 +21,8 @@ export async function GET() {
         image: user.image,
         username: user.username,
         bio: user.bio,
+        preferredTheme: user.preferredTheme,
+        accentColor: user.accentColor,
         createdAt: user.createdAt,
       })
       .from(user)
@@ -45,17 +48,46 @@ export async function PATCH(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, username: candidateUsername, bio, image } = body;
+    const {
+      name,
+      username: candidateUsername,
+      bio,
+      image,
+      preferredTheme,
+      accentColor,
+    } = body;
 
     const updates: Partial<{
       name: string;
       username: string | null;
       bio: string | null;
       image: string | null;
+      preferredTheme: string;
+      accentColor: string;
       updatedAt: Date;
     }> = {
       updatedAt: new Date(),
     };
+
+    if (preferredTheme !== undefined) {
+      if (!isValidThemeMode(preferredTheme)) {
+        return NextResponse.json(
+          { error: "Invalid theme mode. Must be 'light', 'dark', or 'system'." },
+          { status: 400 }
+        );
+      }
+      updates.preferredTheme = preferredTheme;
+    }
+
+    if (accentColor !== undefined) {
+      if (!isValidHexColor(accentColor)) {
+        return NextResponse.json(
+          { error: "Invalid accent color. Must be a valid hex color code (e.g. #89D5D5)." },
+          { status: 400 }
+        );
+      }
+      updates.accentColor = normalizeHexColor(accentColor);
+    }
 
     if (typeof name === "string" && name.trim()) {
       updates.name = name.trim();
@@ -122,6 +154,8 @@ export async function PATCH(req: NextRequest) {
         image: user.image,
         username: user.username,
         bio: user.bio,
+        preferredTheme: user.preferredTheme,
+        accentColor: user.accentColor,
       });
 
     return NextResponse.json({ user: updated, success: true });

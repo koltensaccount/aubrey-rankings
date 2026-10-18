@@ -158,14 +158,14 @@ export function CinematicSlider({
         }}
         className={`group/track relative w-full h-2.5 sm:h-3 rounded-full cursor-pointer touch-none transition-all ${
           disabled
-            ? "opacity-50 cursor-not-allowed bg-[#131815] border border-[#232d27]"
-            : "bg-[#161e1a] border border-[#2b3730] hover:border-[#3d4f45]"
-        } ${isFocused ? "ring-2 ring-[#89d5d5]/50 border-[#89d5d5]" : ""}`}
+            ? "opacity-50 cursor-not-allowed bg-muted border border-border"
+            : "bg-muted/70 border border-border hover:border-primary/50"
+        } ${isFocused ? "ring-2 ring-primary/50 border-primary" : ""}`}
       >
         {/* Fill bar (visible only when rated) */}
         {isRated && (
           <div
-            className="absolute left-0 top-0 bottom-0 rounded-full bg-gradient-to-r from-[#214b43] via-[#2f6a5e] to-[#89d5d5] transition-[width] duration-75 ease-out"
+            className="absolute left-0 top-0 bottom-0 rounded-full bg-gradient-to-r from-primary/50 to-primary transition-[width] duration-75 ease-out"
             style={{ width: `${percent}%` }}
           />
         )}
@@ -173,7 +173,7 @@ export function CinematicSlider({
         {/* Hover preview ghost bar (when unrated and hovering) */}
         {!isRated && hoverPercent !== null && (
           <div
-            className="absolute left-0 top-0 bottom-0 rounded-full bg-[#89d5d5]/15 pointer-events-none transition-[width] duration-75"
+            className="absolute left-0 top-0 bottom-0 rounded-full bg-primary/15 pointer-events-none transition-[width] duration-75"
             style={{ width: `${hoverPercent}%` }}
           />
         )}
@@ -181,8 +181,8 @@ export function CinematicSlider({
         {/* Selected Slider Thumb (visible ONLY when scored/rated) */}
         {isRated && (
           <div
-            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 sm:w-4.5 sm:h-4.5 rounded-full bg-[#89d5d5] border-2 border-[#101412] shadow-[0_0_10px_rgba(137,213,213,0.55)] transition-transform ${
-              isDragging ? "scale-125 shadow-[0_0_16px_rgba(137,213,213,0.85)]" : "group-hover/track:scale-110"
+            className={`absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-4 h-4 sm:w-4.5 sm:h-4.5 rounded-full bg-primary border-2 border-background shadow-md transition-transform ${
+              isDragging ? "scale-125 shadow-lg" : "group-hover/track:scale-110"
             }`}
             style={{ left: `${percent}%` }}
           />
@@ -191,7 +191,7 @@ export function CinematicSlider({
         {/* Hover Ghost Thumb (when unrated, shows where clicking will set) */}
         {!isRated && hoverPercent !== null && (
           <div
-            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full border border-dashed border-[#89d5d5]/60 bg-[#89d5d5]/25 pointer-events-none"
+            className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 w-3.5 h-3.5 rounded-full border border-dashed border-primary/60 bg-primary/25 pointer-events-none"
             style={{ left: `${hoverPercent}%` }}
           />
         )}

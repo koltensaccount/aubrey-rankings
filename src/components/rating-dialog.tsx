@@ -322,7 +322,7 @@ export function RatingDialog({
       }}
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
     >
-      <div className="relative w-full max-w-2xl my-6 rounded-2xl bg-[#141a17] border border-[#303b34] shadow-[0_20px_60px_rgba(0,0,0,0.85)] overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="relative w-full max-w-2xl my-6 rounded-2xl bg-card border border-border text-foreground shadow-[0_20px_60px_rgba(0,0,0,0.85)] overflow-hidden flex flex-col max-h-[92vh]">
         {/* Header with Visual Still */}
         <div className="relative h-44 sm:h-52 w-full bg-black shrink-0">
           {backdropUrl ? (
@@ -332,16 +332,16 @@ export function RatingDialog({
               className="w-full h-full object-cover object-center opacity-65 filter saturate-90"
             />
           ) : (
-            <div className="w-full h-full bg-[#111514]" />
+            <div className="w-full h-full bg-background" />
           )}
-          <div className="absolute inset-0 bg-gradient-to-t from-[#141a17] via-[#141a17]/60 to-transparent" />
+          <div className="absolute inset-0 bg-gradient-to-t from-card via-card/60 to-transparent" />
 
           {/* Close Button */}
           <button
             type="button"
             onClick={onClose}
             aria-label="Close dialog"
-            className="absolute top-3 right-3 h-8 w-8 rounded-full bg-black/75 backdrop-blur-md text-[#f1f0e9] hover:bg-[#25342c] flex items-center justify-center border border-[#303b34] transition-colors cursor-pointer z-10"
+            className="absolute top-3 right-3 h-8 w-8 rounded-full bg-background/80 backdrop-blur-md text-foreground hover:bg-muted flex items-center justify-center border border-border transition-colors cursor-pointer z-10"
           >
             <X className="h-4 w-4" />
           </button>
@@ -350,13 +350,13 @@ export function RatingDialog({
           <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between gap-4">
             <div className="space-y-1 min-w-0">
               {isEpisode && (
-                <span className="inline-block px-2.5 py-0.5 rounded bg-black/80 border border-[#303b34] text-[10px] text-[#89d5d5] font-semibold tracking-wider uppercase">
+                <span className="inline-block px-2.5 py-0.5 rounded bg-black/80 border border-border text-[10px] text-primary font-semibold tracking-wider uppercase">
                   Season {mediaItem.seasonNumber} · Episode {mediaItem.episodeNumber}
                 </span>
               )}
               <h2
                 id="rating-dialog-title"
-                className="font-display text-2xl sm:text-3xl font-bold text-[#f1f0e9] uppercase tracking-tight truncate drop-shadow-md"
+                className="font-display text-2xl sm:text-3xl font-bold text-foreground uppercase tracking-tight truncate drop-shadow-md"
               >
                 {mediaItem.title}
               </h2>
@@ -375,7 +375,7 @@ export function RatingDialog({
 
           {/* Overview snippet if available */}
           {mediaItem.overview && (
-            <p className="text-xs text-[#9aa79e] leading-relaxed line-clamp-2">
+            <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
               {mediaItem.overview}
             </p>
           )}
@@ -383,13 +383,13 @@ export function RatingDialog({
           {/* Mismatched Rubric Notice */}
           {hasMismatchedSystem && (
             <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 space-y-2 text-xs">
-              <div className="flex items-center gap-2 text-amber-300 font-semibold uppercase tracking-wider text-[11px]">
+              <div className="flex items-center gap-2 text-amber-400 font-semibold uppercase tracking-wider text-[11px]">
                 <AlertTriangle size={14} />
                 <span>Historical Rubric Transition</span>
               </div>
-              <p className="text-[#c7d5cb] leading-relaxed">
+              <p className="text-foreground/80 leading-relaxed">
                 This item was originally scored under a previous rubric (Overall:{" "}
-                <strong className="text-amber-300">
+                <strong className="text-amber-400">
                   ★ {initialRating?.calculatedOverallScore ? initialRating.calculatedOverallScore.toFixed(2) : "—"}
                 </strong>
                 ). The collection now uses &ldquo;{ratingSystem?.name || "Standard Rubric"}&rdquo;.
@@ -399,7 +399,7 @@ export function RatingDialog({
                 <button
                   type="button"
                   onClick={handleMigrateMatchingCategories}
-                  className="px-3 py-1.5 rounded bg-amber-400/20 hover:bg-amber-400/30 text-amber-200 border border-amber-400/40 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                  className="px-3 py-1.5 rounded bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/40 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
                 >
                   <Sparkles size={12} />
                   <span>Re-score with Current Rubric</span>
@@ -410,20 +410,20 @@ export function RatingDialog({
 
           {/* Category Scoring Section */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-[#28342d] pb-2">
+            <div className="flex items-center justify-between border-b border-border pb-2">
               <div className="flex items-center gap-2">
-                <Sliders className="h-4 w-4 text-[#89d5d5]" />
-                <h3 className="font-display text-sm sm:text-base font-bold text-[#f1f0e9] uppercase tracking-wide">
+                <Sliders className="h-4 w-4 text-primary" />
+                <h3 className="font-display text-sm sm:text-base font-bold text-foreground uppercase tracking-wide">
                   Category Scoring
                 </h3>
               </div>
-              <span className="text-xs text-[#8fa095] font-mono">
+              <span className="text-xs text-muted-foreground font-mono">
                 Scale 1–{scale}
               </span>
             </div>
 
             {categories.length === 0 ? (
-              <div className="p-6 text-center text-xs text-[#8fa095] border border-dashed border-[#2b3730] rounded-xl">
+              <div className="p-6 text-center text-xs text-muted-foreground border border-dashed border-border rounded-xl">
                 No scoring categories configured for this rubric.
               </div>
             ) : (
@@ -437,25 +437,25 @@ export function RatingDialog({
                       key={cat.id}
                       className={`p-3.5 rounded-xl border transition-colors space-y-2.5 ${
                         isScored
-                          ? "border-[#3b4c40] bg-[#141b18]"
-                          : "border-[#253229] bg-[#111613]"
+                          ? "border-border bg-card shadow-sm"
+                          : "border-border/60 bg-muted/30"
                       }`}
                     >
                       {/* Category Header */}
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-2 min-w-0">
-                          <span className="text-xs font-semibold text-[#f1f0e9] truncate">
+                          <span className="text-xs font-semibold text-foreground truncate">
                             {cat.name}
                           </span>
                           {cat.isRequired && (
-                            <span className="text-[9px] uppercase tracking-wider text-amber-400 font-bold bg-amber-400/10 px-1.5 py-0.2 rounded border border-amber-400/20 shrink-0">
+                            <span className="text-[9px] uppercase tracking-wider text-muted-foreground font-semibold bg-muted/80 px-1.5 py-0.5 rounded border border-border shrink-0">
                               Req
                             </span>
                           )}
                         </div>
 
                         <div className="flex items-center gap-1.5 shrink-0">
-                          <span className="text-[10px] text-[#89d5d5] font-semibold bg-[#89d5d5]/10 px-1.5 py-0.5 rounded border border-[#89d5d5]/20">
+                          <span className="text-[10px] text-primary font-semibold bg-primary/10 px-1.5 py-0.5 rounded border border-primary/20">
                             {cat.weight}× weight
                           </span>
 
@@ -465,7 +465,7 @@ export function RatingDialog({
                               type="button"
                               onClick={() => handleScoreChange(cat.id, null)}
                               title="Clear category score"
-                              className="p-1 rounded text-[#6c7d73] hover:text-[#f1f0e9] hover:bg-[#25342c] transition-colors cursor-pointer"
+                              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors cursor-pointer"
                             >
                               <RotateCcw size={11} />
                             </button>
@@ -498,24 +498,24 @@ export function RatingDialog({
                             value={isScored ? currentScore : ""}
                             onChange={(e) => handleNumericInputChange(cat.id, e.target.value)}
                             aria-label={`${cat.name} numeric score`}
-                            className="w-14 h-8 text-center text-xs font-semibold rounded-lg bg-[#18211d] border border-[#3b4c40] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5] transition-colors"
+                            className="w-14 h-8 text-center text-xs font-semibold rounded-lg bg-input border border-input-border text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
                           />
                         </div>
                       </div>
 
                       {/* Readout label */}
                       <div className="flex items-center justify-between text-[11px] pt-0.5">
-                        <span className="text-[#6c7d73]">
+                        <span className="text-muted-foreground">
                           {isScored ? (
-                            <span className="text-[#89d5d5] font-semibold">
+                            <span className="text-primary font-semibold">
                               {currentScore.toFixed(1)}{" "}
-                              <span className="text-[#6c7d73] font-normal">/ {scale}</span>
+                              <span className="text-muted-foreground font-normal">/ {scale}</span>
                             </span>
                           ) : (
                             <span className="italic">Not rated</span>
                           )}
                         </span>
-                        <span className="text-[10px] text-[#55675c]">
+                        <span className="text-[10px] text-muted-foreground/75">
                           max {scale}
                         </span>
                       </div>
@@ -528,7 +528,7 @@ export function RatingDialog({
 
           {/* Review Text */}
           <div className="space-y-2">
-            <label className="text-xs font-semibold text-[#8fa095] uppercase tracking-wider block">
+            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
               Critique & Reflections
             </label>
             <textarea
@@ -540,20 +540,20 @@ export function RatingDialog({
               }
               value={reviewText}
               onChange={(e) => setReviewText(e.target.value)}
-              className="w-full text-xs rounded-xl p-3 bg-[#111613] border border-[#2b3730] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5] leading-relaxed resize-none"
+              className="w-full text-xs rounded-xl p-3 bg-input border border-input-border text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary leading-relaxed resize-none"
             />
           </div>
 
           {/* Metadata Toggles: Watched, Favorite & Date */}
-          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-[#28342d] text-xs">
+          <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-border text-xs">
             <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={() => setIsWatched(!isWatched)}
                 className={`px-3 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
                   isWatched
-                    ? "bg-[#1c2721] border-[#3b4c40] text-[#89d5d5]"
-                    : "bg-[#141a17] border-[#2b3730] text-[#6c7d73]"
+                    ? "bg-primary/10 border-primary/30 text-primary"
+                    : "bg-muted/40 border-border text-muted-foreground hover:text-foreground"
                 }`}
               >
                 <Eye size={13} />
@@ -565,69 +565,75 @@ export function RatingDialog({
                 onClick={() => setIsFavorite(!isFavorite)}
                 className={`px-3 py-1.5 rounded-lg border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer ${
                   isFavorite
-                    ? "bg-red-500/10 border-red-500/30 text-red-400"
-                    : "bg-[#141a17] border-[#2b3730] text-[#6c7d73]"
+                    ? "bg-red-500/10 border-red-500/30 text-red-500"
+                    : "bg-muted/40 border-border text-muted-foreground hover:text-foreground"
                 }`}
               >
-                <Heart size={13} className={isFavorite ? "fill-red-400" : ""} />
+                <Heart size={13} className={isFavorite ? "fill-red-500" : ""} />
                 <span>Favorite</span>
               </button>
             </div>
 
             <div className="flex items-center gap-2">
-              <Calendar size={13} className="text-[#6c7d73]" />
+              <Calendar size={13} className="text-muted-foreground" />
               <input
                 type="date"
                 value={watchDate}
                 onChange={(e) => setWatchDate(e.target.value)}
-                className="bg-[#18211d] text-xs text-[#f1f0e9] border border-[#2b3730] rounded-lg px-2.5 py-1 focus:outline-none focus:border-[#89d5d5]"
+                className="bg-input text-xs text-foreground border border-input-border rounded-lg px-2.5 py-1 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
               />
             </div>
           </div>
 
           {/* =========================================================================
-              PROMINENT LIVE OVERALL SCORE CARD (Requirement 3: Right above Save action)
+              PROMINENT LIVE OVERALL SCORE CARD (Restrained, semantic, no crypto amber)
               ========================================================================= */}
           <div
             className={`p-4 rounded-xl border transition-all ${
               scoredCount === 0
-                ? "bg-[#121714] border-[#253229] text-[#6c7d73]"
+                ? "bg-muted/30 border-border text-muted-foreground"
                 : isComplete
-                  ? "bg-[#89d5d5]/10 border-[#89d5d5]/40 text-[#89d5d5]"
-                  : "bg-amber-500/10 border-amber-500/30 text-amber-300"
+                  ? "bg-primary/10 border-primary/40 text-foreground"
+                  : "bg-card border-border text-foreground shadow-sm"
             }`}
           >
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <span className="text-[10px] uppercase font-bold tracking-wider block opacity-85">
+                <span className="text-[10px] uppercase font-bold tracking-wider block opacity-75">
                   {scoredCount === 0
-                    ? "Your Overall Score"
+                    ? "Your Overall Score · Unrated"
                     : isComplete
-                      ? "Your Overall Score"
-                      : "Your Overall Score · Provisional"}
+                      ? "Your Overall Score · Complete"
+                      : `Your Overall Score · In Progress (${scoredCount}/${totalCategoriesCount})`}
                 </span>
 
                 <div className="font-display text-2xl sm:text-3xl font-bold tracking-tight mt-0.5">
                   {scoredCount === 0 ? (
-                    <span className="text-[#8fa095] text-lg font-sans">No score yet</span>
+                    <span className="text-muted-foreground text-lg font-sans">No score yet</span>
                   ) : (
-                    <span>
-                      ★ {calculation.weightedScore?.toFixed(2)}{" "}
-                      <span className="text-xs font-sans opacity-70">/ {scale}</span>
+                    <span className="flex items-baseline gap-1">
+                      <span className="text-primary font-bold">★ {calculation.weightedScore?.toFixed(2)}</span>
+                      <span className="text-xs font-sans text-muted-foreground">/ {scale}</span>
                     </span>
                   )}
                 </div>
               </div>
 
-              <div className="text-right sm:text-right">
-                <span className="text-xs font-medium block">
-                  {scoredCount} of {totalCategoriesCount} categories rated
+              <div className="text-left sm:text-right">
+                <span className="text-xs font-semibold block">
+                  {scoredCount === 0 ? (
+                    <span className="text-muted-foreground">Unrated</span>
+                  ) : isComplete ? (
+                    <span className="text-primary">All {totalCategoriesCount} Categories Rated</span>
+                  ) : (
+                    <span>{scoredCount} of {totalCategoriesCount} Categories Rated</span>
+                  )}
                 </span>
-                <span className="text-[10px] opacity-75 block mt-0.5">
+                <span className="text-[10px] text-muted-foreground block mt-0.5">
                   {scoredCount === 0
                     ? "Interact with sliders above to begin scoring"
                     : isComplete
-                      ? "All required categories completed"
+                      ? "All required categories completed · Ready to save"
                       : "Complete all required categories to finalize"}
                 </span>
               </div>
@@ -637,19 +643,19 @@ export function RatingDialog({
 
         {/* Clear Rating Confirmation Banner / Modal */}
         {showClearConfirm && (
-          <div className="p-4 bg-[#1b1515] border-t border-red-500/30 space-y-3 shrink-0">
-            <div className="flex items-center gap-2 text-red-300 text-xs font-semibold uppercase tracking-wider">
+          <div className="p-4 bg-red-950/20 border-t border-red-500/30 space-y-3 shrink-0">
+            <div className="flex items-center gap-2 text-red-400 text-xs font-semibold uppercase tracking-wider">
               <Trash2 size={14} />
               <span>Confirm Rating Removal</span>
             </div>
-            <p className="text-xs text-[#d6c7c7] leading-relaxed">
+            <p className="text-xs text-foreground/85 leading-relaxed">
               Choose how you want to clear your rating for &ldquo;{mediaItem.title}&rdquo;:
             </p>
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => setShowClearConfirm(false)}
-                className="px-3 py-1.5 text-xs text-[#9aa79e] hover:text-[#f1f0e9] cursor-pointer"
+                className="px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground cursor-pointer"
               >
                 Cancel
               </button>
@@ -658,7 +664,7 @@ export function RatingDialog({
                   type="button"
                   onClick={() => handleExecuteClear(true)}
                   disabled={deleting}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#2b2020] hover:bg-[#3d2c2c] text-amber-300 border border-amber-500/30 cursor-pointer transition-colors"
+                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-muted hover:bg-muted/80 text-foreground border border-border cursor-pointer transition-colors"
                 >
                   Clear Scores Only (Keep Review & Notes)
                 </button>
@@ -676,12 +682,12 @@ export function RatingDialog({
         )}
 
         {/* Action Footer */}
-        <div className="flex items-center justify-between p-4 sm:p-5 border-t border-[#28342d] bg-[#101412] shrink-0">
+        <div className="flex items-center justify-between p-4 sm:p-5 border-t border-border bg-card/60 shrink-0">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-3 py-2 text-xs text-[#9aa79e] hover:text-[#f1f0e9] transition-colors cursor-pointer"
+              className="px-3 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
             >
               Cancel
             </button>
@@ -704,12 +710,10 @@ export function RatingDialog({
             type="button"
             onClick={handleSave}
             disabled={saving || deleting}
-            className={`px-5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-lg ${
-              isComplete
-                ? "bg-[#89d5d5] hover:bg-[#a2e6e6] text-[#0d1714] font-bold shadow-[#89d5d5]/20"
-                : scoredCount > 0
-                  ? "bg-amber-400 hover:bg-amber-300 text-[#1b1509] font-bold shadow-amber-400/20"
-                  : "bg-[#d8e2d8] hover:bg-[#edf5ed] text-[#102523]"
+            className={`px-5 py-2.5 rounded-xl text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer shadow-md ${
+              scoredCount > 0
+                ? "bg-primary hover:bg-primary-hover text-primary-foreground font-bold shadow-primary/20"
+                : "bg-secondary hover:bg-muted text-secondary-foreground border border-border"
             }`}
           >
             {saving ? (

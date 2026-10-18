@@ -1,10 +1,10 @@
 // Packaged with the release: migrations and application always have the same revision.
 const { Client } = require('pg');
-const { readdirSync, readFileSync } = require('node:fs');
+const { readdirSync, readFileSync, existsSync } = require('node:fs');
 const { join } = require('node:path');
 const { createHash } = require('node:crypto');
 
-async function run({ connectionString = process.env.DATABASE_URL, directory = process.env.MIGRATIONS_DIR || join(__dirname, '../migrations'), baselineThrough } = {}) {
+async function run({ connectionString = process.env.DATABASE_URL, directory = process.env.MIGRATIONS_DIR || (existsSync(join(__dirname, '../migrations')) ? join(__dirname, '../migrations') : join(__dirname, '../src/db/migrations')), baselineThrough } = {}) {
   if (!connectionString) throw new Error('DATABASE_URL is required');
   const files = readdirSync(directory).filter(f => /^\d{4}_[\w-]+\.sql$/.test(f)).sort();
   if (!files.length) throw new Error('Release has no SQL migrations');

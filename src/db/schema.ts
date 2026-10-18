@@ -25,6 +25,8 @@ export const user = pgTable(
     image: text("image"),
     username: text("username").unique(),
     bio: text("bio"),
+    preferredTheme: text("preferred_theme").default("dark"),
+    accentColor: text("accent_color").default("#89D5D5"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },

@@ -883,14 +883,14 @@ export default function CollectionDetailPage({
             )}
 
             {/* Requirement 6: Rating Status Filters */}
-            <div className="flex items-center gap-1 bg-[#141a17] p-1 rounded-lg border border-[#303b34] shrink-0">
+            <div className="flex items-center gap-1 bg-card p-1 rounded-lg border border-border shrink-0">
               <button
                 type="button"
                 onClick={() => setFilterRated("all")}
                 className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
                   filterRated === "all"
-                    ? "bg-[#25322a] text-[#89d5d5] font-semibold"
-                    : "text-[#8fa095] hover:text-[#f1f0e9]"
+                    ? "bg-surface text-primary font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 All ({totalEntries})
@@ -900,8 +900,8 @@ export default function CollectionDetailPage({
                 onClick={() => setFilterRated("rated")}
                 className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
                   filterRated === "rated"
-                    ? "bg-[#89d5d5] text-[#102523] font-bold"
-                    : "text-[#8fa095] hover:text-[#f1f0e9]"
+                    ? "bg-primary text-primary-foreground font-bold"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Rated ({completedCount})
@@ -911,8 +911,8 @@ export default function CollectionDetailPage({
                 onClick={() => setFilterRated("in_progress")}
                 className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
                   filterRated === "in_progress"
-                    ? "bg-amber-400 text-[#1b1509] font-bold"
-                    : "text-[#8fa095] hover:text-[#f1f0e9]"
+                    ? "bg-primary/20 text-primary border border-primary/40 font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 In Progress ({inProgressCount})
@@ -922,8 +922,8 @@ export default function CollectionDetailPage({
                 onClick={() => setFilterRated("unrated")}
                 className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
                   filterRated === "unrated"
-                    ? "bg-[#25322a] text-[#f1f0e9] font-semibold"
-                    : "text-[#8fa095] hover:text-[#f1f0e9]"
+                    ? "bg-surface text-foreground font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
                 }`}
               >
                 Unrated ({unratedCount})

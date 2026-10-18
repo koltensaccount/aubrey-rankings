@@ -106,27 +106,27 @@ export function BugReportButton() {
         type="button"
         onClick={() => setIsOpen(true)}
         aria-label="Report an issue"
-        className="fixed bottom-4 right-4 z-40 px-3 py-2 rounded-full bg-[#18221c]/90 hover:bg-[#202e26] text-[#8fa095] hover:text-[#89d5d5] border border-[#303b34] hover:border-[#415247] shadow-xl backdrop-blur-md text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer group"
+        className="fixed bottom-4 right-4 z-40 px-3 py-2 rounded-full bg-card/90 hover:bg-surface text-muted-foreground hover:text-primary border border-border hover:border-primary/40 shadow-xl backdrop-blur-md text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer group"
       >
-        <Bug size={14} className="text-[#89d5d5] group-hover:scale-110 transition-transform" />
+        <Bug size={14} className="text-primary group-hover:scale-110 transition-transform" />
         <span className="hidden sm:inline">Report Issue</span>
       </button>
 
       {/* Bug Report Modal */}
       {isOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="w-full max-w-lg rounded-xl bg-[#141a17] border border-[#303b34] p-6 shadow-2xl space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-[#28342d]">
+          <div className="w-full max-w-lg rounded-xl bg-card border border-border p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-border">
               <div className="flex items-center gap-2">
-                <Bug size={18} className="text-[#89d5d5]" />
-                <h3 className="font-display text-lg uppercase font-bold text-[#f1f0e9]">
+                <Bug size={18} className="text-primary" />
+                <h3 className="font-display text-lg uppercase font-bold text-foreground">
                   Report an Issue
                 </h3>
               </div>
               <button
                 type="button"
                 onClick={() => setIsOpen(false)}
-                className="text-[#8fa095] hover:text-[#f1f0e9] p-1 cursor-pointer"
+                className="text-muted-foreground hover:text-foreground p-1 cursor-pointer"
               >
                 <X size={18} />
               </button>
@@ -134,11 +134,11 @@ export function BugReportButton() {
 
             {isSuccess ? (
               <div className="py-8 text-center space-y-3">
-                <CheckCircle2 size={36} className="mx-auto text-[#89d5d5]" />
-                <h4 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+                <CheckCircle2 size={36} className="mx-auto text-primary" />
+                <h4 className="font-display text-xl uppercase font-bold text-foreground">
                   Report Received
                 </h4>
-                <p className="text-xs text-[#9aa79e]">
+                <p className="text-xs text-muted-foreground">
                   Thank you for helping us polish Aubrey Rankings!
                 </p>
               </div>
@@ -151,16 +151,16 @@ export function BugReportButton() {
                 )}
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
                     Page Location
                   </label>
-                  <div className="text-xs text-[#6c7d73] font-mono px-3 py-2 rounded bg-[#101513] border border-[#232d27] truncate">
+                  <div className="text-xs text-muted-foreground/80 font-mono px-3 py-2 rounded bg-surface border border-border truncate">
                     {typeof window !== "undefined" ? window.location.pathname + window.location.search : "/"}
                   </div>
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                  <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
                     Description <span className="text-red-400">*</span>
                   </label>
                   <textarea
@@ -169,23 +169,23 @@ export function BugReportButton() {
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="Describe what happened, what you expected, or any unexpected behavior..."
                     required
-                    className="w-full text-xs rounded-lg p-3 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] placeholder-[#6c7d73] focus:outline-none focus:border-[#89d5d5] transition-colors resize-none"
+                    className="w-full text-xs rounded-lg p-3 bg-surface border border-border text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary transition-colors resize-none"
                   />
                 </div>
 
                 {/* Screenshot Attachment / Paste */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                    <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
                       Screenshot (Optional)
                     </label>
-                    <span className="text-[10px] text-[#6c7d73]">
+                    <span className="text-[10px] text-muted-foreground/70">
                       Paste with Ctrl+V / ⌘V or upload
                     </span>
                   </div>
 
                   {screenshotData ? (
-                    <div className="relative rounded-lg border border-[#303b34] bg-black overflow-hidden max-h-40 flex items-center justify-center group">
+                    <div className="relative rounded-lg border border-border bg-black overflow-hidden max-h-40 flex items-center justify-center group">
                       <img
                         src={screenshotData}
                         alt="Screenshot preview"
@@ -201,10 +201,10 @@ export function BugReportButton() {
                       </button>
                     </div>
                   ) : (
-                    <label className="flex flex-col items-center justify-center p-4 rounded-lg border border-dashed border-[#303b34] hover:border-[#425247] bg-[#111613] cursor-pointer transition-colors">
-                      <ImageIcon size={20} className="text-[#6c7d73] mb-1" />
-                      <span className="text-xs text-[#8fa095]">Click to upload or paste image</span>
-                      <span className="text-[10px] text-[#55645a] mt-0.5">PNG, JPG up to 5MB</span>
+                    <label className="flex flex-col items-center justify-center p-4 rounded-lg border border-dashed border-border hover:border-primary/50 bg-surface cursor-pointer transition-colors">
+                      <ImageIcon size={20} className="text-muted-foreground/60 mb-1" />
+                      <span className="text-xs text-muted-foreground">Click to upload or paste image</span>
+                      <span className="text-[10px] text-muted-foreground/60 mt-0.5">PNG, JPG up to 5MB</span>
                       <input
                         type="file"
                         accept="image/*"
@@ -220,14 +220,14 @@ export function BugReportButton() {
                     type="button"
                     onClick={() => setIsOpen(false)}
                     disabled={isSubmitting}
-                    className="px-4 py-2 text-xs text-[#9aa79e] hover:text-[#f1f0e9] transition-colors cursor-pointer"
+                    className="px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={isSubmitting || !description.trim()}
-                    className="px-5 py-2.5 rounded bg-[#89d5d5] hover:bg-[#a5e2e2] text-[#102523] text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                    className="px-5 py-2.5 rounded bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
                   >
                     {isSubmitting ? (
                       <>

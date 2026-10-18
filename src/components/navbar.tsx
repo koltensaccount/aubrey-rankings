@@ -23,7 +23,7 @@ export function Navbar() {
       : "a";
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-[#303b34] bg-[#111514]/90 backdrop-blur-md">
+    <header className="sticky top-0 z-50 w-full border-b border-border bg-background/90 backdrop-blur-md transition-colors">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
         {/* Brand */}
         <div className="flex items-center gap-8">
@@ -33,11 +33,11 @@ export function Navbar() {
           </Link>
 
           {/* Navigation Links */}
-          <nav className="hidden md:flex items-center gap-6 text-xs text-[#939f98]">
+          <nav className="hidden md:flex items-center gap-6 text-xs text-muted-foreground">
             <Link
               href="/"
               className={`transition-colors py-1 ${
-                pathname === "/" ? "text-[#f1f0e9] font-semibold" : "hover:text-[#f1f0e9]"
+                pathname === "/" ? "text-foreground font-semibold" : "hover:text-foreground"
               }`}
             >
               Feed
@@ -45,7 +45,7 @@ export function Navbar() {
             <Link
               href="/explore"
               className={`transition-colors py-1 ${
-                pathname === "/explore" ? "text-[#f1f0e9] font-semibold" : "hover:text-[#f1f0e9]"
+                pathname === "/explore" ? "text-foreground font-semibold" : "hover:text-foreground"
               }`}
             >
               Explore
@@ -55,7 +55,7 @@ export function Navbar() {
                 <Link
                   href="/profile"
                   className={`transition-colors py-1 ${
-                    pathname === "/profile" ? "text-[#f1f0e9] font-semibold" : "hover:text-[#f1f0e9]"
+                    pathname === "/profile" ? "text-foreground font-semibold" : "hover:text-foreground"
                   }`}
                 >
                   My Library
@@ -63,7 +63,7 @@ export function Navbar() {
                 <Link
                   href="/create"
                   className={`transition-colors py-1 ${
-                    pathname === "/create" ? "text-[#f1f0e9] font-semibold" : "hover:text-[#f1f0e9]"
+                    pathname === "/create" ? "text-foreground font-semibold" : "hover:text-foreground"
                   }`}
                 >
                   Create
@@ -76,12 +76,12 @@ export function Navbar() {
         {/* Right Section / Auth */}
         <div className="flex items-center gap-3">
           {isPending ? (
-            <div className="h-8 w-20 rounded bg-[#1c2420] animate-pulse" />
+            <div className="h-8 w-20 rounded bg-muted animate-pulse" />
           ) : session ? (
             <div className="flex items-center gap-3">
               <Link
                 href="/create"
-                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded bg-[#d8e2d8] hover:bg-[#edf5ed] text-[#102523] text-xs font-semibold transition-colors"
+                className="hidden sm:inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded border border-border bg-secondary hover:bg-muted text-secondary-foreground text-xs font-semibold transition-colors"
               >
                 <Plus size={14} />
                 <span>New ranking</span>
@@ -90,7 +90,7 @@ export function Navbar() {
               <Link
                 href="/settings"
                 title="Settings"
-                className="p-2 text-[#939f98] hover:text-[#f1f0e9] transition-colors"
+                className="p-2 text-muted-foreground hover:text-foreground transition-colors"
               >
                 <Settings size={17} />
               </Link>
@@ -115,7 +115,7 @@ export function Navbar() {
               <button
                 onClick={handleSignOut}
                 title="Sign out"
-                className="p-2 text-[#939f98] hover:text-red-400 transition-colors bg-transparent border-0 cursor-pointer"
+                className="p-2 text-muted-foreground hover:text-red-400 transition-colors bg-transparent border-0 cursor-pointer"
               >
                 <LogOut size={16} />
               </button>
@@ -124,13 +124,13 @@ export function Navbar() {
             <div className="flex items-center gap-3 text-xs">
               <Link
                 href="/login"
-                className="text-[#939f98] hover:text-[#f1f0e9] transition-colors px-3 py-1.5 font-medium"
+                className="text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 font-medium"
               >
                 Sign in
               </Link>
               <Link
                 href="/signup"
-                className="px-4 py-2 rounded bg-[#89d5d5] hover:bg-[#a5dfdf] text-[#102523] font-semibold transition-colors"
+                className="px-4 py-2 rounded bg-primary hover:bg-primary-hover text-primary-foreground font-semibold transition-colors shadow-sm"
               >
                 Get started
               </Link>

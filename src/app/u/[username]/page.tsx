@@ -9,6 +9,7 @@ import { normalizeUsername } from "@/lib/username";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { getTopRankedEntries } from "@/lib/scoring";
 import { FollowButton } from "@/components/social/follow-button";
+import { getAccentTokens } from "@/lib/theme";
 import {
   ArrowRight,
   Calendar,
@@ -106,14 +107,29 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
       })
     : "Recent";
 
+  const profileAccentTokens = getAccentTokens(targetUser.accentColor || "#89D5D5");
+
   return (
-    <div className="min-h-screen bg-[#111514] text-[#f1f0e9] pb-24">
+    <div
+      className="min-h-screen bg-background text-foreground pb-24 transition-colors"
+      style={{
+        "--profile-accent": profileAccentTokens.primary,
+        "--profile-accent-fg": profileAccentTokens.primaryForeground,
+        "--profile-accent-hover": profileAccentTokens.primaryHover,
+      } as React.CSSProperties}
+    >
       {/* Editorial Profile Header */}
-      <header className="border-b border-[#232d27] bg-[#141a17] pt-10 pb-8 px-4 sm:px-8">
+      <header className="border-b border-border bg-card/60 pt-10 pb-8 px-4 sm:px-8">
         <div className="max-w-5xl mx-auto">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6">
             <div className="flex items-start gap-4">
-              <div className="h-16 w-16 rounded-full bg-[#1b2420] border-2 border-[#89d5d5]/40 flex items-center justify-center text-[#89d5d5] font-display text-2xl font-bold shrink-0">
+              <div
+                className="h-16 w-16 rounded-full bg-muted border-2 flex items-center justify-center font-display text-2xl font-bold shrink-0 shadow-sm"
+                style={{
+                  borderColor: `${profileAccentTokens.primary}60`,
+                  color: profileAccentTokens.primary,
+                }}
+              >
                 {targetUser.image ? (
                   <img
                     src={targetUser.image}
@@ -126,19 +142,22 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
               </div>
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <h1 className="font-display text-2xl sm:text-3xl font-bold uppercase tracking-tight text-[#f1f0e9]">
+                  <h1 className="font-display text-2xl sm:text-3xl font-bold uppercase tracking-tight text-foreground">
                     {targetUser.name || targetUser.username}
                   </h1>
-                  <span className="text-xs font-mono text-[#89d5d5]">
+                  <span
+                    className="text-xs font-mono font-semibold"
+                    style={{ color: profileAccentTokens.primary }}
+                  >
                     @{targetUser.username}
                   </span>
                 </div>
                 {targetUser.bio && (
-                  <p className="text-xs text-[#9aa79e] max-w-xl leading-relaxed">
+                  <p className="text-xs text-muted-foreground max-w-xl leading-relaxed">
                     {targetUser.bio}
                   </p>
                 )}
-                <div className="flex flex-wrap items-center gap-4 text-[11px] text-[#6c7d73] pt-1">
+                <div className="flex flex-wrap items-center gap-4 text-[11px] text-muted-foreground pt-1">
                   <span className="flex items-center gap-1.5">
                     <Calendar size={13} />
                     Member since {formattedJoinDate}
@@ -164,6 +183,8 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                 initialFollowersCount={followersCount}
                 initialFollowingCount={followingCount}
                 isOwnProfile={isOwnProfile}
+                accentColor={profileAccentTokens.primary}
+                accentFg={profileAccentTokens.primaryForeground}
               />
             </div>
           </div>
@@ -174,12 +195,12 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
         {/* Pinned Ranking Feature Card */}
         {pinnedCollection && (
           <section className="space-y-3">
-            <div className="flex items-center justify-between border-b border-[#232d27] pb-2">
-              <h2 className="font-display text-xs uppercase font-bold tracking-widest text-[#8fa597] flex items-center gap-1.5">
-                <Sparkles size={13} className="text-[#89d5d5]" />
+            <div className="flex items-center justify-between border-b border-border pb-2">
+              <h2 className="font-display text-xs uppercase font-bold tracking-widest text-muted-foreground flex items-center gap-1.5">
+                <Sparkles size={13} style={{ color: profileAccentTokens.primary }} />
                 Pinned Canon
               </h2>
-              <span className="text-[11px] text-[#6c7d73]">
+              <span className="text-[11px] text-muted-foreground">
                 {pinnedCollection.entries.length} Entries
               </span>
             </div>
@@ -248,7 +269,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                         />
                         <div className="ar-peekMeta">
                           <strong>{entry.mediaItem?.title || "Item"}</strong>
-                          <small>
+                          <small style={{ color: profileAccentTokens.primary }}>
                             {score !== null ? `★ ${score.toFixed(1)}` : "—"}
                           </small>
                         </div>
@@ -263,15 +284,15 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
 
         {/* Public Rankings Grid */}
         <section className="space-y-4">
-          <div className="flex items-center justify-between border-b border-[#232d27] pb-2">
-            <h2 className="font-display text-sm uppercase font-bold tracking-widest text-[#f1f0e9]">
+          <div className="flex items-center justify-between border-b border-border pb-2">
+            <h2 className="font-display text-sm uppercase font-bold tracking-widest text-foreground">
               Published Rankings ({publicCollections.length})
             </h2>
           </div>
 
           {publicCollections.length === 0 ? (
-            <div className="p-8 rounded-xl border border-[#232d27] bg-[#141a17] text-center space-y-2">
-              <p className="text-xs text-[#8fa095]">
+            <div className="p-8 rounded-xl border border-border bg-card text-center space-y-2">
+              <p className="text-xs text-muted-foreground">
                 {targetUser.name || targetUser.username} hasn&apos;t published any public rankings yet.
               </p>
             </div>
@@ -311,7 +332,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                           {col.collectionType === "tv_show" ? "TV Series" : "Canon"} · {col.entries.length} items · ★ {avgScore}
                         </span>
                         <h2>{col.title}</h2>
-                        <p style={{ fontSize: 12, color: "#9caea2", lineHeight: 1.5, margin: "4px 0 8px" }}>
+                        <p style={{ fontSize: 12, opacity: 0.85, lineHeight: 1.5, margin: "4px 0 8px" }}>
                           {col.description || "Weighted rankings scored across narrative rigor, cinematography, and sound."}
                         </p>
                         <ol>
@@ -320,7 +341,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                           ))}
                         </ol>
                       </div>
-                      <ArrowRight size={18} style={{ color: "#8fa597", flexShrink: 0 }} />
+                      <ArrowRight size={18} className="text-muted-foreground shrink-0" />
                     </Link>
                   </article>
                 );
@@ -332,8 +353,8 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
         {/* Recent Public Reviews */}
         {publicReviews.length > 0 && (
           <section className="space-y-4">
-            <div className="flex items-center justify-between border-b border-[#232d27] pb-2">
-              <h2 className="font-display text-sm uppercase font-bold tracking-widest text-[#f1f0e9]">
+            <div className="flex items-center justify-between border-b border-border pb-2">
+              <h2 className="font-display text-sm uppercase font-bold tracking-widest text-foreground">
                 Recent Public Reviews & Dispatches
               </h2>
             </div>
@@ -342,21 +363,27 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
               {publicReviews.map((rev) => (
                 <div
                   key={rev.id}
-                  className="p-5 rounded-xl border border-[#232d27] bg-[#141a17] space-y-2.5"
+                  className="p-5 rounded-xl border border-border bg-card space-y-2.5 shadow-sm"
                 >
                   <div className="flex items-start justify-between">
                     <div>
-                      <h3 className="font-display text-base uppercase font-bold text-[#f1f0e9]">
+                      <h3 className="font-display text-base uppercase font-bold text-foreground">
                         {rev.mediaItem?.title || "Movie"}
                       </h3>
-                      <div className="text-[11px] text-[#8fa095] flex items-center gap-1.5 mt-0.5">
+                      <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
                         {rev.sourceRating && (
-                          <span className="text-[#89d5d5] font-semibold">
+                          <span
+                            className="font-semibold"
+                            style={{ color: profileAccentTokens.primary }}
+                          >
                             ★ {rev.sourceRating.toFixed(1)}/5
                           </span>
                         )}
                         {rev.calculatedOverallScore && (
-                          <span className="text-[#89d5d5] font-semibold">
+                          <span
+                            className="font-semibold"
+                            style={{ color: profileAccentTokens.primary }}
+                          >
                             Weighted: {rev.calculatedOverallScore.toFixed(1)}
                           </span>
                         )}
@@ -368,7 +395,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                       </div>
                     </div>
                   </div>
-                  <p className="text-xs text-[#d0ded5] leading-relaxed line-clamp-4">
+                  <p className="text-xs text-foreground/80 leading-relaxed line-clamp-4">
                     &ldquo;{rev.reviewText}&rdquo;
                   </p>
                 </div>

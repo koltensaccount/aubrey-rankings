@@ -11,6 +11,8 @@ interface FollowButtonProps {
   initialFollowersCount: number;
   initialFollowingCount: number;
   isOwnProfile?: boolean;
+  accentColor?: string;
+  accentFg?: string;
 }
 
 export function FollowButton({
@@ -20,6 +22,8 @@ export function FollowButton({
   initialFollowersCount,
   initialFollowingCount,
   isOwnProfile = false,
+  accentColor,
+  accentFg,
 }: FollowButtonProps) {
   const [isFollowing, setIsFollowing] = useState(initialIsFollowing);
   const [followersCount, setFollowersCount] = useState(initialFollowersCount);
@@ -102,12 +106,27 @@ export function FollowButton({
         disabled={loading}
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
+        style={
+          isFollowing
+            ? isHovered
+              ? undefined
+              : accentColor
+                ? { color: accentColor, borderColor: `${accentColor}50` }
+                : undefined
+            : accentColor
+              ? { backgroundColor: accentColor, color: accentFg || "#102523" }
+              : undefined
+        }
         className={`inline-flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all min-w-[105px] ${
           isFollowing
             ? isHovered
-              ? "bg-[#331c1e] text-[#f87171] border border-[#7f1d1d]"
-              : "bg-[#17201c] text-[#89d5d5] border border-[#3b4c40]"
-            : "bg-[#89d5d5] hover:bg-[#a2e5e5] text-[#102523] border border-transparent shadow-sm shadow-[#89d5d5]/20"
+              ? "bg-red-950/30 text-red-400 border border-red-800"
+              : accentColor
+                ? "bg-card border"
+                : "bg-card text-primary border border-border"
+            : accentColor
+              ? "border border-transparent shadow-sm"
+              : "bg-primary hover:bg-primary-hover text-primary-foreground border border-transparent shadow-sm"
         }`}
       >
         {loading ? (

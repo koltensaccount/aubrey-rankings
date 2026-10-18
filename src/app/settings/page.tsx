@@ -23,11 +23,47 @@ import {
   Star,
   Sparkles,
   Camera,
+  Palette,
+  Sun,
+  Moon,
+  Monitor,
+  RotateCcw,
 } from "lucide-react";
+import { useTheme } from "@/components/theme-provider";
+import {
+  ACCENT_PRESETS,
+  getContrastRatio,
+  getRelativeLuminance,
+  hexToRgb,
+  isValidHexColor,
+  normalizeHexColor,
+  getAccessibleForeground,
+  ThemeMode,
+} from "@/lib/theme";
 
 export default function SettingsPage() {
   const { data: session } = useSession();
-  const [activeTab, setActiveTab] = useState<"rating_systems" | "account" | "data">("rating_systems");
+  const {
+    theme,
+    setTheme,
+    accentColor,
+    setAccentColor,
+    resetToDefaults,
+    resolvedTheme,
+    isSaving: isSavingTheme,
+  } = useTheme();
+
+  const [activeTab, setActiveTab] = useState<
+    "appearance" | "rating_systems" | "account" | "data"
+  >("appearance");
+
+  // Custom accent state
+  const [customHex, setCustomHex] = useState(accentColor);
+  const [colorError, setColorError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setCustomHex(accentColor);
+  }, [accentColor]);
 
   // Rating systems state
   const [ratingSystems, setRatingSystems] = useState<any[]>([]);
@@ -491,55 +527,410 @@ export default function SettingsPage() {
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
       {/* Header */}
       <div>
-        <span className="text-[11px] text-[#8fa095] uppercase tracking-wider block">
+        <span className="text-[11px] text-muted-foreground uppercase tracking-wider block">
           Platform Configuration
         </span>
-        <h1 className="font-display text-4xl sm:text-5xl font-bold uppercase tracking-tight text-[#f1f0e9] mt-1">
+        <h1 className="font-display text-4xl sm:text-5xl font-bold uppercase tracking-tight text-foreground mt-1">
           Settings
         </h1>
-        <p className="text-xs text-[#9aa79e] mt-1">
+        <p className="text-xs text-muted-foreground mt-1">
           Manage personalized weighted rubrics, critique preferences, and account security.
         </p>
       </div>
 
       {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-[#303b34] pb-px">
+      <div className="flex items-center gap-2 border-b border-border pb-px overflow-x-auto">
         <button
-          onClick={() => setActiveTab("rating_systems")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
-            activeTab === "rating_systems"
-              ? "border-[#89d5d5] text-[#f1f0e9]"
-              : "border-transparent text-[#8fa095] hover:text-[#f1f0e9]"
+          onClick={() => setActiveTab("appearance")}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer shrink-0 ${
+            activeTab === "appearance"
+              ? "border-primary text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-          <Sliders size={14} />
+          <Palette size={14} className={activeTab === "appearance" ? "text-primary" : ""} />
+          <span>Appearance</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab("rating_systems")}
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer shrink-0 ${
+            activeTab === "rating_systems"
+              ? "border-primary text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Sliders size={14} className={activeTab === "rating_systems" ? "text-primary" : ""} />
           <span>Weighted Rubrics</span>
         </button>
 
         <button
           onClick={() => setActiveTab("account")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer shrink-0 ${
             activeTab === "account"
-              ? "border-[#89d5d5] text-[#f1f0e9]"
-              : "border-transparent text-[#8fa095] hover:text-[#f1f0e9]"
+              ? "border-primary text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-          <User size={14} />
+          <User size={14} className={activeTab === "account" ? "text-primary" : ""} />
           <span>Account & Security</span>
         </button>
 
         <button
           onClick={() => setActiveTab("data")}
-          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer ${
+          className={`flex items-center gap-2 px-4 py-2.5 text-xs font-semibold border-b-2 transition-colors cursor-pointer shrink-0 ${
             activeTab === "data"
-              ? "border-[#89d5d5] text-[#f1f0e9]"
-              : "border-transparent text-[#8fa095] hover:text-[#f1f0e9]"
+              ? "border-primary text-foreground"
+              : "border-transparent text-muted-foreground hover:text-foreground"
           }`}
         >
-          <FileSpreadsheet size={14} />
+          <FileSpreadsheet size={14} className={activeTab === "data" ? "text-primary" : ""} />
           <span>Data & Import</span>
         </button>
       </div>
+
+      {/* TAB 0: APPEARANCE & THEME */}
+      {activeTab === "appearance" && (
+        <div className="space-y-8 max-w-4xl">
+          {/* Section: Color Theme Mode */}
+          <div className="p-6 rounded-2xl border border-border bg-card space-y-5 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-display text-xl uppercase font-bold text-foreground">
+                  Theme Mode
+                </h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Choose between cinematic dark, editorial light, or automatic system sync.
+                </p>
+              </div>
+              <span className="text-xs font-medium text-muted-foreground/80 px-2.5 py-1 rounded-full border border-border bg-muted/40">
+                Active: <strong className="text-foreground capitalize">{resolvedTheme}</strong>
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Dark Option */}
+              <button
+                type="button"
+                onClick={() => setTheme("dark")}
+                className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between h-36 ${
+                  theme === "dark"
+                    ? "border-primary ring-2 ring-primary/20 bg-muted/60"
+                    : "border-border bg-muted/20 hover:border-border/80 hover:bg-muted/40"
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <div className="h-9 w-9 rounded-lg bg-background border border-border flex items-center justify-center text-foreground shadow-sm">
+                    <Moon size={18} />
+                  </div>
+                  {theme === "dark" && (
+                    <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">
+                      <Check size={12} strokeWidth={3} />
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-foreground block">
+                    Dark (Cinematic)
+                  </span>
+                  <span className="text-[11px] text-muted-foreground leading-relaxed block mt-0.5">
+                    Original cinema aesthetic with deep black and charcoal tones.
+                  </span>
+                </div>
+              </button>
+
+              {/* Light Option */}
+              <button
+                type="button"
+                onClick={() => setTheme("light")}
+                className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between h-36 ${
+                  theme === "light"
+                    ? "border-primary ring-2 ring-primary/20 bg-muted/60"
+                    : "border-border bg-muted/20 hover:border-border/80 hover:bg-muted/40"
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <div className="h-9 w-9 rounded-lg bg-background border border-border flex items-center justify-center text-foreground shadow-sm">
+                    <Sun size={18} />
+                  </div>
+                  {theme === "light" && (
+                    <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">
+                      <Check size={12} strokeWidth={3} />
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-foreground block">
+                    Light (Editorial)
+                  </span>
+                  <span className="text-[11px] text-muted-foreground leading-relaxed block mt-0.5">
+                    Warm off-white paper, soft white cards, and crisp dark typography.
+                  </span>
+                </div>
+              </button>
+
+              {/* System Option */}
+              <button
+                type="button"
+                onClick={() => setTheme("system")}
+                className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between h-36 ${
+                  theme === "system"
+                    ? "border-primary ring-2 ring-primary/20 bg-muted/60"
+                    : "border-border bg-muted/20 hover:border-border/80 hover:bg-muted/40"
+                }`}
+              >
+                <div className="flex items-center justify-between w-full">
+                  <div className="h-9 w-9 rounded-lg bg-background border border-border flex items-center justify-center text-foreground shadow-sm">
+                    <Monitor size={18} />
+                  </div>
+                  {theme === "system" && (
+                    <span className="h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs">
+                      <Check size={12} strokeWidth={3} />
+                    </span>
+                  )}
+                </div>
+                <div>
+                  <span className="text-xs font-bold text-foreground block">
+                    System Preference
+                  </span>
+                  <span className="text-[11px] text-muted-foreground leading-relaxed block mt-0.5">
+                    Automatically syncs with your device operating system theme.
+                  </span>
+                </div>
+              </button>
+            </div>
+          </div>
+
+          {/* Section: Accent Color */}
+          <div className="p-6 rounded-2xl border border-border bg-card space-y-6 shadow-sm">
+            <div>
+              <h3 className="font-display text-xl uppercase font-bold text-foreground">
+                Accent Color
+              </h3>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Customize the interactive highlight color used across buttons, sliders, badges, and your public profile.
+              </p>
+            </div>
+
+            {/* Presets Grid */}
+            <div className="space-y-2">
+              <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                Approved Presets
+              </span>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {ACCENT_PRESETS.map((preset) => {
+                  const isSelected = accentColor.toUpperCase() === preset.hex.toUpperCase();
+                  const [pr, pg, pb] = hexToRgb(preset.hex);
+                  const pLum = getRelativeLuminance(pr, pg, pb);
+                  const checkFg = pLum > 0.4 ? "#102523" : "#FFFFFF";
+
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      onClick={() => {
+                        setAccentColor(preset.hex);
+                        setCustomHex(preset.hex);
+                        setColorError(null);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center gap-3 ${
+                        isSelected
+                          ? "border-primary bg-muted/60 ring-2 ring-primary/20"
+                          : "border-border bg-muted/20 hover:border-border/80 hover:bg-muted/40"
+                      }`}
+                    >
+                      <div
+                        className="h-8 w-8 rounded-full flex items-center justify-center shrink-0 shadow-sm border border-black/15 transition-transform"
+                        style={{ backgroundColor: preset.hex }}
+                      >
+                        {isSelected && (
+                          <Check size={14} strokeWidth={3} style={{ color: checkFg }} />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-xs font-semibold text-foreground block truncate">
+                          {preset.name}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground font-mono block">
+                          {preset.hex}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Custom Accent Picker */}
+            <div className="pt-4 border-t border-border space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+                  Custom Hex Accent
+                </span>
+                {colorError && (
+                  <span className="text-[11px] text-red-500 font-medium">
+                    {colorError}
+                  </span>
+                )}
+              </div>
+
+              <div className="flex flex-wrap items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="relative h-10 w-10 rounded-xl overflow-hidden border border-border shadow-sm shrink-0">
+                    <input
+                      type="color"
+                      value={isValidHexColor(customHex) ? normalizeHexColor(customHex) : "#89D5D5"}
+                      onChange={(e) => {
+                        const val = e.target.value.toUpperCase();
+                        setCustomHex(val);
+                        setAccentColor(val);
+                        setColorError(null);
+                      }}
+                      className="absolute -inset-2 h-14 w-14 cursor-pointer opacity-0"
+                      title="Choose custom color"
+                    />
+                    <div
+                      className="w-full h-full"
+                      style={{
+                        backgroundColor: isValidHexColor(customHex)
+                          ? normalizeHexColor(customHex)
+                          : accentColor,
+                      }}
+                    />
+                  </div>
+
+                  <div className="relative">
+                    <input
+                      type="text"
+                      maxLength={7}
+                      value={customHex}
+                      placeholder="#89D5D5"
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setCustomHex(val);
+                        if (isValidHexColor(val)) {
+                          setAccentColor(val);
+                          setColorError(null);
+                        }
+                      }}
+                      onBlur={() => {
+                        if (isValidHexColor(customHex)) {
+                          const norm = normalizeHexColor(customHex);
+                          setCustomHex(norm);
+                          setAccentColor(norm);
+                          setColorError(null);
+                        } else {
+                          setColorError("Invalid hex format. Use #RGB or #RRGGBB.");
+                          setCustomHex(accentColor);
+                        }
+                      }}
+                      className="w-28 h-10 px-3 text-xs font-mono font-semibold rounded-xl bg-input border border-input-border text-foreground uppercase focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+                    />
+                  </div>
+                </div>
+
+                {/* WCAG AA Contrast Evaluation Readout */}
+                {(() => {
+                  const [r, g, b] = hexToRgb(accentColor);
+                  const lum = getRelativeLuminance(r, g, b);
+                  const fg = getAccessibleForeground(accentColor);
+                  const [fr, fgCol, fb] = hexToRgb(fg);
+                  const fgLum = getRelativeLuminance(fr, fgCol, fb);
+                  const contrast = getContrastRatio(lum, fgLum);
+                  const passesAA = contrast >= 4.5;
+
+                  return (
+                    <div className="flex items-center gap-2 text-xs">
+                      <span
+                        className="px-2.5 py-1 rounded-lg text-xs font-semibold"
+                        style={{
+                          backgroundColor: accentColor,
+                          color: fg,
+                        }}
+                      >
+                        Sample Badge
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        WCAG AA Contrast:{" "}
+                        <strong className="text-foreground font-mono">
+                          {contrast.toFixed(1)}:1
+                        </strong>{" "}
+                        {passesAA ? (
+                          <span className="text-emerald-500 font-semibold">(Pass)</span>
+                        ) : (
+                          <span className="text-amber-500 font-semibold">(Large text only)</span>
+                        )}
+                      </span>
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Live Interactive Preview Card */}
+            <div className="p-5 rounded-xl border border-border bg-background space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                  <Sparkles size={14} className="text-primary" />
+                  <span>Live Appearance Preview</span>
+                </span>
+                <span className="text-[11px] text-muted-foreground">
+                  Updates everywhere immediately
+                </span>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-primary hover:bg-primary-hover text-primary-foreground shadow-sm transition-all"
+                >
+                  Primary Action Button
+                </button>
+                <button
+                  type="button"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-secondary hover:bg-muted text-secondary-foreground border border-border transition-all"
+                >
+                  Secondary Action
+                </button>
+                <div className="px-3 py-1.5 rounded-lg border border-primary/30 bg-primary/10 text-primary text-xs font-semibold flex items-center gap-1">
+                  <span>★ 9.40</span>
+                  <span className="opacity-70 font-normal">/ 10</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Reset & Status Footer */}
+            <div className="pt-2 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  resetToDefaults();
+                  setCustomHex("#89D5D5");
+                  setColorError(null);
+                }}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted border border-border transition-colors cursor-pointer"
+              >
+                <RotateCcw size={13} />
+                <span>Reset to Aubrey Default</span>
+              </button>
+
+              <div className="flex items-center gap-2 text-muted-foreground">
+                {isSavingTheme ? (
+                  <span className="flex items-center gap-1 text-[11px]">
+                    <Loader2 size={12} className="animate-spin text-primary" />
+                    <span>Saving to profile...</span>
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-1 text-[11px] text-emerald-500 font-medium">
+                    <Check size={12} />
+                    <span>Appearance saved</span>
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* TAB 1: RATING SYSTEMS */}
       {activeTab === "rating_systems" && (

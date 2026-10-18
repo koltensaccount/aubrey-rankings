@@ -288,7 +288,7 @@ export default async function ProfilePage() {
                             {col.collectionType === "tv_show" ? "TV Series" : "Canon"} · {col.entries.length} items · ★ {avgScore}
                           </span>
                           <h2>{col.title}</h2>
-                          <p style={{ fontSize: 13, color: "#9caea2", lineHeight: 1.6, margin: "6px 0 10px" }}>
+                          <p style={{ fontSize: 13, color: "var(--muted-foreground)", lineHeight: 1.6, margin: "6px 0 10px" }}>
                             {col.description || "Ranked by narrative rigor and weighted categories."}
                           </p>
                           <ol>
@@ -297,7 +297,7 @@ export default async function ProfilePage() {
                             ))}
                           </ol>
                         </div>
-                        <ArrowRight size={18} style={{ color: "#8fa597", flexShrink: 0 }} />
+                        <ArrowRight size={18} className="text-muted-foreground shrink-0" />
                       </Link>
                     </article>
                   );
