@@ -11,11 +11,14 @@ import {
   Loader2,
   AlertCircle,
   ArrowRight,
+  Layers,
+  Sliders,
 } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { Suspense } from "react";
 
 type RankingType = "tv_show" | "movie_franchise" | "custom";
+type RatingMethod = "numerical" | "tier";
 
 function CreateRankingContent() {
   const router = useRouter();
@@ -23,6 +26,9 @@ function CreateRankingContent() {
 
   const [rankingType, setRankingType] = useState<RankingType>(
     (searchParams.get("type") as RankingType) || "tv_show"
+  );
+  const [ratingMethod, setRatingMethod] = useState<RatingMethod>(
+    (searchParams.get("method") as RatingMethod) || "numerical"
   );
   const [searchQuery, setSearchQuery] = useState(
     searchParams.get("suggest") || ""
@@ -76,6 +82,7 @@ function CreateRankingContent() {
     try {
       let payload: any = {
         collectionType: rankingType,
+        ratingMethod,
       };
 
       if (rankingType === "tv_show") {
@@ -196,9 +203,77 @@ function CreateRankingContent() {
         </button>
       </div>
 
-      {/* Step 2: Content Selection */}
+      {/* Step 2: Rating Method Selection */}
+      <div className="space-y-3">
+        <div>
+          <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
+            Step 2: Evaluation Method
+          </label>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Choose how you want to evaluate entries in this ranking. You can switch methods anytime without losing scores.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <button
+            type="button"
+            onClick={() => setRatingMethod("numerical")}
+            className={`p-5 rounded-card border text-left transition-all cursor-pointer ${
+              ratingMethod === "numerical"
+                ? "border-primary bg-primary/10 ring-1 ring-primary/40 shadow-card"
+                : "border-border bg-card hover:border-primary/50 hover:bg-surface"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <Sliders className={`h-5 w-5 ${ratingMethod === "numerical" ? "text-primary" : "text-muted-foreground"}`} />
+              <span
+                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                  ratingMethod === "numerical"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-surface text-muted-foreground border border-border"
+                }`}
+              >
+                Weighted Rubric
+              </span>
+            </div>
+            <h3 className="font-display text-xl font-bold uppercase text-foreground">Numerical Rating</h3>
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+              Rate items on a 0–10 scale across custom weighted criteria (Writing, Acting, Cinematography, Sound). Calculates exact weighted scores.
+            </p>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setRatingMethod("tier")}
+            className={`p-5 rounded-card border text-left transition-all cursor-pointer ${
+              ratingMethod === "tier"
+                ? "border-primary bg-primary/10 ring-1 ring-primary/40 shadow-card"
+                : "border-border bg-card hover:border-primary/50 hover:bg-surface"
+            }`}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <Layers className={`h-5 w-5 ${ratingMethod === "tier" ? "text-primary" : "text-muted-foreground"}`} />
+              <span
+                className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                  ratingMethod === "tier"
+                    ? "bg-primary text-primary-foreground"
+                    : "bg-surface text-muted-foreground border border-border"
+                }`}
+              >
+                Tier Board
+              </span>
+            </div>
+            <h3 className="font-display text-xl font-bold uppercase text-foreground">Tier List (S / A / B / C / D)</h3>
+            <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+              Drag artwork into customizable S, A, B, C, D tier rows with an interactive tier-board editor. Calibrated by rank order and visual hierarchy.
+            </p>
+          </button>
+        </div>
+      </div>
+
+      {/* Step 3: Content Selection */}
       {rankingType !== "custom" ? (
-        <div className="p-6 rounded-xl border border-border bg-card space-y-6">
+        <div className="p-6 rounded-card border border-border bg-card space-y-6 shadow-card">
           <div className="space-y-2">
             <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
               {rankingType === "tv_show" ? "Search TV Series (via TMDB)" : "Search Movie Franchise (via TMDB)"}

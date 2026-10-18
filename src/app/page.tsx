@@ -222,7 +222,7 @@ export default async function HomePage() {
           </span>
           <span className="text-muted-foreground/60">·</span>
           <Link href="/settings?tab=rating_systems" className="text-primary ml-auto font-medium hover:underline">
-            Weighted Rubric
+            Rating Systems
           </Link>
         </div>
 
@@ -237,7 +237,7 @@ export default async function HomePage() {
             <div className="max-w-md mx-auto space-y-1.5">
               <h3 className="font-display text-3xl uppercase text-foreground">Your library is waiting</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Create your first TV show, franchise, or custom collection to start rating with weighted rubrics.
+                Create your first TV show, franchise, or custom collection to start rating with numerical rubrics or visual tier lists.
               </p>
             </div>
             <div className="flex flex-wrap justify-center gap-3 pt-2">

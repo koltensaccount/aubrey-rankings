@@ -131,11 +131,11 @@ export function CollectionEntryList({
                     </div>
                   ) : state === "in_progress" ? (
                     <div className="text-right">
-                      <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold text-amber-500 dark:text-amber-400 bg-amber-500/10 border border-amber-500/30 uppercase tracking-wider">
+                      <span className="inline-block px-2 py-0.5 rounded text-[10px] font-semibold text-primary-text bg-primary/10 border border-primary/20 uppercase tracking-wider">
                         {scoredCount}/{totalCategories} Rated
                       </span>
                       {score !== null && (
-                        <div className="font-display text-base font-bold text-amber-500/90 dark:text-amber-400/90 mt-0.5">
+                        <div className="font-display text-base font-bold text-primary-text/90 mt-0.5">
                           ★ {score.toFixed(1)}
                         </div>
                       )}
@@ -152,7 +152,7 @@ export function CollectionEntryList({
                       state === "rated"
                         ? "bg-surface hover:bg-surface-elevated text-foreground border-border"
                         : state === "in_progress"
-                          ? "bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-400 border-amber-500/30"
+                          ? "bg-primary/15 hover:bg-primary/25 text-primary-text border-primary/30"
                           : "bg-primary hover:bg-primary-hover text-primary-foreground border-primary shadow-sm"
                     }`}
                   >
@@ -198,7 +198,7 @@ export function CollectionEntryList({
               state === "rated"
                 ? "border-border-card bg-card hover:border-primary/50 shadow-card"
                 : state === "in_progress"
-                  ? "border-amber-500/30 bg-surface hover:border-amber-500/50"
+                  ? "border-primary/30 bg-surface hover:border-primary/50"
                   : "border-border-card bg-surface/50 hover:border-border"
             }`}
           >
@@ -226,7 +226,7 @@ export function CollectionEntryList({
                   ★ {score.toFixed(1)}
                 </div>
               ) : state === "in_progress" ? (
-                <div className="absolute top-3 right-3 px-2 py-0.5 rounded bg-black/85 backdrop-blur-md border border-amber-500/50 text-amber-300 font-display text-xs tracking-wider uppercase font-bold shadow-lg">
+                <div className="absolute top-3 right-3 px-2 py-0.5 rounded bg-black/85 backdrop-blur-md border border-primary/50 text-primary-text font-display text-xs tracking-wider uppercase font-bold shadow-lg">
                   {scoredCount}/{totalCategories} Rated
                 </div>
               ) : (
@@ -254,7 +254,7 @@ export function CollectionEntryList({
                       state === "rated"
                         ? "bg-secondary hover:bg-surface text-foreground border border-border"
                         : state === "in_progress"
-                          ? "bg-amber-500/15 hover:bg-amber-500/25 text-amber-600 dark:text-amber-300 border border-amber-500/40"
+                          ? "bg-primary/15 hover:bg-primary/25 text-primary-text border border-primary/40"
                           : "bg-primary hover:bg-primary-hover text-primary-foreground shadow-sm"
                     }`}
                   >

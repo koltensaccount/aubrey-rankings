@@ -36,20 +36,30 @@ interface CollectionRubricDialogProps {
   isOpen: boolean;
   onClose: () => void;
   isTier?: boolean;
+  targetMethod?: "numerical" | "tier";
   categories: RubricCategory[];
   onCategoriesChange: React.Dispatch<React.SetStateAction<RubricCategory[]>>;
   tiers?: RubricTier[];
   onTiersChange?: React.Dispatch<React.SetStateAction<RubricTier[]>>;
   customizeForCollectionOnly: boolean;
   onCustomizeScopeChange: (scope: boolean) => void;
-  onSave: () => void;
+  onSave: (targetMethod?: "numerical" | "tier") => void;
   isSaving: boolean;
 }
+
+const DEFAULT_TIER_ROWS: RubricTier[] = [
+  { id: "tier_temp_s", name: "S", description: "Masterpiece / Exceptional", color: "#EF4444", sortOrder: 1 },
+  { id: "tier_temp_a", name: "A", description: "Great / High Quality", color: "#F97316", sortOrder: 2 },
+  { id: "tier_temp_b", name: "B", description: "Good / Solid", color: "#F59E0B", sortOrder: 3 },
+  { id: "tier_temp_c", name: "C", description: "Average / Mediocre", color: "#10B981", sortOrder: 4 },
+  { id: "tier_temp_d", name: "D", description: "Subpar / Poor", color: "#3B82F6", sortOrder: 5 },
+];
 
 export function CollectionRubricDialog({
   isOpen,
   onClose,
   isTier = false,
+  targetMethod,
   categories,
   onCategoriesChange,
   tiers = [],
@@ -60,8 +70,26 @@ export function CollectionRubricDialog({
   isSaving,
 }: CollectionRubricDialogProps) {
   const [activeColorPickerIdx, setActiveColorPickerIdx] = useState<number | null>(null);
+  const [selectedMethod, setSelectedMethod] = useState<"numerical" | "tier">(
+    targetMethod || (isTier ? "tier" : "numerical")
+  );
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setSelectedMethod(targetMethod || (isTier ? "tier" : "numerical"));
+    }
+  }, [isOpen, targetMethod, isTier]);
 
   if (!isOpen) return null;
+
+  const isTierMode = selectedMethod === "tier";
+
+  const handleSelectMethod = (m: "numerical" | "tier") => {
+    setSelectedMethod(m);
+    if (m === "tier" && (!tiers || tiers.length === 0) && onTiersChange) {
+      onTiersChange(DEFAULT_TIER_ROWS);
+    }
+  };
 
   const handleAddTier = () => {
     if (!onTiersChange) return;
@@ -104,14 +132,14 @@ export function CollectionRubricDialog({
         <div className="flex items-center justify-between pb-3 border-b border-border">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-primary/20 text-primary flex items-center justify-center">
-              {isTier ? <Layers size={18} /> : <Sliders size={18} />}
+              {isTierMode ? <Layers size={18} /> : <Sliders size={18} />}
             </div>
             <div>
               <h3 className="font-display text-xl uppercase font-bold text-foreground">
-                {isTier ? "Customize Tier Rubric" : "Adjust Rubric Weights"}
+                {isTierMode ? "Tier Rating System" : "Numerical Weighted Rubric"}
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {isTier
+                {isTierMode
                   ? "Configure tier lanes, colors, labels, and hierarchy for this collection."
                   : "Calibrate the multiplier weights for each evaluation category."}
               </p>
@@ -126,9 +154,48 @@ export function CollectionRubricDialog({
           </button>
         </div>
 
+        {/* Evaluation Method Switcher */}
+        <div className="space-y-1.5">
+          <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
+            Rating Method
+          </label>
+          <div className="grid grid-cols-2 gap-2 p-1 bg-surface rounded-lg border border-border">
+            <button
+              type="button"
+              onClick={() => handleSelectMethod("numerical")}
+              className={`py-2 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                selectedMethod === "numerical"
+                  ? "bg-card text-foreground shadow-xs border border-border font-bold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Sliders size={14} className={selectedMethod === "numerical" ? "text-primary-text" : ""} />
+              <span>Numerical Rubric</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectMethod("tier")}
+              className={`py-2 px-3 rounded-md text-xs font-semibold flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                selectedMethod === "tier"
+                  ? "bg-card text-foreground shadow-xs border border-border font-bold"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <Layers size={14} className={selectedMethod === "tier" ? "text-primary-text" : ""} />
+              <span>Tier List (S/A/B/C/D)</span>
+            </button>
+          </div>
+          <div className="text-[11px] text-muted-foreground flex items-center justify-between px-1">
+            <span>Preserves all historical scores and tier assignments.</span>
+            {selectedMethod !== (isTier ? "tier" : "numerical") && (
+              <span className="text-primary-text font-semibold">Will switch collection format</span>
+            )}
+          </div>
+        </div>
+
         {/* Content area: Tier Rows OR Numerical Sliders */}
-        <div className="space-y-3 max-h-[55vh] overflow-y-auto pr-1">
-          {isTier ? (
+        <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+          {isTierMode ? (
             <>
               {tiers.map((tier, idx) => (
                 <div
@@ -292,7 +359,7 @@ export function CollectionRubricDialog({
           </button>
           <button
             type="button"
-            onClick={onSave}
+            onClick={() => onSave(selectedMethod)}
             disabled={isSaving}
             className="px-5 py-2.5 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50 shadow-sm"
           >
@@ -304,7 +371,7 @@ export function CollectionRubricDialog({
             ) : (
               <>
                 <Check className="h-4 w-4" />
-                <span>Save Rubric</span>
+                <span>{selectedMethod !== (isTier ? "tier" : "numerical") ? "Apply & Switch Format" : "Save Rubric"}</span>
               </>
             )}
           </button>

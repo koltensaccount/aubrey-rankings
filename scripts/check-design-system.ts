@@ -112,4 +112,43 @@ if (hexViolations === 0) {
   process.exit(1);
 }
 
+// 3. Scan collection, ranking, and rubric components for hardcoded interface accent colors
+const interfaceAccentAuditFiles = [
+  path.join(ROOT, "src/app/collection/[id]/components/collection-toolbar.tsx"),
+  path.join(ROOT, "src/app/collection/[id]/components/tier-board-view.tsx"),
+  path.join(ROOT, "src/app/collection/[id]/components/tier-board-editor-modal.tsx"),
+  path.join(ROOT, "src/app/collection/[id]/components/collection-entry-list.tsx"),
+  path.join(ROOT, "src/app/collection/[id]/components/collection-header.tsx"),
+  path.join(ROOT, "src/components/rating-dialog.tsx"),
+  path.join(ROOT, "src/app/settings/components/rating-systems-tab.tsx"),
+  path.join(ROOT, "src/app/create/page.tsx"),
+];
+
+const forbiddenInterfaceAccentRegex = /\b(?:bg|text|border|fill|ring|from|to|via)-(?:amber|yellow|gold)-(?:[1-9]00|\d{2,3})(?:\/\d+)?\b/i;
+
+let accentViolations = 0;
+for (const file of interfaceAccentAuditFiles) {
+  if (fs.existsSync(file)) {
+    const lines = fs.readFileSync(file, "utf-8").split("\n");
+    lines.forEach((line, index) => {
+      // Allow data swatches array or comments
+      if (line.includes("COLOR_SWATCHES") || line.trim().startsWith("//") || line.trim().startsWith("*")) {
+        return;
+      }
+      if (forbiddenInterfaceAccentRegex.test(line)) {
+        const relPath = path.relative(ROOT, file);
+        console.error(`❌ Hardcoded interface accent violation in ${relPath}:${index + 1}: ${line.trim()}`);
+        accentViolations++;
+      }
+    });
+  }
+}
+
+if (accentViolations === 0) {
+  console.log("✔ No forbidden hardcoded interface accents found in ranking and rubric components.");
+} else {
+  console.error(`❌ Found ${accentViolations} hardcoded interface accent violations.`);
+  process.exit(1);
+}
+
 console.log("✅ Aubrey Rankings Design System check passed cleanly!");

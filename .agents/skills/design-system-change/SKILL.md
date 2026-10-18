@@ -38,7 +38,15 @@ className="rounded-button bg-primary text-primary-foreground px-4 py-2"
 - Lightness is clamped and guaranteed $\ge 4.5:1$ contrast against base dark background (`#111514`).
 - Radioactive or fluorescent neons are clamped to prevent garish visual artifacts.
 
-## 4. Verification Command
+## 4. Strict Interface Accent Token Rules
+
+- **Zero Hardcoded Interface Accent Classes**: Never hardcode colors like `amber-*`, `yellow-*`, or `gold-*` for interactive elements such as buttons, active view toggles, badges, progress bars, or modal headers.
+- **Required Semantic Tokens**: Always use Aubrey's theme tokens (`bg-primary`, `hover:bg-primary-hover`, `text-primary`, `text-primary-foreground`, `text-primary-text`, `bg-surface`, `bg-surface-elevated`, `border-border`, `bg-card`).
+- **User Data vs. Interface Chrome**:
+  - *User Data Colors*: User-customizable tier row colors (e.g. S tier `#EF4444`, A tier `#F97316`) are domain data stored in the database and applied dynamically via inline styles (`style={{ backgroundColor: tier.color }}`). These must remain untouched.
+  - *Interface Chrome*: Any surrounding buttons, badges, banners, icons, modals, and toolbar controls MUST use semantic design tokens and adapt dynamically to the user's selected accent theme.
+
+## 5. Verification Command
 
 Run the automated design system audit script:
 
@@ -50,3 +58,4 @@ This verifies that:
 - `globals.css` and `src/lib/theme.ts` palettes match exactly.
 - All extensible tokens are properly defined.
 - No legacy crypto/dark hex colors (`#141a17`, `#303b34`, `#102523`, etc.) exist in `src/app` or `src/components`.
+- No forbidden hardcoded interface accent colors (`amber-*`, `yellow-*`, `gold-*`) exist in ranking or collection interface components.

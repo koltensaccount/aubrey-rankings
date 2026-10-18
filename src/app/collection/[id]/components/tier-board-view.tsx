@@ -54,9 +54,9 @@ export function TierBoardView({
     <div className="space-y-4">
       {/* Owner Action: Dedicated Visual Tier-Board Editor Banner */}
       {isOwner && onOpenTierEditor && (
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-lg bg-gradient-to-r from-amber-500/10 via-card to-card border border-amber-500/20 shadow-sm">
+        <div className="flex flex-col sm:flex-row items-center justify-between gap-3 p-4 rounded-card bg-gradient-to-r from-primary/10 via-card to-card border border-primary/20 shadow-card">
           <div className="flex items-center gap-3 text-left">
-            <div className="w-10 h-10 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center shrink-0">
+            <div className="w-10 h-10 rounded-lg bg-primary/20 text-primary-text flex items-center justify-center shrink-0">
               <Layers size={20} />
             </div>
             <div>
@@ -71,7 +71,7 @@ export function TierBoardView({
           <button
             type="button"
             onClick={onOpenTierEditor}
-            className="w-full sm:w-auto px-4 py-2 rounded-button bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
+            className="w-full sm:w-auto px-4 py-2 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground font-semibold text-xs transition-all shadow-sm flex items-center justify-center gap-1.5 cursor-pointer shrink-0"
           >
             <Layers size={14} />
             <span>Rank Items</span>

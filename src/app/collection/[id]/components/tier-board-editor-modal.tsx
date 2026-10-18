@@ -353,7 +353,7 @@ function DroppableUnrankedTray({
         <SortableContext items={itemIds} strategy={rectSortingStrategy}>
           {itemIds.length === 0 ? (
             <div className="w-full py-8 text-center text-xs text-muted-foreground/60 italic flex items-center justify-center gap-2">
-              <Sparkles size={14} className="text-amber-400" />
+              <Sparkles size={14} className="text-primary-text" />
               <span>All titles are currently ranked! Drag any card back here to unrank it.</span>
             </div>
           ) : (
@@ -593,7 +593,7 @@ export function TierBoardEditorModal({
       {/* 1. Header Bar */}
       <header className="border-b border-border bg-card/90 px-4 sm:px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold">
+          <div className="w-8 h-8 rounded-lg bg-primary/20 text-primary-text flex items-center justify-center font-bold">
             <Layers size={18} />
           </div>
           <div>

@@ -118,7 +118,7 @@ function SettingsContent() {
           }`}
         >
           <Sliders size={14} className={activeTab === "rating_systems" ? "text-primary" : ""} />
-          <span>Weighted Rubrics</span>
+          <span>Rating Systems</span>
         </button>
 
         <button

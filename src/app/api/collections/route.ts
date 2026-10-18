@@ -58,6 +58,8 @@ export async function POST(request: NextRequest) {
       tmdbId,
       importAllEpisodes,
       selectedSeasonNumbers,
+      ratingMethod = "numerical",
+      defaultRatingSystemId: requestedRsId,
     } = body;
 
     const title = typeof rawTitle === "string" ? rawTitle.trim() : "";
@@ -72,15 +74,55 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find or seed default rating system for this user
-    let defaultRs = await db.query.ratingSystems.findFirst({
-      where: (rs, { eq, and }) =>
-        and(eq(rs.userId, session.user.id), eq(rs.isDefault, true)),
-    });
+    // Resolve default rating system (numerical vs tier)
+    let defaultRatingSystemId: string | null = null;
 
-    let defaultRatingSystemId = defaultRs?.id;
+    if (requestedRsId && typeof requestedRsId === "string") {
+      const explicitRs = await db.query.ratingSystems.findFirst({
+        where: (rs, { eq, and, or, isNull }) =>
+          and(
+            eq(rs.id, requestedRsId),
+            or(eq(rs.userId, session.user.id), and(eq(rs.isSystemTemplate, true), isNull(rs.userId)))
+          ),
+      });
+      if (explicitRs) {
+        defaultRatingSystemId = explicitRs.id;
+      }
+    }
+
     if (!defaultRatingSystemId) {
-      defaultRatingSystemId = await seedDefaultRatingSystem(session.user.id);
+      if (ratingMethod === "tier") {
+        // Find user default tier system or fallback to persisted system tier template
+        const userTier = await db.query.ratingSystems.findFirst({
+          where: (rs, { eq, and }) =>
+            and(eq(rs.userId, session.user.id), eq(rs.type, "tier"), eq(rs.isDefault, true)),
+        });
+        const anyUserTier = userTier || await db.query.ratingSystems.findFirst({
+          where: (rs, { eq, and }) =>
+            and(eq(rs.userId, session.user.id), eq(rs.type, "tier")),
+        });
+        const systemTier = anyUserTier || await db.query.ratingSystems.findFirst({
+          where: (rs, { eq, and }) =>
+            and(eq(rs.type, "tier"), eq(rs.isSystemTemplate, true)),
+        });
+        defaultRatingSystemId = systemTier?.id || "rs_template_standard_tiers";
+      } else {
+        // Numerical rating system
+        let defaultRs = await db.query.ratingSystems.findFirst({
+          where: (rs, { eq, and }) =>
+            and(eq(rs.userId, session.user.id), eq(rs.isDefault, true), eq(rs.type, "numerical")),
+        });
+        if (!defaultRs) {
+          defaultRs = await db.query.ratingSystems.findFirst({
+            where: (rs, { eq, and }) =>
+              and(eq(rs.userId, session.user.id), eq(rs.type, "numerical")),
+          });
+        }
+        defaultRatingSystemId = defaultRs?.id || null;
+        if (!defaultRatingSystemId) {
+          defaultRatingSystemId = await seedDefaultRatingSystem(session.user.id);
+        }
+      }
     }
 
     const collectionId = `col_${Date.now()}_${nanoid(6)}`;

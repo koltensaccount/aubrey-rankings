@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
 import { collections, collectionEntries, mediaItems, ratings, ratingSystems, follows } from "@/db/schema";
-import { eq, and, asc, sql } from "drizzle-orm";
+import { eq, and, or, isNull, asc, sql } from "drizzle-orm";
 import { tmdb } from "@/lib/tmdb";
 
 export async function GET(
@@ -223,14 +223,48 @@ export async function PATCH(
       updateData.isPinned = body.isPinned;
     }
 
-    // Security Fix: Verify rating system ownership
+    // Rating method switching (numerical <-> tier)
+    if (body.ratingMethod !== undefined) {
+      if (body.ratingMethod === "tier") {
+        const userTier = await db.query.ratingSystems.findFirst({
+          where: (rs, { eq, and }) =>
+            and(eq(rs.userId, session.user.id), eq(rs.type, "tier"), eq(rs.isDefault, true)),
+        });
+        const anyUserTier = userTier || await db.query.ratingSystems.findFirst({
+          where: (rs, { eq, and }) =>
+            and(eq(rs.userId, session.user.id), eq(rs.type, "tier")),
+        });
+        const systemTier = anyUserTier || await db.query.ratingSystems.findFirst({
+          where: (rs, { eq, and }) =>
+            and(eq(rs.type, "tier"), eq(rs.isSystemTemplate, true)),
+        });
+        updateData.defaultRatingSystemId = systemTier?.id || "rs_template_standard_tiers";
+      } else if (body.ratingMethod === "numerical") {
+        let defaultRs = await db.query.ratingSystems.findFirst({
+          where: (rs, { eq, and }) =>
+            and(eq(rs.userId, session.user.id), eq(rs.isDefault, true), eq(rs.type, "numerical")),
+        });
+        if (!defaultRs) {
+          defaultRs = await db.query.ratingSystems.findFirst({
+            where: (rs, { eq, and }) =>
+              and(eq(rs.userId, session.user.id), eq(rs.type, "numerical")),
+          });
+        }
+        updateData.defaultRatingSystemId = defaultRs?.id || null;
+      }
+    }
+
+    // Explicit rating system assignment (supports user systems AND system templates)
     if (body.defaultRatingSystemId !== undefined) {
       if (body.defaultRatingSystemId !== null) {
         const rs = await db.query.ratingSystems.findFirst({
-          where: (r, { eq, and }) =>
+          where: (r, { eq, and, or, isNull }) =>
             and(
               eq(r.id, body.defaultRatingSystemId),
-              eq(r.userId, session.user.id)
+              or(
+                eq(r.userId, session.user.id),
+                and(eq(r.isSystemTemplate, true), isNull(r.userId))
+              )
             ),
         });
         if (!rs) {

@@ -66,7 +66,7 @@ export function CollectionToolbar({
             <button
               type="button"
               onClick={onOpenTierEditor}
-              className="px-3 py-1.5 rounded-button bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+              className="px-3.5 py-1.5 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm cursor-pointer shrink-0"
             >
               <Layers size={13} />
               <span>Rank Items</span>
@@ -175,7 +175,7 @@ export function CollectionToolbar({
                 title="Tier Board view"
                 className={`p-1.5 rounded text-xs transition-colors cursor-pointer ${
                   viewMode === "tier_board"
-                    ? "bg-surface text-amber-400 font-bold"
+                    ? "bg-surface text-primary-text font-bold"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >

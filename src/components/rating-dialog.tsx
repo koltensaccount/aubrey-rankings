@@ -425,14 +425,14 @@ export function RatingDialog({
 
           {/* Mismatched Rubric Notice */}
           {hasMismatchedSystem && (
-            <div className="p-4 rounded-card bg-amber-500/10 border border-amber-500/30 space-y-2 text-xs">
-              <div className="flex items-center gap-2 text-amber-400 font-semibold uppercase tracking-wider text-[11px]">
+            <div className="p-4 rounded-card bg-surface border border-border space-y-2 text-xs">
+              <div className="flex items-center gap-2 text-primary-text font-semibold uppercase tracking-wider text-[11px]">
                 <AlertTriangle size={14} />
                 <span>Historical Rubric Transition</span>
               </div>
               <p className="text-foreground/80 leading-relaxed">
                 This item was originally scored under a previous rubric (Overall:{" "}
-                <strong className="text-amber-400">
+                <strong className="text-primary-text">
                   ★{" "}
                   {initialRating?.calculatedOverallScore
                     ? initialRating.calculatedOverallScore.toFixed(2)
@@ -446,7 +446,7 @@ export function RatingDialog({
                 <button
                   type="button"
                   onClick={handleMigrateMatchingCategories}
-                  className="px-3 py-1.5 rounded-button bg-amber-400/20 hover:bg-amber-400/30 text-amber-300 border border-amber-400/40 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
+                  className="px-3 py-1.5 rounded-button bg-primary/15 hover:bg-primary/25 text-primary-text border border-primary/30 text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors"
                 >
                   <Sparkles size={12} />
                   <span>Re-score with Current Rubric</span>

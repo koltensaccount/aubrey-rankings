@@ -106,26 +106,47 @@ export default function CollectionDetailPage({
   const [loadingSeasonData, setLoadingSeasonData] = useState(false);
   const [tvSeasonData, setTvSeasonData] = useState<any | null>(null);
 
-  const handleOpenRubricModal = () => {
+  const [rubricTargetMethod, setRubricTargetMethod] = useState<"numerical" | "tier" | undefined>(undefined);
+
+  const handleOpenRubricModal = (targetMethod?: "numerical" | "tier") => {
     const sys = collection?.defaultRatingSystem;
-    if (!sys) return;
-    if (sys.type === "tier") {
-      setEditingRubricTiers(
-        (sys.tiers || []).map((t: any) => ({ ...t }))
-      );
-    } else {
-      setEditingRubricCategories(
-        (sys.categories || []).map((c: any) => ({ ...c }))
-      );
+    setRubricTargetMethod(targetMethod);
+    if (sys) {
+      if (sys.tiers && sys.tiers.length > 0) {
+        setEditingRubricTiers((sys.tiers || []).map((t: any) => ({ ...t })));
+      }
+      if (sys.categories && sys.categories.length > 0) {
+        setEditingRubricCategories((sys.categories || []).map((c: any) => ({ ...c })));
+      }
     }
     setShowRubricModal(true);
   };
 
-  const handleSaveRubric = async () => {
-    if (!collection?.defaultRatingSystem?.id) return;
+  const handleSaveRubric = async (targetMethod?: "numerical" | "tier") => {
     setSavingRubric(true);
     try {
-      const isTierSys = collection?.defaultRatingSystem?.type === "tier";
+      const currentMethod = collection?.defaultRatingSystem?.type === "tier" ? "tier" : "numerical";
+      const chosenMethod = targetMethod || currentMethod;
+      const methodChanged = chosenMethod !== currentMethod;
+
+      if (methodChanged) {
+        // Step 1: Switch collection rating method (seamless & non-destructive)
+        const patchRes = await fetch(`/api/collections/${id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ ratingMethod: chosenMethod }),
+        });
+        if (!patchRes.ok) {
+          const err = await patchRes.json();
+          throw new Error(err.error || "Failed to switch collection rating method");
+        }
+        await fetchCollection();
+        setShowRubricModal(false);
+        return;
+      }
+
+      if (!collection?.defaultRatingSystem?.id) return;
+      const isTierSys = chosenMethod === "tier";
       const payload: any = isTierSys
         ? {
             type: "tier",
@@ -176,10 +197,7 @@ export default function CollectionDetailPage({
           body: JSON.stringify({ defaultRatingSystemId: newSystemId }),
         });
 
-        setCollection((prev: any) => ({
-          ...prev,
-          defaultRatingSystem: patchData.ratingSystem,
-        }));
+        await fetchCollection();
         setShowRubricModal(false);
       } else {
         const res = await fetch(`/api/rating-systems/${collection.defaultRatingSystem.id}`, {
@@ -189,17 +207,16 @@ export default function CollectionDetailPage({
         });
 
         if (res.ok) {
-          const data = await res.json();
-          setCollection((prev: any) => ({
-            ...prev,
-            defaultRatingSystem: data.ratingSystem,
-          }));
+          await fetchCollection();
           setShowRubricModal(false);
+        } else {
+          const err = await res.json();
+          throw new Error(err.error || "Failed to update rating system");
         }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error("Failed to save rubric", err);
-      alert("Failed to save rubric adjustments");
+      alert(err?.message || "Failed to save rubric adjustments");
     } finally {
       setSavingRubric(false);
     }
@@ -793,6 +810,7 @@ export default function CollectionDetailPage({
         isOpen={showRubricModal}
         onClose={() => setShowRubricModal(false)}
         isTier={isTierCollection}
+        targetMethod={rubricTargetMethod}
         categories={editingRubricCategories}
         onCategoriesChange={setEditingRubricCategories}
         tiers={editingRubricTiers}
@@ -810,7 +828,7 @@ export default function CollectionDetailPage({
           onClose={() => setShowTierEditor(false)}
           collection={collection}
           processedEntries={processedEntries}
-          onOpenCustomizeTiers={handleOpenRubricModal}
+          onOpenCustomizeTiers={() => handleOpenRubricModal("tier")}
           onQuickAssignTier={handleQuickAssignTier}
           onRefreshCollection={fetchCollection}
         />

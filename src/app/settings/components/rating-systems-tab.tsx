@@ -367,7 +367,7 @@ export function RatingSystemsTab({ initialSystemId }: { initialSystemId?: string
                   onClick={handleCreateTierSystem}
                   className="w-full text-left px-3 py-2 hover:bg-surface flex items-center gap-2 text-foreground transition-colors cursor-pointer border-t border-border"
                 >
-                  <Layers size={13} className="text-amber-400 shrink-0" />
+                  <Layers size={13} className="text-primary-text shrink-0" />
                   <div>
                     <div className="font-semibold">Tier Rating System</div>
                     <div className="text-[10px] text-muted-foreground">Ordered S, A, B, C, D tiers</div>
@@ -407,7 +407,7 @@ export function RatingSystemsTab({ initialSystemId }: { initialSystemId?: string
                         </span>
                       )}
                       {sys.isSystemTemplate && (
-                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-amber-500/15 text-amber-400 border border-amber-500/30">
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-surface-elevated text-muted-foreground border border-border">
                           Template
                         </span>
                       )}
@@ -415,7 +415,7 @@ export function RatingSystemsTab({ initialSystemId }: { initialSystemId?: string
                     <div className="flex items-center gap-1.5 mt-1 text-[11px] text-muted-foreground">
                       {isTierSys ? (
                         <>
-                          <Layers size={11} className="text-amber-400 shrink-0" />
+                          <Layers size={11} className="text-primary-text shrink-0" />
                           <span>{sys.tiers?.length || 0} tiers</span>
                           <span className="text-border">·</span>
                           <div className="flex items-center gap-1">
@@ -495,9 +495,9 @@ export function RatingSystemsTab({ initialSystemId }: { initialSystemId?: string
           <div className="p-6 rounded-card border border-border-card bg-card space-y-6 shadow-card">
             {/* System Template Read-Only Notice */}
             {isSystemTemplate && (
-              <div className="p-3.5 rounded-card bg-amber-500/10 border border-amber-500/30 flex items-center justify-between gap-3 text-xs">
-                <div className="flex items-center gap-2 text-amber-300">
-                  <Info size={16} className="shrink-0" />
+              <div className="p-3.5 rounded-card bg-surface border border-border flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 text-foreground/90">
+                  <Info size={16} className="shrink-0 text-primary-text" />
                   <span>
                     This is a built-in system template. To customize or reorder its tiers, make your own copy.
                   </span>
@@ -505,7 +505,7 @@ export function RatingSystemsTab({ initialSystemId }: { initialSystemId?: string
                 <button
                   type="button"
                   onClick={() => handleDuplicateSystem(editingSystem.id)}
-                  className="px-3 py-1.5 rounded-button bg-amber-500 hover:bg-amber-600 text-black font-semibold text-xs shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="px-3 py-1.5 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground font-semibold text-xs shrink-0 flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Copy size={13} />
                   <span>Clone Template</span>
