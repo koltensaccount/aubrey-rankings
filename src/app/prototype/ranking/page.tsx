@@ -276,7 +276,7 @@ export default function PrototypeRankingPage() {
                 aria-pressed={seasonFilter === season}
                 className={`px-3 py-1.5 rounded-lg text-xs font-mono transition-all whitespace-nowrap ${
                   seasonFilter === season
-                    ? "bg-[#89D5D5] text-[#102523] font-bold"
+                    ? "bg-primary text-primary-foreground font-bold"
                     : "text-[#9C9993] hover:text-[#F2EFE9] hover:bg-[#1E1E1C]"
                 }`}
               >
@@ -779,7 +779,7 @@ export default function PrototypeRankingPage() {
               </button>
               <button
                 onClick={saveLiveRating}
-                className="px-6 py-2.5 rounded-xl bg-[#89D5D5] hover:bg-[#B7ECE8] text-[#102523] text-xs font-bold shadow-lg shadow-[#89D5D5]/20"
+                className="px-6 py-2.5 rounded-xl bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-bold shadow-lg shadow-primary/20"
               >
                 Save rating
               </button>

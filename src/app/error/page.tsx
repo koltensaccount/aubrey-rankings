@@ -40,16 +40,16 @@ function ErrorContent() {
   }
 
   return (
-    <div className="w-full max-w-md rounded-xl border border-[#303b34] bg-[#141a17] p-8 shadow-2xl space-y-6 text-center">
-      <div className="mx-auto w-12 h-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400">
+    <div className="w-full max-w-md rounded-card border border-border-card bg-card p-8 shadow-card space-y-6 text-center">
+      <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 border border-destructive/20 flex items-center justify-center text-destructive">
         <AlertCircle size={24} />
       </div>
 
       <div className="space-y-2">
-        <h1 className="font-display text-3xl font-bold uppercase tracking-tight text-[#f1f0e9]">
+        <h1 className="font-display text-3xl font-bold uppercase tracking-tight text-foreground">
           {title}
         </h1>
-        <p className="text-xs text-[#9aa79e] leading-relaxed">
+        <p className="text-xs text-muted-foreground leading-relaxed">
           {message}
         </p>
       </div>
@@ -57,7 +57,7 @@ function ErrorContent() {
       <div className="pt-2">
         <Link
           href="/login"
-          className="inline-flex items-center justify-center gap-2 w-full py-3 rounded bg-[#d8e2d8] hover:bg-[#edf5ed] text-[#102523] text-xs font-semibold uppercase tracking-wider transition-all"
+          className="inline-flex items-center justify-center gap-2 w-full py-3 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold uppercase tracking-wider transition-all shadow-sm"
         >
           <ArrowLeft size={14} />
           <span>Return to Sign In</span>
@@ -72,7 +72,7 @@ export default function AuthErrorPage() {
     <div className="min-h-[calc(100vh-12rem)] flex items-center justify-center p-4">
       <Suspense
         fallback={
-          <div className="text-center text-xs text-[#8fa095]">Loading error details...</div>
+          <div className="text-center text-xs text-muted-foreground">Loading error details...</div>
         }
       >
         <ErrorContent />

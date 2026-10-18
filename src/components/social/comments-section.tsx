@@ -147,7 +147,7 @@ export function CommentsSection({
 
       {/* Post Comment Input */}
       <form onSubmit={handleSubmit} className="space-y-3">
-        <div className="relative rounded-xl border border-border bg-card focus-within:border-primary/60 transition-colors">
+        <div className="relative rounded-input border border-border-input bg-card focus-within:border-primary/60 transition-colors">
           <textarea
             value={newContent}
             onChange={(e) => setNewContent(e.target.value)}
@@ -161,7 +161,7 @@ export function CommentsSection({
             <button
               type="submit"
               disabled={submitting || !newContent.trim() || newContent.length > 2000}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:hover:bg-primary text-primary-foreground font-semibold text-xs transition-colors shadow-sm shadow-primary/15"
+              className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-button bg-primary hover:bg-primary-hover disabled:opacity-40 disabled:hover:bg-primary text-primary-foreground font-semibold text-xs transition-colors shadow-sm shadow-primary/15"
             >
               {submitting ? (
                 <Loader2 size={13} className="animate-spin" />
@@ -172,7 +172,7 @@ export function CommentsSection({
             </button>
           </div>
         </div>
-        {error && <p className="text-xs text-[#f87171]">{error}</p>}
+        {error && <p className="text-xs text-destructive">{error}</p>}
       </form>
 
       {/* Comments List */}
@@ -181,7 +181,7 @@ export function CommentsSection({
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
       ) : comments.length === 0 ? (
-        <div className="py-8 text-center text-xs text-muted-foreground border border-dashed border-border rounded-xl">
+        <div className="py-8 text-center text-xs text-muted-foreground border border-dashed border-border rounded-comment">
           No critical notes yet. Be the first to comment on this canon.
         </div>
       ) : (
@@ -202,7 +202,7 @@ export function CommentsSection({
             return (
               <div
                 key={item.id}
-                className="group relative rounded-xl border border-border bg-card/80 hover:bg-card p-4 transition-colors space-y-2.5"
+                className="group relative rounded-comment border border-border-card bg-card/80 hover:bg-card p-4 transition-colors space-y-2.5"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
@@ -256,7 +256,7 @@ export function CommentsSection({
                     <button
                       onClick={() => handleDelete(item.id)}
                       disabled={deletingId === item.id}
-                      className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-[#f87171] transition-opacity"
+                      className="opacity-0 group-hover:opacity-100 p-1 text-muted-foreground hover:text-destructive transition-opacity"
                       title={item.isAuthor ? "Delete your note" : "Moderate note"}
                       aria-label="Delete comment"
                     >

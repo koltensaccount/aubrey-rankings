@@ -38,43 +38,43 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="min-h-[calc(100vh-12rem)] flex items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-xl border border-[#303b34] bg-[#141a17] p-8 shadow-2xl space-y-6">
+      <div className="w-full max-w-md rounded-card border border-border-card bg-card p-8 shadow-card space-y-6">
         <div className="text-center space-y-2">
           <Link href="/" className="ar-brand justify-center">
             aubrey<span>rankings</span>
             <i />
           </Link>
-          <h1 className="font-display text-3xl font-bold uppercase tracking-tight text-[#f1f0e9] pt-2">
+          <h1 className="font-display text-3xl font-bold uppercase tracking-tight text-foreground pt-2">
             Reset Password
           </h1>
-          <p className="text-xs text-[#9aa79e]">
+          <p className="text-xs text-muted-foreground">
             Enter your account email to receive a password recovery link.
           </p>
         </div>
 
         {error && (
-          <div className="p-3 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2">
+          <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-start gap-2">
             <AlertCircle size={15} className="shrink-0 mt-0.5" />
             <span>{error}</span>
           </div>
         )}
 
         {submitted ? (
-          <div className="p-5 rounded-lg bg-[#18231e] border border-[#3b4c40] text-center space-y-4">
-            <div className="w-12 h-12 mx-auto rounded-full bg-[#89d5d5]/10 border border-[#89d5d5]/30 flex items-center justify-center text-[#89d5d5]">
+          <div className="p-5 rounded-lg bg-surface border border-border text-center space-y-4">
+            <div className="w-12 h-12 mx-auto rounded-full bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
               <CheckCircle2 size={24} />
             </div>
             <div className="space-y-1">
-              <h3 className="font-display text-lg font-bold uppercase text-[#f1f0e9]">
+              <h3 className="font-display text-lg font-bold uppercase text-foreground">
                 Check Your Inbox
               </h3>
-              <p className="text-xs text-[#9aa79e] leading-relaxed">
-                If an account exists for <strong className="text-[#89d5d5]">{email}</strong>, we have dispatched a secure recovery link.
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                If an account exists for <strong className="text-primary-text">{email}</strong>, we have dispatched a secure recovery link.
               </p>
             </div>
             <Link
               href="/login"
-              className="inline-flex items-center gap-2 text-xs font-semibold text-[#89d5d5] hover:underline pt-2"
+              className="inline-flex items-center gap-2 text-xs font-semibold text-primary-text hover:underline pt-2"
             >
               <ArrowLeft size={13} />
               <span>Back to Sign In</span>
@@ -83,7 +83,7 @@ export default function ForgotPasswordPage() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
                 Account Email Address
               </label>
               <input
@@ -93,14 +93,14 @@ export default function ForgotPasswordPage() {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 disabled={loading}
-                className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5] transition-colors"
+                className="w-full text-xs rounded-input px-3.5 py-2.5 bg-surface border border-border-input text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors"
               />
             </div>
 
             <button
               type="submit"
               disabled={loading || !email.trim()}
-              className="w-full mt-2 py-3 rounded bg-[#d8e2d8] hover:bg-[#edf5ed] text-[#102523] text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2"
+              className="w-full mt-2 py-3 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50 flex items-center justify-center gap-2 shadow-sm"
             >
               {loading ? (
                 <>
@@ -118,7 +118,7 @@ export default function ForgotPasswordPage() {
             <div className="text-center pt-2">
               <Link
                 href="/login"
-                className="inline-flex items-center gap-1.5 text-xs text-[#8fa095] hover:text-[#f1f0e9] transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
               >
                 <ArrowLeft size={13} />
                 <span>Return to Sign In</span>

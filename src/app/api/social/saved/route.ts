@@ -85,9 +85,10 @@ export async function GET(request: NextRequest) {
       if (!item.collection) return false;
       const isOwner = item.collection.userId === session.user.id;
       const isPublicOrUnlisted =
-        item.collection.visibility === "public" ||
-        item.collection.visibility === "unlisted" ||
-        item.collection.isPublic;
+        item.collection.visibility !== "private" &&
+        (item.collection.visibility === "public" ||
+          item.collection.visibility === "unlisted" ||
+          item.collection.isPublic);
       return isOwner || isPublicOrUnlisted;
     })
     .map((item) => ({

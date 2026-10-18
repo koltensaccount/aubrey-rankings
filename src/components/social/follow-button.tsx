@@ -120,7 +120,7 @@ export function FollowButton({
                 ? { color: accentColor, borderColor: `${accentColor}50` }
                 : undefined
             : accentColor
-              ? { backgroundColor: accentColor, color: accentFg || "#102523" }
+              ? { backgroundColor: accentColor, color: accentFg || "var(--primary-foreground)" }
               : undefined
         }
         className={`inline-flex items-center justify-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-semibold transition-all min-w-[105px] cursor-pointer ${

@@ -362,7 +362,9 @@ async function api(endpoint: string, options: { method?: string; body?: any; coo
   } = {
     baseUrl: BASE_URL,
     seededAt: new Date().toISOString(),
-    accounts: userSessions,
+    accounts: Object.fromEntries(
+      Object.entries(userSessions).map(([k, s]) => [k, { id: s.id, username: s.username }])
+    ),
     collections: {},
   };
 
@@ -680,7 +682,8 @@ async function api(endpoint: string, options: { method?: string; body?: any; coo
     const existingComments = await api(`/api/social/comments?collectionId=${c.collectionId}`);
     const hasComment = existingComments.data?.comments?.some(
       (existing: any) =>
-        existing.userId === userSession.id && existing.content.trim() === c.content.trim()
+        (existing.author?.id || existing.userId) === userSession.id &&
+        existing.content.trim() === c.content.trim()
     );
 
     if (!hasComment) {

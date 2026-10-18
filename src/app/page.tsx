@@ -182,7 +182,9 @@ export default async function HomePage() {
     .filter((sr) => {
       if (!sr.collection) return false;
       const isOwner = sr.collection.userId === session.user.id;
-      const isPublic = sr.collection.visibility === "public" || sr.collection.isPublic;
+      const isPublic =
+        sr.collection.visibility !== "private" &&
+        (sr.collection.visibility === "public" || sr.collection.visibility === "unlisted" || sr.collection.isPublic);
       return isOwner || isPublic;
     })
     .map((sr) => sr.collection);

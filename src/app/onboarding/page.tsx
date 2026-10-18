@@ -119,7 +119,7 @@ export default function OnboardingPage() {
   if (isPending) {
     return (
       <div className="min-h-[calc(100vh-12rem)] flex items-center justify-center p-4">
-        <div className="text-xs uppercase tracking-widest text-[#8fa597] animate-pulse">
+        <div className="text-xs uppercase tracking-widest text-muted-foreground animate-pulse">
           Loading credentials...
         </div>
       </div>
@@ -128,26 +128,26 @@ export default function OnboardingPage() {
 
   return (
     <div className="min-h-[calc(100vh-12rem)] flex items-center justify-center p-4 py-12">
-      <div className="w-full max-w-lg rounded-xl border border-[#303b34] bg-[#141a17] p-8 shadow-2xl space-y-8">
+      <div className="w-full max-w-lg rounded-card border border-border-card bg-card p-8 shadow-card space-y-8">
         <div className="text-center space-y-2">
           <Link href="/" className="ar-brand justify-center">
             aubrey<span>rankings</span>
             <i />
           </Link>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border border-[#89d5d5]/30 bg-[#89d5d5]/10 text-[10px] font-semibold uppercase tracking-widest text-[#89d5d5] mt-3">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border border-primary/30 bg-primary/10 text-[10px] font-semibold uppercase tracking-widest text-primary-text mt-3">
             <Sparkles size={11} />
             Choose a Username
           </div>
-          <h1 className="font-display text-3xl sm:text-4xl font-bold uppercase tracking-tight text-[#f1f0e9] pt-1">
+          <h1 className="font-display text-3xl sm:text-4xl font-bold uppercase tracking-tight text-foreground pt-1">
             Claim Your Handle
           </h1>
-          <p className="text-xs text-[#9aa79e] max-w-sm mx-auto leading-relaxed">
+          <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
             Choose your unique public handle. This will identify your ranked collections, critiques, and profile across Aubrey Rankings.
           </p>
         </div>
 
         {submitError && (
-          <div className="p-3 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2">
+          <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-start gap-2">
             <AlertCircle size={15} className="shrink-0 mt-0.5" />
             <span>{submitError}</span>
           </div>
@@ -156,12 +156,12 @@ export default function OnboardingPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Username Input */}
           <div className="space-y-2">
-            <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider flex items-center justify-between">
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
               <span>Unique Username *</span>
-              <span className="text-[10px] text-[#6c7d73]">3–20 chars · a–z, 0–9, _</span>
+              <span className="text-[10px] text-muted-foreground/75">3–20 chars · a–z, 0–9, _</span>
             </label>
             <div className="relative flex items-center">
-              <span className="absolute left-3.5 text-[#6c7d73] font-mono text-sm select-none">
+              <span className="absolute left-3.5 text-muted-foreground/70 font-mono text-sm select-none">
                 @
               </span>
               <input
@@ -171,16 +171,16 @@ export default function OnboardingPage() {
                 onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ""))}
                 maxLength={20}
                 required
-                className="w-full h-11 pl-8 pr-10 rounded-md border border-[#303b34] bg-[#181f1b] text-sm font-mono text-[#f1f0e9] placeholder:text-[#455249] focus:outline-none focus:border-[#89d5d5] transition-all"
+                className="w-full h-11 pl-8 pr-10 rounded-input border border-border-input bg-surface text-sm font-mono text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
               />
               <div className="absolute right-3">
                 {checking ? (
-                  <span className="text-[10px] text-[#8fa597] animate-pulse">verifying...</span>
+                  <span className="text-[10px] text-muted-foreground animate-pulse">verifying...</span>
                 ) : availability.checked ? (
                   availability.available ? (
-                    <Check size={16} className="text-[#89d5d5]" />
+                    <Check size={16} className="text-primary" />
                   ) : (
-                    <AlertCircle size={16} className="text-red-400" />
+                    <AlertCircle size={16} className="text-destructive" />
                   )
                 ) : null}
               </div>
@@ -190,7 +190,7 @@ export default function OnboardingPage() {
             {availability.checked && (
               <p
                 className={`text-[11px] flex items-center gap-1.5 ${
-                  availability.available ? "text-[#89d5d5]" : "text-red-400"
+                  availability.available ? "text-primary-text" : "text-destructive"
                 }`}
               >
                 {availability.available ? (
@@ -210,7 +210,7 @@ export default function OnboardingPage() {
 
           {/* Display Name */}
           <div className="space-y-2">
-            <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
               Display Name
             </label>
             <input
@@ -219,29 +219,29 @@ export default function OnboardingPage() {
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
               maxLength={50}
-              className="w-full h-11 px-3.5 rounded-md border border-[#303b34] bg-[#181f1b] text-sm text-[#f1f0e9] placeholder:text-[#455249] focus:outline-none focus:border-[#89d5d5] transition-all"
+              className="w-full h-11 px-3.5 rounded-input border border-border-input bg-surface text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
             />
           </div>
 
           {/* Bio */}
           <div className="space-y-2">
-            <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider flex items-center justify-between">
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider flex items-center justify-between">
               <span>Bio (Optional)</span>
-              <span className="text-[10px] text-[#6c7d73]">{bio.length}/300</span>
+              <span className="text-[10px] text-muted-foreground/75">{bio.length}/300</span>
             </label>
             <textarea
               placeholder="Obsessive cataloger of dystopian sci-fi, 70mm epics, and Charlie Brooker nightmares."
               value={bio}
               onChange={(e) => setBio(e.target.value.slice(0, 300))}
               rows={3}
-              className="w-full p-3 rounded-md border border-[#303b34] bg-[#181f1b] text-sm text-[#f1f0e9] placeholder:text-[#455249] focus:outline-none focus:border-[#89d5d5] transition-all resize-none"
+              className="w-full p-3 rounded-input border border-border-input bg-surface text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all resize-none"
             />
           </div>
 
           <button
             type="submit"
             disabled={!availability.available || submitting}
-            className="w-full h-12 rounded-md bg-[#89d5d5] hover:bg-[#a0dede] text-[#111514] font-display text-sm font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-[#89d5d5]/10"
+            className="w-full h-12 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground font-display text-sm font-bold uppercase tracking-wider transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed shadow-sm"
           >
             {submitting ? "Securing Handle..." : "Complete Registry & Enter"}
             <ArrowRight size={16} />

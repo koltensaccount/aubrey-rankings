@@ -81,7 +81,7 @@ export function LikeButton({
       disabled={loading}
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
         isLiked
-          ? "bg-[#331c21] text-[#f87171] border border-[#7f1d24]"
+          ? "bg-rose-500/15 text-rose-500 dark:text-rose-400 border border-rose-500/30"
           : "bg-surface hover:bg-surface-elevated text-foreground border border-border"
       }`}
       title={isLiked ? "Unlike ranking" : "Like ranking"}
@@ -90,7 +90,7 @@ export function LikeButton({
       <Heart
         size={14}
         className={`transition-transform duration-200 ${
-          isLiked ? "fill-[#f87171] text-[#f87171] scale-110" : "text-muted-foreground"
+          isLiked ? "fill-rose-500 text-rose-500 dark:fill-rose-400 dark:text-rose-400 scale-110" : "text-muted-foreground"
         }`}
       />
       <span className="font-semibold text-xs">{likeCount}</span>

@@ -125,7 +125,7 @@ export default async function ProfilePage() {
                   {userCollections.length > publishedCollections.length && (
                     <>
                       <span>·</span>
-                      <span className="text-[#8fa095]">
+                      <span className="text-muted-foreground">
                         ({userCollections.length} total)
                       </span>
                     </>
