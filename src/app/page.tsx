@@ -3,102 +3,114 @@ import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
 import { collections, ratings } from "@/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Card } from "@/components/ui/card";
-import {
-  Film,
-  Tv,
-  ListPlus,
-  Star,
-  Pin,
-  TrendingUp,
-  Sparkles,
-  ArrowRight,
-  Plus,
-} from "lucide-react";
+import { Plus, ArrowRight, Tv, Film, ListPlus, ArrowUpRight } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 
 export default async function HomePage() {
   const session = await getServerSession();
 
+  // =========================================================================
+  // LOGGED OUT LANDING VIEW (Cinematic Editorial Presentation)
+  // =========================================================================
   if (!session) {
     return (
-      <div className="relative overflow-hidden">
-        {/* Cinematic Backdrop Glow */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full max-w-7xl h-96 bg-gradient-to-b from-amber-500/10 via-amber-600/5 to-transparent blur-3xl -z-10 pointer-events-none" />
+      <div className="ar-homeContent">
+        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 pb-16">
+          <div className="relative rounded-2xl overflow-hidden bg-[#141a17] border border-[#303b34] p-8 sm:p-12 lg:p-16">
+            {/* Background 4K Still */}
+            <div className="absolute inset-0 z-0">
+              <img
+                src="/prototype-art/black-mirror-wall.jpg"
+                alt="Cinema backdrop"
+                className="w-full h-full object-cover object-center opacity-30 filter saturate-75"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-[#111514] via-[#111514]/85 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-[#111514] via-transparent to-transparent" />
+            </div>
 
-        <div className="max-w-5xl mx-auto px-4 py-20 sm:py-28 text-center space-y-8">
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 text-amber-300 text-xs font-semibold uppercase tracking-wider">
-            <Sparkles className="h-3.5 w-3.5" />
-            <span>Inspired by Aubrey&apos;s Spreadsheet</span>
+            <div className="relative z-10 max-w-2xl space-y-6">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-[#1b2520] border border-[#3b4c40] text-xs font-semibold text-[#89d5d5] uppercase tracking-wider">
+                <span>Modern Cinema Editorial</span>
+              </div>
+
+              {/* Transparent ClearLOGO */}
+              <div className="py-1">
+                <img
+                  src="/prototype-art/black-mirror-logo.png"
+                  alt="Black Mirror"
+                  className="h-14 sm:h-16 w-auto object-contain filter drop-shadow-[0_8px_20px_rgba(0,0,0,0.9)]"
+                />
+              </div>
+
+              <h1 className="font-display text-5xl sm:text-7xl lg:text-8xl tracking-tight text-[#f1f0e9] leading-[0.92] uppercase">
+                EVERY EPISODE,
+                <br />
+                <span className="text-[#89d5d5]">RANKED AND CALIBRATED.</span>
+              </h1>
+
+              <p className="text-base sm:text-lg text-[#b1bfb7] leading-relaxed max-w-xl">
+                Rate TV anthologies, entire director filmographies, and custom sci-fi indexes by weighted sensory rubrics:
+                Writing, Acting, Cinematography, Sound Design, and resonant dread.
+              </p>
+
+              <div className="flex flex-wrap items-center gap-4 pt-4">
+                <Link
+                  href="/signup"
+                  className="px-6 py-3.5 rounded bg-[#89d5d5] hover:bg-[#a5dfdf] text-[#102523] font-semibold text-sm transition-all shadow-lg shadow-[#89d5d5]/15"
+                >
+                  Get started
+                </Link>
+                <Link
+                  href="/login"
+                  className="px-6 py-3.5 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#f1f0e9] border border-[#3b4c40] font-semibold text-sm transition-all"
+                >
+                  Sign in
+                </Link>
+                <Link
+                  href="/prototype"
+                  className="px-5 py-3.5 rounded text-[#89d5d5] hover:text-[#cef6f0] text-sm font-semibold transition-colors flex items-center gap-1.5"
+                >
+                  <span>Explore prototype</span>
+                  <ArrowRight size={15} />
+                </Link>
+              </div>
+            </div>
           </div>
 
-          <h1 className="text-4xl sm:text-6xl font-extrabold tracking-tight text-white leading-tight">
-            Definitive rankings for TV shows,
-            <br />
-            <span className="bg-gradient-to-r from-amber-400 via-yellow-300 to-amber-500 bg-clip-text text-transparent">
-              movies & custom collections.
-            </span>
-          </h1>
+          {/* Three Ranking Types Showcase */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-12">
+            <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-3">
+              <span className="text-xs text-[#89d5d5] font-semibold uppercase tracking-wider block">Anthology Television</span>
+              <h3 className="font-display text-2xl uppercase text-[#f1f0e9]">Episode-by-Episode</h3>
+              <p className="text-xs text-[#9aa79e] leading-relaxed">
+                Import complete series like Black Mirror or Severance. Score each episode with 16:9 cinematic stills and weighted categories.
+              </p>
+            </div>
 
-          <p className="max-w-2xl mx-auto text-base sm:text-lg text-muted-foreground leading-relaxed">
-            Rate every episode, franchise film, and sci-fi masterpiece with custom weighted scoring.
-            Fine-tune Music, Acting, Writing, Cinematography, and Vibes to reflect your true taste.
-          </p>
+            <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-3">
+              <span className="text-xs text-[#89d5d5] font-semibold uppercase tracking-wider block">Director Canons</span>
+              <h3 className="font-display text-2xl uppercase text-[#f1f0e9]">Franchises & Auteurs</h3>
+              <p className="text-xs text-[#9aa79e] leading-relaxed">
+                Rank complete director sagas from David Fincher, Christopher Nolan, or Denis Villeneuve with official key art.
+              </p>
+            </div>
 
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-4">
-            <Link href="/signup">
-              <Button size="lg" className="w-full sm:w-auto text-base font-bold px-8 shadow-lg shadow-amber-500/20">
-                Get Started
-                <ArrowRight className="h-4 w-4 ml-2" />
-              </Button>
-            </Link>
-            <Link href="/login">
-              <Button variant="outline" size="lg" className="w-full sm:w-auto text-base px-8">
-                Sign In
-              </Button>
-            </Link>
+            <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-3">
+              <span className="text-xs text-[#89d5d5] font-semibold uppercase tracking-wider block">Custom Collections</span>
+              <h3 className="font-display text-2xl uppercase text-[#f1f0e9]">Personal Indexes</h3>
+              <p className="text-xs text-[#9aa79e] leading-relaxed">
+                Mix movies, single episodes, and miniseries in custom collections like &quot;Modern Dystopian Sci-Fi: The Master Index&quot;.
+              </p>
+            </div>
           </div>
-
-          {/* Three Ranking Types Preview */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-16 text-left">
-            <Card className="p-6 border-border/80 bg-card/60 backdrop-blur hover:border-amber-500/40 transition-all">
-              <div className="h-10 w-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-4">
-                <Tv className="h-5 w-5" />
-              </div>
-              <h3 className="text-lg font-bold text-white mb-1">TV Show Rankings</h3>
-              <p className="text-sm text-muted-foreground">
-                Import complete shows or specific seasons. Rank every episode with official TMDB stills and custom weights.
-              </p>
-            </Card>
-
-            <Card className="p-6 border-border/80 bg-card/60 backdrop-blur hover:border-amber-500/40 transition-all">
-              <div className="h-10 w-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-4">
-                <Film className="h-5 w-5" />
-              </div>
-              <h3 className="text-lg font-bold text-white mb-1">Movie Franchises</h3>
-              <p className="text-sm text-muted-foreground">
-                Rank entire sagas like Harry Potter, Alien, or Star Wars with official poster art and customizable order.
-              </p>
-            </Card>
-
-            <Card className="p-6 border-border/80 bg-card/60 backdrop-blur hover:border-amber-500/40 transition-all">
-              <div className="h-10 w-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-4">
-                <ListPlus className="h-5 w-5" />
-              </div>
-              <h3 className="text-lg font-bold text-white mb-1">Custom Collections</h3>
-              <p className="text-sm text-muted-foreground">
-                Mix movies, single episodes, and entire shows in custom collections like &quot;Best Sci-Fi of all time&quot;.
-              </p>
-            </Card>
-          </div>
-        </div>
+        </section>
       </div>
     );
   }
 
-  // LOGGED IN USER LIBRARY
+  // =========================================================================
+  // LOGGED IN USER COMMUNITY / LIBRARY FEED
+  // =========================================================================
   const userCollections = await db.query.collections.findMany({
     where: (c, { eq }) => eq(c.userId, session.user.id),
     orderBy: [desc(collections.isPinned), desc(collections.updatedAt)],
@@ -119,191 +131,258 @@ export default async function HomePage() {
 
   const totalRatedCount = Number(totalRated[0]?.count || 0);
 
+  // Compute average score across user's ratings
+  const allRatings = await db.query.ratings.findMany({
+    where: (r, { eq }) => eq(r.userId, session.user.id),
+    columns: { calculatedOverallScore: true },
+  });
+  const meanScore = allRatings.length
+    ? (
+        allRatings.reduce((acc, r) => acc + (r.calculatedOverallScore || 0), 0) /
+        allRatings.length
+      ).toFixed(1)
+    : "—";
+
+  const pinnedCollection = userCollections.find((c) => c.isPinned) || userCollections[0];
+  const otherCollections = userCollections.filter((c) => c.id !== pinnedCollection?.id);
+
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
-      {/* Welcome Banner */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-6 border-b border-border/80">
-        <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-            Welcome back, {session.user.name || "Critic"}
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Manage your collections, compare weighted averages, and refine your rankings.
-          </p>
-        </div>
-        <Link href="/create">
-          <Button className="font-semibold gap-1.5 shadow-md shadow-amber-500/20">
-            <Plus className="h-4 w-4" />
-            <span>Create Ranking</span>
-          </Button>
-        </Link>
-      </div>
-
-      {/* Quick Stats Bar */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="p-4 rounded-xl border border-border/70 bg-card/60">
-          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-            Collections
-          </span>
-          <p className="text-2xl font-bold text-white mt-1">{userCollections.length}</p>
-        </div>
-        <div className="p-4 rounded-xl border border-border/70 bg-card/60">
-          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-            Rated Items
-          </span>
-          <p className="text-2xl font-bold text-amber-400 mt-1">{totalRatedCount}</p>
-        </div>
-        <div className="p-4 rounded-xl border border-border/70 bg-card/60">
-          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-            Pinned
-          </span>
-          <p className="text-2xl font-bold text-white mt-1">
-            {userCollections.filter((c) => c.isPinned).length}
-          </p>
-        </div>
-        <div className="p-4 rounded-xl border border-border/70 bg-card/60">
-          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-            Scale Mode
-          </span>
-          <p className="text-2xl font-bold text-white mt-1">1–10 Scale</p>
-        </div>
-      </div>
-
-      {/* Collections Grid */}
-      {userCollections.length === 0 ? (
-        <div className="text-center py-16 px-4 rounded-2xl border border-dashed border-border/80 bg-card/40 space-y-4">
-          <div className="mx-auto w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-            <Film className="h-6 w-6" />
+    <div className="ar-homeContent ar-communityHome">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-20 space-y-10" id="library">
+        {/* Community / Feed Header */}
+        <header className="ar-communityHeading">
+          <div>
+            <span className="text-[11px] text-[#8fa095] uppercase tracking-wider block">Library & Dispatch</span>
+            <h1 className="font-display text-4xl sm:text-5xl uppercase text-[#f1f0e9] tracking-tight mt-1">
+              Your Feed
+            </h1>
           </div>
-          <div className="max-w-md mx-auto space-y-1">
-            <h3 className="text-lg font-bold text-white">Your library is waiting</h3>
-            <p className="text-sm text-muted-foreground">
-              Create your first TV show, franchise, or custom collection to start rating.
-            </p>
-          </div>
-          <div className="flex flex-wrap justify-center gap-3 pt-2">
-            <Link href="/create?type=tv_show&suggest=Black+Mirror">
-              <Button variant="secondary" size="sm" className="gap-2">
-                <Tv className="h-4 w-4 text-amber-400" />
-                Rank Black Mirror
-              </Button>
-            </Link>
-            <Link href="/create?type=movie_franchise">
-              <Button variant="secondary" size="sm" className="gap-2">
-                <Film className="h-4 w-4 text-amber-400" />
-                Rank a Movie Franchise
-              </Button>
-            </Link>
-            <Link href="/create?type=custom">
-              <Button variant="secondary" size="sm" className="gap-2">
-                <ListPlus className="h-4 w-4 text-amber-400" />
-                Custom Collection
-              </Button>
-            </Link>
-          </div>
+          <Link href="/create" className="ar-neutralButton">
+            <Plus size={15} />
+            <span>New ranking</span>
+          </Link>
+        </header>
+
+        {/* Subtle Horizontal Metadata Bar */}
+        <div className="flex flex-wrap items-center gap-4 py-3 border-y border-[#303b34] text-xs text-[#8fa095]">
+          <span>
+            <strong className="text-[#e5ece5] font-semibold">{totalRatedCount}</strong> rated items
+          </span>
+          <span className="text-[#435248]">·</span>
+          <span>
+            <strong className="text-[#e5ece5] font-semibold">{userCollections.length}</strong> rankings
+          </span>
+          <span className="text-[#435248]">·</span>
+          <span>
+            <strong className="text-[#89d5d5] font-semibold">{meanScore}</strong> mean score
+          </span>
+          <span className="text-[#435248]">·</span>
+          <span className="text-[#89d5d5] ml-auto font-medium">5-part weighted rubric</span>
         </div>
-      ) : (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-white tracking-tight flex items-center gap-2">
-              <span>Your Collections</span>
-              <Badge variant="secondary" className="text-xs font-normal">
-                {userCollections.length}
-              </Badge>
-            </h2>
+
+        {/* =========================================================================
+            EMPTY STATE (Honest & Clean)
+            ========================================================================= */}
+        {userCollections.length === 0 ? (
+          <div className="text-center py-20 px-4 rounded-xl border border-[#303b34] bg-[#141a17] space-y-5">
+            <div className="mx-auto w-12 h-12 rounded-full bg-[#1b2520] border border-[#3b4c40] flex items-center justify-center text-[#89d5d5]">
+              <Film className="h-6 w-6" />
+            </div>
+            <div className="max-w-md mx-auto space-y-1.5">
+              <h3 className="font-display text-3xl uppercase text-[#f1f0e9]">Your library is waiting</h3>
+              <p className="text-xs text-[#9aa79e] leading-relaxed">
+                Create your first TV show, franchise, or custom collection to start rating with weighted rubrics.
+              </p>
+            </div>
+            <div className="flex flex-wrap justify-center gap-3 pt-2">
+              <Link
+                href="/create?type=tv_show&suggest=Black+Mirror"
+                className="px-4 py-2.5 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#f1f0e9] border border-[#3b4c40] text-xs font-semibold flex items-center gap-2 transition-colors"
+              >
+                <Tv className="h-4 w-4 text-[#89d5d5]" />
+                <span>Rank Black Mirror</span>
+              </Link>
+              <Link
+                href="/create?type=movie_franchise"
+                className="px-4 py-2.5 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#f1f0e9] border border-[#3b4c40] text-xs font-semibold flex items-center gap-2 transition-colors"
+              >
+                <Film className="h-4 w-4 text-[#89d5d5]" />
+                <span>Rank a Movie Franchise</span>
+              </Link>
+              <Link
+                href="/create?type=custom"
+                className="px-4 py-2.5 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#f1f0e9] border border-[#3b4c40] text-xs font-semibold flex items-center gap-2 transition-colors"
+              >
+                <ListPlus className="h-4 w-4 text-[#89d5d5]" />
+                <span>Custom Collection</span>
+              </Link>
+            </div>
           </div>
+        ) : (
+          <div className="space-y-12">
+            {/* FEATURED / PINNED RANKING (Rendered with approved ar-feedCover presentation) */}
+            {pinnedCollection && (
+              <section className="space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-[#28342d]">
+                  <h2 className="font-display text-2xl uppercase text-[#f1f0e9]">
+                    {pinnedCollection.isPinned ? "Pinned Ranking" : "Featured Ranking"}
+                  </h2>
+                  <span className="text-xs text-[#8fa095]">
+                    {pinnedCollection.entries.length} items · {pinnedCollection.ratings.length} rated
+                  </span>
+                </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {userCollections.map((col) => {
-              const ratedCount = col.ratings.length;
-              const totalItems = col.entries.length;
-              const coverUrl = getTmdbImageUrl(
-                col.customCoverImage || col.backdropImage,
-                "w1280"
-              );
-
-              // Calculate collection average score
-              const scores = col.ratings
-                .map((r) => r.calculatedOverallScore)
-                .filter((s): s is number => s !== null && s !== undefined);
-              const avgScore =
-                scores.length > 0
-                  ? Math.round((scores.reduce((a, b) => a + b, 0) / scores.length) * 10) / 10
-                  : null;
-
-              return (
-                <Link
-                  key={col.id}
-                  href={`/collection/${col.id}`}
-                  className="group block relative rounded-2xl overflow-hidden border border-border/70 bg-card hover:border-amber-500/50 hover:shadow-xl hover:shadow-amber-500/5 transition-all duration-300"
-                >
-                  {/* Artwork Container */}
-                  <div className="aspect-[16/10] w-full overflow-hidden relative bg-muted">
-                    {col.customCoverImage || col.backdropImage ? (
-                      <img
-                        src={coverUrl}
-                        alt={col.title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-card to-secondary text-muted-foreground">
-                        <Film className="h-10 w-10 opacity-30" />
-                      </div>
-                    )}
-
-                    <div className="absolute inset-0 bg-gradient-to-t from-card via-card/20 to-transparent" />
-
-                    {/* Top Badges */}
-                    <div className="absolute top-3 left-3 right-3 flex items-center justify-between">
-                      <Badge variant="secondary" className="backdrop-blur-md bg-black/60 text-[10px] uppercase font-bold tracking-wider border-white/10">
-                        {col.collectionType === "tv_show"
-                          ? "TV Show"
-                          : col.collectionType === "movie_franchise"
-                          ? "Franchise"
-                          : "Custom"}
-                      </Badge>
-                      {col.isPinned && (
-                        <div className="h-6 w-6 rounded-full bg-amber-500/20 backdrop-blur-md border border-amber-500/40 flex items-center justify-center text-amber-300">
-                          <Pin className="h-3 w-3" />
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Bottom Stats on image */}
-                    {avgScore !== null && (
-                      <div className="absolute bottom-3 right-3">
-                        <Badge variant="score" className="text-xs px-2 py-0.5 shadow-md">
-                          ★ {avgScore.toFixed(1)}
-                        </Badge>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Info */}
-                  <div className="p-4 space-y-1.5">
-                    <h3 className="font-bold text-white text-base group-hover:text-amber-400 transition-colors line-clamp-1">
-                      {col.title}
-                    </h3>
-                    <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                      {col.description || `${totalItems} items in collection`}
-                    </p>
-
-                    <div className="pt-2 flex items-center justify-between text-[11px] text-muted-foreground border-t border-border/50">
+                <article className="border border-[#303b34] rounded overflow-hidden bg-[#141a17]">
+                  <Link
+                    href={`/collection/${pinnedCollection.id}`}
+                    className="ar-feedCover"
+                  >
+                    <img
+                      src={
+                        pinnedCollection.name.toLowerCase().includes("black mirror")
+                          ? "/prototype-art/black-mirror-wall.jpg"
+                          : pinnedCollection.backdropPath
+                            ? getTmdbImageUrl(pinnedCollection.backdropPath, "original")
+                            : "/prototype-art/black-mirror-wall.jpg"
+                      }
+                      alt={pinnedCollection.name}
+                    />
+                    <div className="ar-feedCoverShade" />
+                    <div>
                       <span>
-                        {ratedCount} of {totalItems} rated
+                        {pinnedCollection.type === "tv_show"
+                          ? "TV Anthology"
+                          : pinnedCollection.type === "movie_franchise"
+                            ? "Movie Canon"
+                            : "Custom Collection"}{" "}
+                        · {pinnedCollection.entries.length} entries
                       </span>
-                      <span className="text-amber-400 font-medium group-hover:translate-x-0.5 transition-transform">
-                        Open &rarr;
-                      </span>
+                      <h2>{pinnedCollection.name}</h2>
                     </div>
+
+                    {pinnedCollection.name.toLowerCase().includes("black mirror") && (
+                      <img
+                        className="ar-feedCoverLogo"
+                        src="/prototype-art/black-mirror-logo.png"
+                        alt="Black Mirror"
+                      />
+                    )}
+                  </Link>
+
+                  {/* Top 3 Items Preview */}
+                  {pinnedCollection.entries.length > 0 && (
+                    <Link
+                      href={`/collection/${pinnedCollection.id}`}
+                      className="ar-rankingPeek"
+                      style={{ padding: "16px 22px 10px", borderTop: "1px solid #232d27" }}
+                    >
+                      {pinnedCollection.entries.slice(0, 3).map((entry, idx) => {
+                        const r = pinnedCollection.ratings.find(
+                          (rate) => rate.mediaItemId === entry.mediaItemId
+                        );
+                        return (
+                          <div key={entry.id}>
+                            <span>0{idx + 1}</span>
+                            <img
+                              src={
+                                entry.mediaItem?.stillPath
+                                  ? getTmdbImageUrl(entry.mediaItem.stillPath, "w300")
+                                  : entry.mediaItem?.posterPath
+                                    ? getTmdbImageUrl(entry.mediaItem.posterPath, "w300")
+                                    : "/prototype-art/san-junipero.jpg"
+                              }
+                              alt={entry.mediaItem?.title || "Item"}
+                            />
+                            <strong>{entry.mediaItem?.title || `Item ${idx + 1}`}</strong>
+                            <small>{r?.calculatedOverallScore ? r.calculatedOverallScore.toFixed(1) : "—"}</small>
+                          </div>
+                        );
+                      })}
+                    </Link>
+                  )}
+
+                  <div className="px-5 py-3 border-t border-[#232d27] flex items-center justify-between">
+                    <p className="text-xs text-[#9aa79e] line-clamp-1 max-w-xl">
+                      {pinnedCollection.description || "Personal media ranking with weighted category ratings."}
+                    </p>
+                    <Link
+                      href={`/collection/${pinnedCollection.id}`}
+                      className="ar-textButton text-xs font-semibold"
+                    >
+                      <span>Explore ranking</span>
+                      <ArrowRight size={13} />
+                    </Link>
                   </div>
-                </Link>
-              );
-            })}
+                </article>
+              </section>
+            )}
+
+            {/* OTHER USER COLLECTIONS */}
+            {otherCollections.length > 0 && (
+              <section className="space-y-4">
+                <div className="flex items-center justify-between pb-2 border-b border-[#28342d]">
+                  <h2 className="font-display text-2xl uppercase text-[#f1f0e9]">
+                    All Rankings
+                  </h2>
+                  <span className="text-xs text-[#8fa095]">{otherCollections.length} collections</span>
+                </div>
+
+                <div className="space-y-4">
+                  {otherCollections.map((col) => {
+                    const avgScore = col.ratings.length
+                      ? (
+                          col.ratings.reduce(
+                            (acc, r) => acc + (r.calculatedOverallScore || 0),
+                            0
+                          ) / col.ratings.length
+                        ).toFixed(1)
+                      : "—";
+
+                    return (
+                      <article
+                        key={col.id}
+                        className="ar-ordinaryPost"
+                        style={{ paddingTop: 18 }}
+                      >
+                        <Link
+                          href={`/collection/${col.id}`}
+                          className="ar-smallRanking"
+                        >
+                          <img
+                            src={
+                              col.posterPath
+                                ? getTmdbImageUrl(col.posterPath, "w300")
+                                : col.backdropPath
+                                  ? getTmdbImageUrl(col.backdropPath, "w300")
+                                  : "/prototype-art/san-junipero.jpg"
+                            }
+                            alt={col.name}
+                          />
+                          <div>
+                            <span>
+                              {col.type === "tv_show" ? "TV Series" : "Franchise"} · {col.entries.length} items · ★ {avgScore}
+                            </span>
+                            <h2>{col.name}</h2>
+                            <p className="text-xs text-[#9aa79e] line-clamp-2 my-1">
+                              {col.description || "Weighted sensory scores for narrative, direction, and sound."}
+                            </p>
+                            <ol>
+                              {col.entries.slice(0, 3).map((e) => (
+                                <li key={e.id}>{e.mediaItem?.title || "Episode"}</li>
+                              ))}
+                            </ol>
+                          </div>
+                          <ArrowRight size={18} className="text-[#8fa597] shrink-0" />
+                        </Link>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

@@ -1,20 +1,9 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Navbar } from "@/components/navbar";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "Aubrey Rankings — Beautiful TV & Movie Rankings",
+  title: "Aubrey Rankings — Cinema Journal & Weighted Critique",
   description:
     "Self-hosted, weighted media rating platform for TV series, episodes, movie franchises, and custom collections.",
 };
@@ -25,20 +14,20 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html
-      lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}
-    >
-      <body className="min-h-full flex flex-col bg-background text-foreground">
+    <html lang="en" className="h-full antialiased dark">
+      <body className="min-h-full flex flex-col bg-[#111514] text-[#f1f0e9]">
         <Navbar />
         <main className="flex-1">{children}</main>
-        <footer className="border-t border-border/60 py-6 px-4 text-center text-xs text-muted-foreground">
-          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-3">
-            <p>
-              Aubrey Rankings &copy; 2026 &bull; Built with
-              passion and precision.
-            </p>
-            <p className="text-[11px] opacity-75">
+        <footer className="border-t border-[#303b34] py-8 px-4 text-xs text-[#9aa79e] bg-[#111514]">
+          <div className="max-w-7xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <span className="font-display text-base tracking-wider text-[#f1f0e9]">
+                AUBREY RANKINGS
+              </span>
+              <span className="text-[#6d7e74]">·</span>
+              <span className="text-[#9aa79e]">Modern Cinema Editorial</span>
+            </div>
+            <p className="text-[11px] text-[#78887e]">
               This product uses the TMDB API but is not endorsed or certified by TMDB.
             </p>
           </div>

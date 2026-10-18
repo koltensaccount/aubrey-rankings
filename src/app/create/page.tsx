@@ -2,23 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import {
   Tv,
   Film,
   ListPlus,
   Search,
-  Sparkles,
   Check,
-  ChevronRight,
   Loader2,
   AlertCircle,
+  ArrowRight,
 } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
-
 import { Suspense } from "react";
 
 type RankingType = "tv_show" | "movie_franchise" | "custom";
@@ -121,19 +115,22 @@ function CreateRankingContent() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-10 space-y-8">
+    <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-8">
       {/* Header */}
       <div>
-        <h1 className="text-3xl font-extrabold text-white tracking-tight">
+        <span className="text-[11px] text-[#8fa095] uppercase tracking-wider block">
+          Editorial Setup
+        </span>
+        <h1 className="font-display text-4xl sm:text-5xl font-bold uppercase tracking-tight text-[#f1f0e9] mt-1">
           Create New Ranking
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Select a mode to build an episode-by-episode TV ranking, movie franchise, or custom list.
+        <p className="text-xs text-[#9aa79e] mt-1">
+          Select a format to build an episode-by-episode TV ranking, franchise canon, or custom list.
         </p>
       </div>
 
       {error && (
-        <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm flex items-start gap-2.5">
+        <div className="p-3.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2.5">
           <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
           <span>{error}</span>
         </div>
@@ -147,15 +144,15 @@ function CreateRankingContent() {
             setRankingType("tv_show");
             setSelectedItem(null);
           }}
-          className={`p-5 rounded-2xl border text-left transition-all ${
+          className={`p-5 rounded-xl border text-left transition-all cursor-pointer ${
             rankingType === "tv_show"
-              ? "border-amber-500 bg-amber-500/10 ring-1 ring-amber-500/50"
-              : "border-border/80 bg-card hover:border-border"
+              ? "border-[#89d5d5] bg-[#1a2520] ring-1 ring-[#89d5d5]/40"
+              : "border-[#303b34] bg-[#141a17] hover:border-[#425247]"
           }`}
         >
-          <Tv className={`h-6 w-6 mb-3 ${rankingType === "tv_show" ? "text-amber-400" : "text-muted-foreground"}`} />
-          <h3 className="font-bold text-white text-base">TV Show</h3>
-          <p className="text-xs text-muted-foreground mt-1">
+          <Tv className={`h-5 w-5 mb-3 ${rankingType === "tv_show" ? "text-[#89d5d5]" : "text-[#8fa095]"}`} />
+          <h3 className="font-display text-xl font-bold uppercase text-[#f1f0e9]">TV Show</h3>
+          <p className="text-xs text-[#8fa095] mt-1">
             Rank every episode across all seasons (e.g. Black Mirror, Succession).
           </p>
         </button>
@@ -166,16 +163,16 @@ function CreateRankingContent() {
             setRankingType("movie_franchise");
             setSelectedItem(null);
           }}
-          className={`p-5 rounded-2xl border text-left transition-all ${
+          className={`p-5 rounded-xl border text-left transition-all cursor-pointer ${
             rankingType === "movie_franchise"
-              ? "border-amber-500 bg-amber-500/10 ring-1 ring-amber-500/50"
-              : "border-border/80 bg-card hover:border-border"
+              ? "border-[#89d5d5] bg-[#1a2520] ring-1 ring-[#89d5d5]/40"
+              : "border-[#303b34] bg-[#141a17] hover:border-[#425247]"
           }`}
         >
-          <Film className={`h-6 w-6 mb-3 ${rankingType === "movie_franchise" ? "text-amber-400" : "text-muted-foreground"}`} />
-          <h3 className="font-bold text-white text-base">Movie Franchise</h3>
-          <p className="text-xs text-muted-foreground mt-1">
-            Rank all movies in a collection (e.g. Harry Potter, The Lord of the Rings).
+          <Film className={`h-5 w-5 mb-3 ${rankingType === "movie_franchise" ? "text-[#89d5d5]" : "text-[#8fa095]"}`} />
+          <h3 className="font-display text-xl font-bold uppercase text-[#f1f0e9]">Movie Franchise</h3>
+          <p className="text-xs text-[#8fa095] mt-1">
+            Rank all movies in a collection (e.g. Alien, Harry Potter, Dune).
           </p>
         </button>
 
@@ -185,15 +182,15 @@ function CreateRankingContent() {
             setRankingType("custom");
             setSelectedItem(null);
           }}
-          className={`p-5 rounded-2xl border text-left transition-all ${
+          className={`p-5 rounded-xl border text-left transition-all cursor-pointer ${
             rankingType === "custom"
-              ? "border-amber-500 bg-amber-500/10 ring-1 ring-amber-500/50"
-              : "border-border/80 bg-card hover:border-border"
+              ? "border-[#89d5d5] bg-[#1a2520] ring-1 ring-[#89d5d5]/40"
+              : "border-[#303b34] bg-[#141a17] hover:border-[#425247]"
           }`}
         >
-          <ListPlus className={`h-6 w-6 mb-3 ${rankingType === "custom" ? "text-amber-400" : "text-muted-foreground"}`} />
-          <h3 className="font-bold text-white text-base">Custom Collection</h3>
-          <p className="text-xs text-muted-foreground mt-1">
+          <ListPlus className={`h-5 w-5 mb-3 ${rankingType === "custom" ? "text-[#89d5d5]" : "text-[#8fa095]"}`} />
+          <h3 className="font-display text-xl font-bold uppercase text-[#f1f0e9]">Custom Index</h3>
+          <p className="text-xs text-[#8fa095] mt-1">
             Mix movies, episodes, and personal entries into custom lists.
           </p>
         </button>
@@ -201,25 +198,25 @@ function CreateRankingContent() {
 
       {/* Step 2: Content Selection */}
       {rankingType !== "custom" ? (
-        <Card className="p-6 space-y-6 border-border/80 bg-card/80">
+        <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-6">
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-white">
-              {rankingType === "tv_show" ? "Search TV Show" : "Search Movie Franchise / Collection"}
+            <label className="text-xs font-semibold text-[#8fa095] uppercase tracking-wider block">
+              {rankingType === "tv_show" ? "Search TV Series (via TMDB)" : "Search Movie Franchise (via TMDB)"}
             </label>
             <div className="relative">
-              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#8fa095]" />
+              <input
                 placeholder={
                   rankingType === "tv_show"
-                    ? "e.g. Black Mirror, Severance, Breaking Bad..."
-                    : "e.g. Harry Potter, Star Wars, Alien..."
+                    ? "e.g. Black Mirror, Severance, Twin Peaks..."
+                    : "e.g. Alien, Star Wars, Blade Runner..."
                 }
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 h-12 text-base bg-secondary/40"
+                className="w-full pl-10 pr-10 py-3 text-xs rounded-lg bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5] transition-colors"
               />
               {isSearching && (
-                <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-amber-400 animate-spin" />
+                <Loader2 className="absolute right-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#89d5d5] animate-spin" />
               )}
             </div>
           </div>
@@ -227,8 +224,8 @@ function CreateRankingContent() {
           {/* Search Results */}
           {searchResults.length > 0 && (
             <div className="space-y-2">
-              <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                Results
+              <span className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                Select Title
               </span>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-1">
                 {searchResults.map((item) => {
@@ -238,30 +235,37 @@ function CreateRankingContent() {
                     <div
                       key={item.id}
                       onClick={() => setSelectedItem(item)}
-                      className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition-all ${
+                      className={`flex gap-3.5 p-3 rounded-lg border transition-all cursor-pointer ${
                         isSelected
-                          ? "border-amber-500 bg-amber-500/15"
-                          : "border-border/70 bg-card hover:border-border hover:bg-secondary/40"
+                          ? "border-[#89d5d5] bg-[#1b2721] ring-1 ring-[#89d5d5]/50"
+                          : "border-[#2b3730] bg-[#111613] hover:border-[#3d4f43]"
                       }`}
                     >
-                      <img
-                        src={poster}
-                        alt={item.name}
-                        className="w-12 h-16 object-cover rounded-lg bg-muted shrink-0"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-white text-sm truncate">
-                          {item.name}
-                        </h4>
-                        <p className="text-xs text-muted-foreground line-clamp-2 mt-0.5">
-                          {item.overview || "No overview available."}
-                        </p>
-                      </div>
-                      {isSelected && (
-                        <div className="h-6 w-6 rounded-full bg-amber-500 text-stone-950 flex items-center justify-center shrink-0">
-                          <Check className="h-3.5 w-3.5 stroke-[3]" />
+                      {poster ? (
+                        <img
+                          src={poster}
+                          alt={item.name}
+                          className="w-14 h-20 object-cover rounded shrink-0 bg-black"
+                        />
+                      ) : (
+                        <div className="w-14 h-20 bg-[#18211d] rounded flex items-center justify-center shrink-0">
+                          <Film className="h-5 w-5 text-[#8fa095]" />
                         </div>
                       )}
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <div className="flex items-start justify-between gap-1">
+                          <h4 className="font-display text-base font-bold text-[#f1f0e9] uppercase tracking-tight truncate">
+                            {item.name}
+                          </h4>
+                          {isSelected && <Check className="h-4 w-4 text-[#89d5d5] shrink-0" />}
+                        </div>
+                        <p className="text-[11px] text-[#8fa095]">
+                          {item.first_air_date ? item.first_air_date.split("-")[0] : ""}
+                        </p>
+                        <p className="text-[11px] text-[#9aa79e] line-clamp-2 leading-relaxed">
+                          {item.overview}
+                        </p>
+                      </div>
                     </div>
                   );
                 })}
@@ -269,63 +273,61 @@ function CreateRankingContent() {
             </div>
           )}
 
-          {/* Selected Item Preview */}
           {selectedItem && (
-            <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/10 flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <img
-                  src={getTmdbImageUrl(selectedItem.poster_path, "w342")}
-                  alt={selectedItem.name}
-                  className="w-10 h-14 object-cover rounded-lg"
-                />
-                <div>
-                  <Badge variant="default" className="text-[10px] mb-1">
-                    Ready to Import
-                  </Badge>
-                  <h4 className="font-bold text-white text-sm">{selectedItem.name}</h4>
-                </div>
+            <div className="p-4 rounded-lg bg-[#18211d] border border-[#3b4c40] flex items-center justify-between">
+              <div>
+                <span className="text-[10px] text-[#89d5d5] uppercase font-semibold block">Selected</span>
+                <span className="font-display text-lg font-bold text-[#f1f0e9] uppercase">{selectedItem.name}</span>
               </div>
-              <Button
+              <button
+                type="button"
                 onClick={handleCreate}
                 disabled={loading}
-                className="font-bold shadow-md shadow-amber-500/20"
+                className="px-5 py-2.5 rounded bg-[#d8e2d8] hover:bg-[#edf5ed] text-[#102523] text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer"
               >
-                {loading ? "Importing Episodes..." : "Create Ranking"}
-              </Button>
+                {loading ? "Importing & Creating..." : "Initialize Ranking"}
+                <ArrowRight size={14} />
+              </button>
             </div>
           )}
-        </Card>
+        </div>
       ) : (
         /* Custom Collection Form */
-        <Card className="p-6 space-y-4 border-border/80 bg-card/80">
+        <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-4">
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-white">Collection Title</label>
-            <Input
-              placeholder="e.g. Favorite Science Fiction"
+            <label className="text-xs font-semibold text-[#8fa095] uppercase tracking-wider block">
+              Collection Title
+            </label>
+            <input
+              placeholder="e.g. Modern Dystopian Sci-Fi: The Master Index"
               value={customTitle}
               onChange={(e) => setCustomTitle(e.target.value)}
-              className="h-11 bg-secondary/40"
+              className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
             />
           </div>
+
           <div className="space-y-1.5">
-            <label className="text-sm font-semibold text-white">Description (Optional)</label>
-            <Input
-              placeholder="e.g. My all-time top science fiction movies and single TV episodes."
+            <label className="text-xs font-semibold text-[#8fa095] uppercase tracking-wider block">
+              Editorial Description
+            </label>
+            <textarea
+              rows={3}
+              placeholder="Explain the scope and curatorial criteria for this ranking index..."
               value={customDescription}
               onChange={(e) => setCustomDescription(e.target.value)}
-              className="h-11 bg-secondary/40"
+              className="w-full text-xs rounded-lg p-3 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5] resize-none"
             />
           </div>
-          <div className="pt-2 flex justify-end">
-            <Button
-              onClick={handleCreate}
-              disabled={loading || !customTitle.trim()}
-              className="font-bold shadow-md shadow-amber-500/20"
-            >
-              {loading ? "Creating..." : "Create Collection"}
-            </Button>
-          </div>
-        </Card>
+
+          <button
+            type="button"
+            onClick={handleCreate}
+            disabled={loading || !customTitle.trim()}
+            className="w-full py-3 rounded bg-[#d8e2d8] hover:bg-[#edf5ed] text-[#102523] text-xs font-semibold uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50"
+          >
+            {loading ? "Creating Index..." : "Create Collection"}
+          </button>
+        </div>
       )}
     </div>
   );
@@ -333,7 +335,13 @@ function CreateRankingContent() {
 
 export default function CreateRankingPage() {
   return (
-    <Suspense fallback={<div className="max-w-4xl mx-auto p-10 text-center text-sm text-muted-foreground">Loading creator...</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-[50vh] flex items-center justify-center">
+          <Loader2 className="h-6 w-6 text-[#89d5d5] animate-spin" />
+        </div>
+      }
+    >
       <CreateRankingContent />
     </Suspense>
   );

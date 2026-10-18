@@ -98,35 +98,49 @@ export function RatingDialog({
     }
   }
 
-  const calculation = calculateWeightedAverage(categories, numericScores);
+  const categoryDefs: CategoryDef[] = categories.map((c) => ({
+    id: c.id,
+    name: c.name,
+    weight: c.weight,
+    isRequired: c.isRequired,
+  }));
 
-  const handleScoreChange = (categoryId: string, val: string) => {
+  const calculation = calculateWeightedAverage(numericScores, categoryDefs, scale);
+
+  const handleScoreChange = (catId: string, val: string) => {
     if (val === "") {
-      setScores((prev) => ({ ...prev, [categoryId]: "" }));
+      setScores((prev) => ({ ...prev, [catId]: "" }));
       return;
     }
     const num = parseFloat(val);
-    if (!isNaN(num)) {
-      const clamped = Math.max(0, Math.min(scale, num));
-      setScores((prev) => ({ ...prev, [categoryId]: clamped }));
+    if (!isNaN(num) && num >= 0 && num <= scale) {
+      setScores((prev) => ({ ...prev, [catId]: num }));
     }
   };
 
   const handleSave = async () => {
-    setSaving(true);
     setError(null);
+    setSaving(true);
 
     try {
+      // Build category scores array
+      const categoryScoresArray = Object.entries(scores)
+        .filter(([_, score]) => score !== "" && typeof score === "number")
+        .map(([categoryId, score]) => ({
+          categoryId,
+          score: score as number,
+        }));
+
       const payload = {
         mediaItemId: mediaItem.id,
         collectionId: collectionId || null,
         ratingSystemId: ratingSystem?.id || null,
-        scores: numericScores,
-        watchDate: watchDate ? new Date(watchDate).toISOString() : null,
+        categoryScores: categoryScoresArray,
         reviewText: reviewText.trim() || null,
         personalNotes: personalNotes.trim() || null,
         isWatched,
         isFavorite,
+        watchDate: watchDate ? new Date(watchDate).toISOString() : null,
       };
 
       const res = await fetch("/api/ratings", {
@@ -135,54 +149,46 @@ export function RatingDialog({
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json();
       if (!res.ok) {
+        const data = await res.json();
         throw new Error(data.error || "Failed to save rating");
       }
 
-      onRatingSaved({
-        id: data.ratingId,
-        mediaItemId: mediaItem.id,
-        calculatedOverallScore: data.calculatedOverallScore,
-        isWatched,
-        isFavorite,
-        reviewText,
-        personalNotes,
-        watchDate,
-        categoryScores: Object.entries(numericScores).map(([catId, sc]) => ({
-          categoryId: catId,
-          score: sc,
-        })),
-      });
-
+      const savedData = await res.json();
+      onRatingSaved(savedData);
       onClose();
     } catch (err: any) {
-      setError(err?.message || "Failed to save rating");
+      setError(err?.message || "An error occurred while saving");
     } finally {
       setSaving(false);
     }
   };
 
-  const artworkUrl = getTmdbImageUrl(
-    mediaItem.stillPath || mediaItem.posterPath || mediaItem.backdropPath,
-    "original"
-  );
+  const backdropUrl = mediaItem.stillPath
+    ? getTmdbImageUrl(mediaItem.stillPath, "original")
+    : mediaItem.backdropPath
+      ? getTmdbImageUrl(mediaItem.backdropPath, "original")
+      : null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-2xl border border-border bg-card shadow-2xl text-card-foreground">
-        {/* Header / Hero */}
-        <div className="relative aspect-[21/9] w-full overflow-hidden bg-muted">
-          <img
-            src={artworkUrl}
-            alt={mediaItem.title}
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-card via-card/50 to-transparent" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md overflow-y-auto">
+      <div className="relative w-full max-w-2xl my-8 rounded-xl bg-[#141a17] border border-[#303b34] shadow-2xl overflow-hidden">
+        {/* Header with Visual Still */}
+        <div className="relative h-48 sm:h-56 w-full bg-black">
+          {backdropUrl ? (
+            <img
+              src={backdropUrl}
+              alt={mediaItem.title}
+              className="w-full h-full object-cover object-center opacity-70"
+            />
+          ) : (
+            <div className="w-full h-full bg-[#111514]" />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-[#141a17] via-[#141a17]/50 to-transparent" />
 
           <button
             onClick={onClose}
-            className="absolute top-3 right-3 h-8 w-8 rounded-full bg-black/60 backdrop-blur-md text-white/80 hover:text-white flex items-center justify-center border border-white/10"
+            className="absolute top-3 right-3 h-8 w-8 rounded-full bg-black/70 backdrop-blur-md text-[#f1f0e9] hover:bg-[#25342c] flex items-center justify-center border border-[#303b34] transition-colors"
           >
             <X className="h-4 w-4" />
           </button>
@@ -190,11 +196,11 @@ export function RatingDialog({
           <div className="absolute bottom-3 left-4 right-4 flex items-end justify-between">
             <div className="space-y-1">
               {mediaItem.seasonNumber && mediaItem.episodeNumber && (
-                <Badge variant="secondary" className="bg-black/60 text-xs text-amber-300">
-                  Season {mediaItem.seasonNumber} &bull; Episode {mediaItem.episodeNumber}
-                </Badge>
+                <span className="inline-block px-2 py-0.5 rounded bg-black/75 border border-[#303b34] text-[10px] text-[#89d5d5] font-semibold">
+                  Season {mediaItem.seasonNumber} · Episode {mediaItem.episodeNumber}
+                </span>
               )}
-              <h2 className="text-xl sm:text-2xl font-bold text-white tracking-tight">
+              <h2 className="font-display text-2xl sm:text-3xl font-bold text-[#f1f0e9] uppercase tracking-tight">
                 {mediaItem.title}
               </h2>
             </div>
@@ -202,12 +208,12 @@ export function RatingDialog({
             {/* Calculated Weighted Score Live Pill */}
             {calculation.weightedScore !== null && (
               <div className="flex flex-col items-end">
-                <span className="text-[10px] text-muted-foreground uppercase font-semibold">
-                  Weighted Score
+                <span className="text-[10px] text-[#8fa095] uppercase font-semibold">
+                  Overall Score
                 </span>
-                <Badge variant="score" className="text-base px-3 py-1 shadow-lg">
+                <span className="text-xl font-bold text-[#89d5d5] font-display">
                   ★ {calculation.weightedScore.toFixed(2)}
-                </Badge>
+                </span>
               </div>
             )}
           </div>
@@ -216,26 +222,28 @@ export function RatingDialog({
         {/* Content */}
         <div className="p-6 space-y-6">
           {error && (
-            <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm">
+            <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
               {error}
             </div>
           )}
 
           {/* Media Overview */}
           {mediaItem.overview && (
-            <p className="text-xs text-muted-foreground leading-relaxed line-clamp-3">
+            <p className="text-xs text-[#9aa79e] leading-relaxed line-clamp-3">
               {mediaItem.overview}
             </p>
           )}
 
           {/* Weighted Categories Section */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between border-b border-border/60 pb-2">
+            <div className="flex items-center justify-between border-b border-[#28342d] pb-2">
               <div className="flex items-center gap-2">
-                <Sliders className="h-4 w-4 text-amber-400" />
-                <h3 className="font-bold text-white text-sm">Category Scoring</h3>
+                <Sliders className="h-4 w-4 text-[#89d5d5]" />
+                <h3 className="font-display text-base font-bold text-[#f1f0e9] uppercase">
+                  Category Scoring
+                </h3>
               </div>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-xs text-[#8fa095]">
                 Scale 1–{scale}
               </span>
             </div>
@@ -246,36 +254,36 @@ export function RatingDialog({
                 return (
                   <div
                     key={cat.id}
-                    className="p-3 rounded-xl border border-border/70 bg-secondary/30 space-y-2"
+                    className="p-3 rounded-lg border border-[#2b3730] bg-[#111613] space-y-2"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-semibold text-white">
+                      <span className="text-xs font-semibold text-[#f1f0e9]">
                         {cat.name}
                       </span>
-                      <span className="text-[10px] text-amber-400/80 font-medium bg-amber-500/10 px-1.5 py-0.5 rounded">
-                        Weight: {cat.weight}x
+                      <span className="text-[10px] text-[#89d5d5] font-medium bg-[#89d5d5]/10 px-1.5 py-0.5 rounded border border-[#89d5d5]/20">
+                        {cat.weight}x
                       </span>
                     </div>
 
                     <div className="flex items-center gap-3">
                       <input
                         type="range"
-                        min="0"
+                        min="1"
                         max={scale}
                         step="0.5"
-                        value={currentScore === "" || currentScore === undefined ? 0 : currentScore}
+                        value={typeof currentScore === "number" ? currentScore : scale / 2}
                         onChange={(e) => handleScoreChange(cat.id, e.target.value)}
-                        className="flex-1 accent-amber-500 cursor-pointer"
+                        className="flex-1 accent-[#89d5d5] cursor-pointer"
                       />
-                      <Input
+                      <input
                         type="number"
                         min="0"
                         max={scale}
                         step="0.1"
                         placeholder="—"
-                        value={currentScore === "" || currentScore === undefined ? "" : currentScore}
+                        value={currentScore ?? ""}
                         onChange={(e) => handleScoreChange(cat.id, e.target.value)}
-                        className="w-16 h-8 text-center text-sm font-bold bg-background text-amber-300 border-border"
+                        className="w-16 h-8 text-center text-xs font-semibold rounded bg-[#18211d] border border-[#3b4c40] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
                       />
                     </div>
                   </div>
@@ -284,100 +292,45 @@ export function RatingDialog({
             </div>
           </div>
 
-          {/* Quick Attributes */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                Watch Date
-              </label>
-              <Input
-                type="date"
-                value={watchDate}
-                onChange={(e) => setWatchDate(e.target.value)}
-                className="h-9 text-xs bg-secondary/40"
-              />
-            </div>
-
-            <div className="flex items-center gap-2 pt-5">
-              <button
-                type="button"
-                onClick={() => setIsWatched(!isWatched)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${
-                  isWatched
-                    ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
-                    : "border-border text-muted-foreground hover:text-white"
-                }`}
-              >
-                <Eye className="h-4 w-4" />
-                <span>Watched</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setIsFavorite(!isFavorite)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-semibold border transition-all ${
-                  isFavorite
-                    ? "border-amber-500/40 bg-amber-500/15 text-amber-300"
-                    : "border-border text-muted-foreground hover:text-white"
-                }`}
-              >
-                <Heart className={`h-4 w-4 ${isFavorite ? "fill-amber-400" : ""}`} />
-                <span>Favorite</span>
-              </button>
-            </div>
+          {/* Review Text */}
+          <div className="space-y-2">
+            <label className="text-xs font-semibold text-[#8fa095] uppercase tracking-wider block">
+              Critique / Review
+            </label>
+            <textarea
+              rows={3}
+              placeholder="What made this episode resonant, terrifying, or profound?"
+              value={reviewText}
+              onChange={(e) => setReviewText(e.target.value)}
+              className="w-full text-xs rounded-lg p-3 bg-[#111613] border border-[#2b3730] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5] leading-relaxed resize-none"
+            />
           </div>
 
-          {/* Review & Personal Notes */}
-          <div className="space-y-3 pt-2">
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                Review (Public / Displayed)
-              </label>
-              <textarea
-                rows={2}
-                placeholder="What did you think of this entry?"
-                value={reviewText}
-                onChange={(e) => setReviewText(e.target.value)}
-                className="w-full rounded-lg border border-border bg-input/50 p-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/80 resize-none"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                Personal Notes (Private)
-              </label>
-              <textarea
-                rows={2}
-                placeholder="Private reminders, favorite quotes, or rewatch impressions..."
-                value={personalNotes}
-                onChange={(e) => setPersonalNotes(e.target.value)}
-                className="w-full rounded-lg border border-border bg-input/50 p-2.5 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-amber-500/80 resize-none"
-              />
-            </div>
-          </div>
-
-          {/* Save Action */}
-          <div className="flex items-center justify-between pt-4 border-t border-border/80">
-            <Button variant="ghost" onClick={onClose} disabled={saving}>
+          {/* Action Footer */}
+          <div className="flex items-center justify-between pt-4 border-t border-[#28342d]">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 text-xs text-[#9aa79e] hover:text-[#f1f0e9] transition-colors"
+            >
               Cancel
-            </Button>
-            <Button
+            </button>
+            <button
               onClick={handleSave}
               disabled={saving}
-              className="font-bold gap-2 shadow-lg shadow-amber-500/20"
+              className="px-5 py-2.5 rounded bg-[#d8e2d8] hover:bg-[#edf5ed] text-[#102523] text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer"
             >
               {saving ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  Saving...
+                  <span>Saving...</span>
                 </>
               ) : (
                 <>
                   <Save className="h-4 w-4" />
-                  Save Rating
+                  <span>Save Rating</span>
                 </>
               )}
-            </Button>
+            </button>
           </div>
         </div>
       </div>
