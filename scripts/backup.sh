@@ -33,7 +33,10 @@ find "$BACKUP_DIR" -type f -name "aubrey_*" -mtime +14 -delete
 # 4. Optional Off-Server Sync via rclone
 if command -v rclone &>/dev/null && rclone listremotes | grep -q "^gdrive:"; then
   echo "-> Syncing backups off-server to Google Drive (gdrive:Backups/aubrey-rankings)..."
-  rclone copy "$BACKUP_DIR" gdrive:Backups/aubrey-rankings --fast-list || echo "Warning: Off-server rclone backup failed"
+  # The verified local snapshot is mandatory; a stalled remote must not block a release indefinitely.
+  timeout 60s rclone copy "$BACKUP_DIR" gdrive:Backups/aubrey-rankings --fast-list \
+    --retries 1 --low-level-retries 2 --contimeout 10s --timeout 20s \
+    || echo "WARNING: Off-server backup failed or timed out; verified local backup retained"
 fi
 
 echo "=== Backup completed successfully! Output stored in ${BACKUP_DIR} ==="
