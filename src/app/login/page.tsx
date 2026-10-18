@@ -43,12 +43,22 @@ export default function LoginPage() {
     setError(null);
     setGoogleLoading(true);
     try {
-      await signIn.social({
+      const res = await signIn.social({
         provider: "google",
         callbackURL: "/onboarding",
       });
+      if (res?.error) {
+        setError(
+          res.error.message ||
+            "Google Sign-In is not configured on this server. Please sign in with email and password."
+        );
+        setGoogleLoading(false);
+      }
     } catch (err: any) {
-      setError(err?.message || "Google Sign-In is currently unavailable.");
+      setError(
+        err?.message ||
+          "Google Sign-In is currently unavailable. Please sign in with email and password."
+      );
       setGoogleLoading(false);
     }
   };
@@ -132,6 +142,12 @@ export default function LoginPage() {
               <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider">
                 Password
               </label>
+              <Link
+                href="/forgot-password"
+                className="text-[11px] text-[#89d5d5] hover:underline"
+              >
+                Forgot password?
+              </Link>
             </div>
             <input
               type="password"

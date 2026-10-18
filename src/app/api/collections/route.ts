@@ -10,6 +10,7 @@ import {
 import { tmdb } from "@/lib/tmdb";
 import { nanoid } from "@/lib/utils";
 import { eq, desc, and } from "drizzle-orm";
+import { seedDefaultRatingSystem } from "@/lib/auth";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession();
@@ -65,11 +66,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Find default rating system for this user
+    // Find or seed default rating system for this user
     let defaultRs = await db.query.ratingSystems.findFirst({
       where: (rs, { eq, and }) =>
         and(eq(rs.userId, session.user.id), eq(rs.isDefault, true)),
     });
+
+    let defaultRatingSystemId = defaultRs?.id;
+    if (!defaultRatingSystemId) {
+      defaultRatingSystemId = await seedDefaultRatingSystem(session.user.id);
+    }
 
     const collectionId = `col_${Date.now()}_${nanoid(6)}`;
     let customCoverImage: string | null = null;
@@ -89,7 +95,7 @@ export async function POST(request: NextRequest) {
         description: description || showDetails.overview,
         collectionType: "tv_show",
         tmdbId: Number(tmdbId),
-        defaultRatingSystemId: defaultRs?.id || null,
+        defaultRatingSystemId: defaultRatingSystemId || null,
         customCoverImage,
         backdropImage,
       });
@@ -171,7 +177,7 @@ export async function POST(request: NextRequest) {
         description: description || collectionDetails.overview,
         collectionType: "movie_franchise",
         tmdbId: Number(tmdbId),
-        defaultRatingSystemId: defaultRs?.id || null,
+        defaultRatingSystemId: defaultRatingSystemId || null,
         customCoverImage,
         backdropImage,
       });
@@ -222,7 +228,7 @@ export async function POST(request: NextRequest) {
       title,
       description: description || null,
       collectionType: "custom",
-      defaultRatingSystemId: defaultRs?.id || null,
+      defaultRatingSystemId: defaultRatingSystemId || null,
     });
 
     return NextResponse.json({ id: collectionId, success: true });

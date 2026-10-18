@@ -80,13 +80,13 @@ function CreateRankingContent() {
 
       if (rankingType === "tv_show") {
         if (!selectedItem) throw new Error("Please select a TV show from the search results");
-        payload.title = selectedItem.name;
+        payload.title = selectedItem.name || selectedItem.title;
         payload.description = selectedItem.overview;
         payload.tmdbId = selectedItem.id;
         payload.importAllEpisodes = true;
       } else if (rankingType === "movie_franchise") {
         if (!selectedItem) throw new Error("Please select a movie franchise from search results");
-        payload.title = selectedItem.name;
+        payload.title = selectedItem.name || selectedItem.title;
         payload.description = selectedItem.overview || "";
         payload.tmdbId = selectedItem.id;
       } else {
@@ -244,7 +244,7 @@ function CreateRankingContent() {
                       {poster ? (
                         <img
                           src={poster}
-                          alt={item.name}
+                          alt={item.name || item.title || "Poster"}
                           className="w-14 h-20 object-cover rounded shrink-0 bg-black"
                         />
                       ) : (
@@ -255,12 +255,16 @@ function CreateRankingContent() {
                       <div className="flex-1 min-w-0 space-y-1">
                         <div className="flex items-start justify-between gap-1">
                           <h4 className="font-display text-base font-bold text-[#f1f0e9] uppercase tracking-tight truncate">
-                            {item.name}
+                            {item.name || item.title}
                           </h4>
                           {isSelected && <Check className="h-4 w-4 text-[#89d5d5] shrink-0" />}
                         </div>
                         <p className="text-[11px] text-[#8fa095]">
-                          {item.first_air_date ? item.first_air_date.split("-")[0] : ""}
+                          {item.first_air_date
+                            ? item.first_air_date.split("-")[0]
+                            : item.release_date
+                              ? item.release_date.split("-")[0]
+                              : ""}
                         </p>
                         <p className="text-[11px] text-[#9aa79e] line-clamp-2 leading-relaxed">
                           {item.overview}
@@ -277,7 +281,9 @@ function CreateRankingContent() {
             <div className="p-4 rounded-lg bg-[#18211d] border border-[#3b4c40] flex items-center justify-between">
               <div>
                 <span className="text-[10px] text-[#89d5d5] uppercase font-semibold block">Selected</span>
-                <span className="font-display text-lg font-bold text-[#f1f0e9] uppercase">{selectedItem.name}</span>
+                <span className="font-display text-lg font-bold text-[#f1f0e9] uppercase">
+                  {selectedItem.name || selectedItem.title}
+                </span>
               </div>
               <button
                 type="button"

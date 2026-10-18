@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   List,
   Grid,
@@ -14,6 +15,9 @@ import {
   Lock,
   Globe,
   GitCompare,
+  Trash2,
+  AlertTriangle,
+  Loader2,
 } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { RatingDialog } from "@/components/rating-dialog";
@@ -30,6 +34,7 @@ export default function CollectionDetailPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
+  const router = useRouter();
 
   const [collection, setCollection] = useState<any | null>(null);
   const [ratingsMap, setRatingsMap] = useState<Record<string, any>>({});
@@ -38,6 +43,12 @@ export default function CollectionDetailPage({
   const [visibilityUpdating, setVisibilityUpdating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Deletion modals state
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletingCollection, setDeletingCollection] = useState(false);
+  const [entryToDelete, setEntryToDelete] = useState<any | null>(null);
+  const [deletingEntry, setDeletingEntry] = useState(false);
 
   // View preferences
   const [viewMode, setViewMode] = useState<"list" | "editorial" | "compact">("list");
@@ -48,6 +59,51 @@ export default function CollectionDetailPage({
 
   // Rating Modal
   const [selectedItemForRating, setSelectedItemForRating] = useState<any | null>(null);
+
+  const handleDeleteCollection = async () => {
+    setDeletingCollection(true);
+    try {
+      const res = await fetch(`/api/collections/${id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to delete collection");
+      }
+      router.push("/");
+      router.refresh();
+    } catch (err: any) {
+      alert(err?.message || "Failed to delete collection");
+      setDeletingCollection(false);
+      setShowDeleteModal(false);
+    }
+  };
+
+  const handleRemoveEntry = async () => {
+    if (!entryToDelete) return;
+    setDeletingEntry(true);
+    try {
+      const res = await fetch(`/api/collections/${id}/entries/${entryToDelete.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to remove entry");
+      }
+      setCollection((prev: any) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          entries: (prev.entries || []).filter((e: any) => e.id !== entryToDelete.id),
+        };
+      });
+      setEntryToDelete(null);
+    } catch (err: any) {
+      alert(err?.message || "Failed to remove entry");
+    } finally {
+      setDeletingEntry(false);
+    }
+  };
 
   const handleVisibilityChange = async (newVisibility: "private" | "unlisted" | "public") => {
     setVisibilityUpdating(true);
@@ -177,10 +233,18 @@ export default function CollectionDetailPage({
   }, [collection, ratingsMap, filterRated, selectedSeason, searchFilter, sortBy]);
 
   const handleRatingSaved = (savedRating: any) => {
-    setRatingsMap((prev) => ({
-      ...prev,
-      [savedRating.mediaItemId]: savedRating,
-    }));
+    if (!savedRating?.mediaItemId) return;
+    setRatingsMap((prev) => {
+      if (savedRating.cleared) {
+        const next = { ...prev };
+        delete next[savedRating.mediaItemId];
+        return next;
+      }
+      return {
+        ...prev,
+        [savedRating.mediaItemId]: savedRating,
+      };
+    });
   };
 
   if (loading) {
@@ -210,14 +274,15 @@ export default function CollectionDetailPage({
     );
   }
 
+  const collectionTitle = collection.title || collection.name || "";
   const isBlackMirror =
-    collection.name.toLowerCase().includes("black mirror") ||
+    collectionTitle.toLowerCase().includes("black mirror") ||
     collection.tmdbId === 42009;
 
   const backdropUrl = isBlackMirror
     ? "/prototype-art/black-mirror-wall.jpg"
-    : collection.backdropPath
-      ? getTmdbImageUrl(collection.backdropPath, "original")
+    : (collection.backdropImage || collection.backdropPath)
+      ? getTmdbImageUrl(collection.backdropImage || collection.backdropPath, "original")
       : "/prototype-art/black-mirror-wall.jpg";
 
   const totalEntries = collection.entries?.length || 0;
@@ -240,7 +305,7 @@ export default function CollectionDetailPage({
         <div className="absolute inset-0 z-0">
           <img
             src={backdropUrl}
-            alt={collection.name}
+            alt={collectionTitle || "Collection Backdrop"}
             className="w-full h-full object-cover object-top opacity-35 filter contrast-125 saturate-90"
           />
           <div className="absolute inset-0 bg-gradient-to-t from-[#111514] via-[#111514]/75 to-[#111514]/30" />
@@ -311,6 +376,17 @@ export default function CollectionDetailPage({
                 <GitCompare size={12} className="text-[#89d5d5]" />
                 <span>Compare</span>
               </Link>
+              {isOwner && (
+                <button
+                  type="button"
+                  onClick={() => setShowDeleteModal(true)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 border border-red-500/30 transition-colors cursor-pointer"
+                  title="Delete this entire ranking collection"
+                >
+                  <Trash2 size={12} />
+                  <span>Delete</span>
+                </button>
+              )}
               <span className="text-[11px] font-mono text-[#89d5d5]">
                 {collection.collectionType === "tv_show" ? "TV Anthology" : "Canon"} · {totalEntries} Entries
               </span>
@@ -520,6 +596,17 @@ export default function CollectionDetailPage({
                       <Sliders size={13} />
                       <span className="hidden sm:inline">Rate</span>
                     </button>
+
+                    {isOwner && (
+                      <button
+                        type="button"
+                        onClick={() => setEntryToDelete(entry)}
+                        className="p-1.5 rounded text-[#6c7d73] hover:text-red-400 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 transition-colors cursor-pointer"
+                        title="Remove from this ranking"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
                   </div>
                 </div>
               );
@@ -568,13 +655,25 @@ export default function CollectionDetailPage({
                       </h3>
                     </div>
 
-                    <button
-                      onClick={() => setSelectedItemForRating(media)}
-                      className="w-full mt-2 py-2 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <Sliders size={13} />
-                      <span>{hasScore ? "Adjust Score" : "Score Episode"}</span>
-                    </button>
+                    <div className="flex items-center gap-2 mt-2">
+                      <button
+                        onClick={() => setSelectedItemForRating(media)}
+                        className="flex-1 py-2 rounded bg-[#1c2721] hover:bg-[#25342c] text-[#89d5d5] border border-[#3b4c40] text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <Sliders size={13} />
+                        <span>{hasScore ? "Adjust Score" : "Score Episode"}</span>
+                      </button>
+                      {isOwner && (
+                        <button
+                          type="button"
+                          onClick={() => setEntryToDelete(entry)}
+                          className="p-2 rounded text-[#6c7d73] hover:text-red-400 hover:bg-red-500/10 border border-[#303b34] hover:border-red-500/30 transition-colors cursor-pointer"
+                          title="Remove from this ranking"
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -585,6 +684,96 @@ export default function CollectionDetailPage({
         {/* Stage 5: Critical Notes & Discussion */}
         <CommentsSection collectionId={collection.id} isOwner={isOwner} />
       </main>
+
+      {/* Delete Collection Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl bg-[#141a17] border border-red-500/30 p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-red-400">
+              <AlertTriangle className="h-6 w-6 shrink-0" />
+              <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+                Delete Entire Ranking
+              </h3>
+            </div>
+            <p className="text-xs text-[#9aa79e] leading-relaxed">
+              Are you sure you want to permanently delete{" "}
+              <strong className="text-[#f1f0e9]">{collectionTitle}</strong>?
+              This will remove all ranked entries and scores associated with this collection. This action cannot be undone.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                disabled={deletingCollection}
+                className="px-4 py-2 text-xs text-[#9aa79e] hover:text-[#f1f0e9] transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeleteCollection}
+                disabled={deletingCollection}
+                className="px-5 py-2.5 rounded bg-red-600 hover:bg-red-500 text-[#f1f0e9] text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {deletingCollection ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4" />
+                    <span>Yes, Delete Ranking</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Remove Entry Confirmation Modal */}
+      {entryToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-md rounded-xl bg-[#141a17] border border-[#303b34] p-6 shadow-2xl space-y-4">
+            <div className="flex items-center gap-3 text-[#89d5d5]">
+              <Trash2 className="h-5 w-5 shrink-0" />
+              <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+                Remove Entry
+              </h3>
+            </div>
+            <p className="text-xs text-[#9aa79e] leading-relaxed">
+              Remove <strong className="text-[#f1f0e9]">{entryToDelete.mediaItem?.title}</strong> from this ranking?
+              The item will be removed from this list, but your rating and TMDB metadata are preserved.
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setEntryToDelete(null)}
+                disabled={deletingEntry}
+                className="px-4 py-2 text-xs text-[#9aa79e] hover:text-[#f1f0e9] transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleRemoveEntry}
+                disabled={deletingEntry}
+                className="px-5 py-2.5 rounded bg-red-600 hover:bg-red-500 text-[#f1f0e9] text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+              >
+                {deletingEntry ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Removing...</span>
+                  </>
+                ) : (
+                  <span>Remove Entry</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Interactive Rating Dialog */}
       {selectedItemForRating && (

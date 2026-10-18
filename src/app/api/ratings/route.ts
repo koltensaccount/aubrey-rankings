@@ -19,6 +19,7 @@ export async function POST(request: NextRequest) {
       collectionId,
       ratingSystemId,
       scores, // { [categoryId: string]: number | null }
+      categoryScores: bodyCategoryScores, // [ { categoryId: string, score: number } ]
       watchDate,
       reviewText,
       personalNotes,
@@ -99,7 +100,20 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    if (scores && typeof scores === "object") {
+    if (Array.isArray(bodyCategoryScores)) {
+      for (const item of bodyCategoryScores) {
+        if (
+          item?.categoryId &&
+          item.score !== undefined &&
+          item.score !== null &&
+          !isNaN(Number(item.score))
+        ) {
+          finalScores[item.categoryId] = Number(item.score);
+        }
+      }
+    }
+
+    if (scores && typeof scores === "object" && !Array.isArray(scores)) {
       for (const [catId, val] of Object.entries(scores)) {
         if (val === null || val === undefined || isNaN(Number(val))) {
           delete finalScores[catId];
@@ -110,7 +124,10 @@ export async function POST(request: NextRequest) {
     }
 
     let calculatedOverallScore = existing?.calculatedOverallScore ?? null;
-    if (categoriesList.length > 0 && (scores !== undefined || existing?.categoryScores)) {
+    if (
+      categoriesList.length > 0 &&
+      (scores !== undefined || bodyCategoryScores !== undefined || existing?.categoryScores)
+    ) {
       const calcResult = calculateWeightedAverage(categoriesList, finalScores);
       calculatedOverallScore = calcResult.weightedScore;
     }
@@ -195,12 +212,88 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       ratingId,
+      mediaItemId,
       calculatedOverallScore,
+      rating: {
+        id: ratingId,
+        userId: session.user.id,
+        mediaItemId,
+        collectionId: collectionId || null,
+        ratingSystemId: activeRatingSystemId,
+        calculatedOverallScore,
+        reviewText: reviewText || null,
+        personalNotes: personalNotes || null,
+        isWatched: isWatched !== undefined ? Boolean(isWatched) : true,
+        isFavorite: Boolean(isFavorite),
+        categoryScores: Object.entries(finalScores).map(([categoryId, score]) => ({
+          categoryId,
+          score,
+        })),
+      },
     });
   } catch (error: any) {
     console.error("[Save Rating Error]", error);
     return NextResponse.json(
       { error: error?.message || "Failed to save rating" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  const session = await getServerSession();
+  if (!session) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
+  try {
+    const url = new URL(request.url);
+    const ratingId = url.searchParams.get("ratingId");
+    const mediaItemId = url.searchParams.get("mediaItemId");
+    const collectionId = url.searchParams.get("collectionId");
+
+    let targetRating: any = null;
+
+    if (ratingId) {
+      targetRating = await db.query.ratings.findFirst({
+        where: (r, { eq, and }) =>
+          and(eq(r.id, ratingId), eq(r.userId, session.user.id)),
+      });
+    } else if (mediaItemId) {
+      targetRating = await db.query.ratings.findFirst({
+        where: (r, { eq, and, isNull }) =>
+          and(
+            eq(r.userId, session.user.id),
+            eq(r.mediaItemId, mediaItemId),
+            collectionId ? eq(r.collectionId, collectionId) : isNull(r.collectionId)
+          ),
+      });
+    } else {
+      return NextResponse.json(
+        { error: "ratingId or mediaItemId is required to delete rating" },
+        { status: 400 }
+      );
+    }
+
+    if (!targetRating) {
+      return NextResponse.json(
+        { error: "Rating not found or access denied" },
+        { status: 404 }
+      );
+    }
+
+    // Delete rating record (foreign key cascade removes related categoryScores)
+    await db.delete(ratings).where(eq(ratings.id, targetRating.id));
+
+    return NextResponse.json({
+      success: true,
+      deletedRatingId: targetRating.id,
+      mediaItemId: targetRating.mediaItemId,
+    });
+  } catch (error: any) {
+    console.error("[Delete Rating Error]", error);
+    return NextResponse.json(
+      { error: error?.message || "Failed to delete rating" },
       { status: 500 }
     );
   }

@@ -45,12 +45,22 @@ export default function SignUpPage() {
     setError(null);
     setGoogleLoading(true);
     try {
-      await signIn.social({
+      const res = await signIn.social({
         provider: "google",
         callbackURL: "/onboarding",
       });
+      if (res?.error) {
+        setError(
+          res.error.message ||
+            "Google Sign-Up is not configured on this server. Please create an account with email and password."
+        );
+        setGoogleLoading(false);
+      }
     } catch (err: any) {
-      setError(err?.message || "Google Sign-Up is currently unavailable.");
+      setError(
+        err?.message ||
+          "Google Sign-Up is currently unavailable. Please create an account with email and password."
+      );
       setGoogleLoading(false);
     }
   };

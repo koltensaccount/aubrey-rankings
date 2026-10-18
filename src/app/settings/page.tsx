@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useSession, signOut } from "@/lib/auth-client";
+import { useSession, signOut, authClient } from "@/lib/auth-client";
 import {
   Sliders,
   User,
@@ -18,6 +18,7 @@ import {
   UploadCloud,
   ExternalLink,
   Film,
+  KeyRound,
 } from "lucide-react";
 
 export default function SettingsPage() {
@@ -44,6 +45,53 @@ export default function SettingsPage() {
   const [usernameChecking, setUsernameChecking] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [usernameReason, setUsernameReason] = useState<string | null>(null);
+
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmNewPassword, setConfirmNewPassword] = useState("");
+  const [passwordChanging, setPasswordChanging] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentPassword || !newPassword) return;
+
+    if (newPassword.length < 8) {
+      setPasswordError("New password must be at least 8 characters.");
+      return;
+    }
+
+    if (newPassword !== confirmNewPassword) {
+      setPasswordError("New passwords do not match.");
+      return;
+    }
+
+    setPasswordChanging(true);
+    setPasswordError(null);
+    try {
+      const res = await authClient.changePassword({
+        currentPassword,
+        newPassword,
+        revokeOtherSessions: true,
+      });
+
+      if (res?.error) {
+        throw new Error(res.error.message || "Failed to update password.");
+      }
+
+      setPasswordSuccess(true);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmNewPassword("");
+      setTimeout(() => setPasswordSuccess(false), 4000);
+    } catch (err: any) {
+      setPasswordError(err?.message || "Incorrect current password or update failed.");
+    } finally {
+      setPasswordChanging(false);
+    }
+  };
 
   useEffect(() => {
     fetchRatingSystems();
@@ -563,6 +611,103 @@ export default function SettingsPage() {
               </button>
             </div>
           </form>
+
+          {/* Change Password Form */}
+          <div className="p-6 rounded-xl border border-[#303b34] bg-[#141a17] space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="h-9 w-9 rounded-lg bg-[#18251e] border border-[#3b4c40] flex items-center justify-center text-[#89d5d5]">
+                <KeyRound size={18} />
+              </div>
+              <div>
+                <h3 className="font-display text-xl uppercase font-bold text-[#f1f0e9]">
+                  Change Password
+                </h3>
+                <p className="text-xs text-[#8fa095] mt-0.5">
+                  Update your Aubrey Rankings account password.
+                </p>
+              </div>
+            </div>
+
+            {passwordError && (
+              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2">
+                <AlertTriangle size={15} className="shrink-0 mt-0.5" />
+                <span>{passwordError}</span>
+              </div>
+            )}
+
+            {passwordSuccess && (
+              <div className="p-3 rounded-lg bg-[#89d5d5]/10 border border-[#89d5d5]/30 text-[#89d5d5] text-xs flex items-center gap-2">
+                <Check size={15} className="shrink-0" />
+                <span>Your password has been successfully updated.</span>
+              </div>
+            )}
+
+            <form onSubmit={handleChangePassword} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                  Current Password
+                </label>
+                <input
+                  type="password"
+                  placeholder="••••••••••••"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  required
+                  disabled={passwordChanging}
+                  className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="At least 8 characters"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    required
+                    disabled={passwordChanging}
+                    className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-semibold text-[#8fa095] uppercase tracking-wider block">
+                    Confirm New Password
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="Repeat new password"
+                    value={confirmNewPassword}
+                    onChange={(e) => setConfirmNewPassword(e.target.value)}
+                    required
+                    disabled={passwordChanging}
+                    className="w-full text-xs rounded-lg px-3.5 py-2.5 bg-[#18211d] border border-[#303b34] text-[#f1f0e9] focus:outline-none focus:border-[#89d5d5]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-2">
+                <button
+                  type="submit"
+                  disabled={passwordChanging || !currentPassword || !newPassword}
+                  className="px-5 py-2.5 rounded-lg bg-[#89d5d5] hover:bg-[#a0dede] text-[#111514] font-display text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer flex items-center gap-2"
+                >
+                  {passwordChanging ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Updating...</span>
+                    </>
+                  ) : (
+                    <span>Update Password</span>
+                  )}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
 

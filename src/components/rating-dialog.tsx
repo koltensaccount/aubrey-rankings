@@ -14,6 +14,7 @@ import {
   Save,
   Loader2,
   Sliders,
+  Trash2,
 } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { calculateWeightedAverage, CategoryDef } from "@/lib/scoring";
@@ -54,6 +55,7 @@ export function RatingDialog({
   const [isFavorite, setIsFavorite] = useState(false);
   const [watchDate, setWatchDate] = useState("");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   // Initialize form state when item or initialRating changes
@@ -118,23 +120,67 @@ export function RatingDialog({
     }
   };
 
+  const handleClearRating = async () => {
+    if (!initialRating) return;
+    if (
+      !window.confirm(
+        `Are you sure you want to clear your rating for "${mediaItem.title}"?`
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    setDeleting(true);
+
+    try {
+      const query = new URLSearchParams();
+      query.set("mediaItemId", mediaItem.id);
+      if (collectionId) {
+        query.set("collectionId", collectionId);
+      }
+
+      const res = await fetch(`/api/ratings?${query.toString()}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to clear rating");
+      }
+
+      onRatingSaved({
+        mediaItemId: mediaItem.id,
+        cleared: true,
+      });
+      onClose();
+    } catch (err: any) {
+      setError(err?.message || "Failed to clear rating");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleSave = async () => {
     setError(null);
     setSaving(true);
 
     try {
-      // Build category scores array
+      const numericScoresMap: Record<string, number> = {};
       const categoryScoresArray = Object.entries(scores)
         .filter(([_, score]) => score !== "" && typeof score === "number")
-        .map(([categoryId, score]) => ({
-          categoryId,
-          score: score as number,
-        }));
+        .map(([categoryId, score]) => {
+          numericScoresMap[categoryId] = score as number;
+          return {
+            categoryId,
+            score: score as number,
+          };
+        });
 
       const payload = {
         mediaItemId: mediaItem.id,
         collectionId: collectionId || null,
         ratingSystemId: ratingSystem?.id || null,
+        scores: numericScoresMap,
         categoryScores: categoryScoresArray,
         reviewText: reviewText.trim() || null,
         personalNotes: personalNotes.trim() || null,
@@ -155,7 +201,17 @@ export function RatingDialog({
       }
 
       const savedData = await res.json();
-      onRatingSaved(savedData);
+      onRatingSaved(
+        savedData.rating || {
+          mediaItemId: mediaItem.id,
+          calculatedOverallScore: savedData.calculatedOverallScore,
+          categoryScores: categoryScoresArray,
+          reviewText: reviewText.trim() || null,
+          personalNotes: personalNotes.trim() || null,
+          isWatched,
+          isFavorite,
+        }
+      );
       onClose();
     } catch (err: any) {
       setError(err?.message || "An error occurred while saving");
@@ -308,15 +364,30 @@ export function RatingDialog({
 
           {/* Action Footer */}
           <div className="flex items-center justify-between pt-4 border-t border-[#28342d]">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-xs text-[#9aa79e] hover:text-[#f1f0e9] transition-colors"
-            >
-              Cancel
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={onClose}
+                className="px-3 py-2 text-xs text-[#9aa79e] hover:text-[#f1f0e9] transition-colors"
+              >
+                Cancel
+              </button>
+              {initialRating && (
+                <button
+                  type="button"
+                  onClick={handleClearRating}
+                  disabled={deleting || saving}
+                  className="px-3 py-1.5 rounded text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 flex items-center gap-1.5 transition-colors cursor-pointer"
+                  title="Remove your rating for this item"
+                >
+                  <Trash2 size={13} />
+                  <span>{deleting ? "Clearing..." : "Clear Rating"}</span>
+                </button>
+              )}
+            </div>
             <button
               onClick={handleSave}
-              disabled={saving}
+              disabled={saving || deleting}
               className="px-5 py-2.5 rounded bg-[#d8e2d8] hover:bg-[#edf5ed] text-[#102523] text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer"
             >
               {saving ? (
