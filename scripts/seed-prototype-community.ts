@@ -407,7 +407,7 @@ async function api(endpoint: string, options: { method?: string; body?: any; coo
   const colDetailsAubrey = await api(`/api/collections/${aubreyCol.id}`, { cookie: userSessions.aubrey.cookie });
   const existingEntriesAubrey = colDetailsAubrey.data?.entries || [];
 
-  for (const item of BLACK_MIRROR_EPISODES) {
+  for (const item of BLACK_MIRROR_ITEMS) {
     let entry = existingEntriesAubrey.find(
       (e: any) =>
         e.mediaItem?.seasonNumber === item.season &&
