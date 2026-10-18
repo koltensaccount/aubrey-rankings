@@ -37,10 +37,10 @@ const visitorUser = {
   username: `bob_${tag}`,
 };
 
-let ownerId: string;
-let visitorId: string;
-let ownerCookie: string;
-let visitorCookie: string;
+let ownerId: string = "";
+let visitorId: string = "";
+let ownerCookie: string = "";
+let visitorCookie: string = "";
 
 const colId = `col_test_p7_${tag}`;
 const movie1Id = `media_mov1_${tag}`;
