@@ -13,6 +13,7 @@ import {
   Share2,
   Lock,
   Globe,
+  GitCompare,
 } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { RatingDialog } from "@/components/rating-dialog";
@@ -290,6 +291,14 @@ export default function CollectionDetailPage({
                 </div>
               )}
               <LikeButton collectionId={collection.id} />
+              <Link
+                href={`/compare?left=${collection.id}`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold bg-[#17201c] hover:bg-[#1f2b26] text-[#8fa095] hover:text-[#89d5d5] border border-[#3b4c40] transition-colors"
+                title="Compare with another canon"
+              >
+                <GitCompare size={12} className="text-[#89d5d5]" />
+                <span>Compare</span>
+              </Link>
               <span className="text-[11px] font-mono text-[#89d5d5]">
                 {collection.collectionType === "tv_show" ? "TV Anthology" : "Canon"} · {totalEntries} Entries
               </span>
