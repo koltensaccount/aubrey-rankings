@@ -120,6 +120,14 @@ export function TierBoardView({
                 entriesInTier.map((entry) => {
                   const media = entry.mediaItem;
                   const isStill = media.mediaType === "episode" || Boolean(media.stillPath);
+                  const isEpisode =
+                    (media.mediaType === "episode" || media.seasonNumber != null || media.episodeNumber != null) &&
+                    media.seasonNumber != null &&
+                    media.episodeNumber != null &&
+                    media.mediaType !== "movie";
+                  const episodeBadgeText = isEpisode
+                    ? `S${String(media.seasonNumber).padStart(2, "0")} · E${String(media.episodeNumber).padStart(2, "0")}`
+                    : null;
                   const isMoving = movingEntryId === entry.id;
                   return (
                     <div
@@ -135,6 +143,15 @@ export function TierBoardView({
                           title={media.title}
                           aspect={isStill ? "video" : "poster"}
                         />
+                        {/* Compact TV Episode Badge visible without hover */}
+                        {episodeBadgeText && (
+                          <div
+                            data-testid="episode-badge"
+                            className="absolute top-1 left-1 z-10 pointer-events-none px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md text-foreground border border-border/60 text-[9px] font-mono font-bold tracking-wider shadow-sm select-none"
+                          >
+                            {episodeBadgeText}
+                          </div>
+                        )}
                         {isMoving && (
                           <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-20">
                             <Loader2 size={16} className="text-primary animate-spin" />
@@ -143,7 +160,10 @@ export function TierBoardView({
                       </div>
 
                       <div className="p-1.5 bg-card">
-                        <div className="text-[11px] font-semibold text-foreground truncate uppercase font-display leading-tight">
+                        <div
+                          title={episodeBadgeText ? `${episodeBadgeText} — ${media.title}` : media.title}
+                          className="text-[11px] font-semibold text-foreground truncate uppercase font-display leading-tight"
+                        >
                           {media.title}
                         </div>
                       </div>
@@ -151,7 +171,7 @@ export function TierBoardView({
                       {/* Hover Overlay Action Controls */}
                       <div className="absolute inset-0 bg-black/85 opacity-0 group-hover:opacity-100 transition-opacity p-2 flex flex-col justify-between z-10 text-xs">
                         <div className="text-[10px] text-white/90 font-medium line-clamp-2">
-                          {media.title}
+                          {episodeBadgeText ? `${episodeBadgeText} — ${media.title}` : media.title}
                         </div>
 
                         <div className="space-y-1">
@@ -214,6 +234,14 @@ export function TierBoardView({
             {unassignedEntries.map((entry) => {
               const media = entry.mediaItem;
               const isStill = media.mediaType === "episode" || Boolean(media.stillPath);
+              const isEpisode =
+                (media.mediaType === "episode" || media.seasonNumber != null || media.episodeNumber != null) &&
+                media.seasonNumber != null &&
+                media.episodeNumber != null &&
+                media.mediaType !== "movie";
+              const episodeBadgeText = isEpisode
+                ? `S${String(media.seasonNumber).padStart(2, "0")} · E${String(media.episodeNumber).padStart(2, "0")}`
+                : null;
               const isMoving = movingEntryId === entry.id;
               return (
                 <div
@@ -229,6 +257,15 @@ export function TierBoardView({
                       title={media.title}
                       aspect={isStill ? "video" : "poster"}
                     />
+                    {/* Compact TV Episode Badge visible without hover */}
+                    {episodeBadgeText && (
+                      <div
+                        data-testid="episode-badge"
+                        className="absolute top-1 left-1 z-10 pointer-events-none px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md text-foreground border border-border/60 text-[9px] font-mono font-bold tracking-wider shadow-sm select-none"
+                      >
+                        {episodeBadgeText}
+                      </div>
+                    )}
                     {isMoving && (
                       <div className="absolute inset-0 bg-black/70 flex items-center justify-center z-20">
                         <Loader2 size={16} className="text-primary animate-spin" />
@@ -237,7 +274,10 @@ export function TierBoardView({
                   </div>
 
                   <div className="p-1.5 bg-card">
-                    <div className="text-[11px] font-semibold text-foreground truncate uppercase font-display leading-tight">
+                    <div
+                      title={episodeBadgeText ? `${episodeBadgeText} — ${media.title}` : media.title}
+                      className="text-[11px] font-semibold text-foreground truncate uppercase font-display leading-tight"
+                    >
                       {media.title}
                     </div>
                   </div>
@@ -245,7 +285,7 @@ export function TierBoardView({
                   {isOwner && (
                     <div className="absolute inset-0 bg-black/85 opacity-0 group-hover:opacity-100 transition-opacity p-2 flex flex-col justify-between z-10 text-xs">
                       <div className="text-[10px] text-white/90 font-medium line-clamp-2">
-                        {media.title}
+                        {episodeBadgeText ? `${episodeBadgeText} — ${media.title}` : media.title}
                       </div>
 
                       <div className="space-y-1">

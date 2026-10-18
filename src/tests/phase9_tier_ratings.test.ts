@@ -228,4 +228,111 @@ describe("Phase 9: First-Class Tier Rating Systems", () => {
     assert.strictEqual(result.alignmentRating, "Strong Alignment");
     assert.strictEqual(result.meanScoreDifference, null, "Mean numerical score diff must be null for tier vs numerical without dual scores");
   });
+
+  it("5. Ordinary tier-system saves cannot silently unassign ratings without explicit confirmation or reassignment", async () => {
+    const safetySystemId = "rs_safety_" + Date.now();
+    await db.insert(ratingSystems).values({
+      id: safetySystemId,
+      userId: testUserId,
+      name: "Safety Check Rubric",
+      type: "tier",
+      scale: 10,
+    });
+
+    const tierS = "tier_safe_s_" + Date.now();
+    const tierA = "tier_safe_a_" + Date.now();
+    const tierB = "tier_safe_b_" + Date.now();
+    await db.insert(ratingTiers).values([
+      { id: tierS, ratingSystemId: safetySystemId, name: "S Tier", color: "#EF4444", sortOrder: 1 },
+      { id: tierA, ratingSystemId: safetySystemId, name: "A Tier", color: "#F97316", sortOrder: 2 },
+      { id: tierB, ratingSystemId: safetySystemId, name: "B Tier", color: "#F59E0B", sortOrder: 3 },
+    ]);
+
+    const mediaId = "media_safe_" + Date.now();
+    await db.insert(mediaItems).values({
+      id: mediaId,
+      title: "Safety Test Film",
+      mediaType: "movie",
+    });
+
+    const ratingId = "rating_safe_" + Date.now();
+    await db.insert(ratings).values({
+      id: ratingId,
+      userId: testUserId,
+      mediaItemId: mediaId,
+      ratingSystemId: safetySystemId,
+      tierId: tierB,
+      reviewText: "A memorable gem that belongs in B tier.",
+      personalNotes: "Private note that must be preserved.",
+      calculatedOverallScore: 7.5,
+    });
+
+    // 1. Ordinary save removing tier B without unassignRemovedTiers or tierMigrations must FAIL with 409
+    let rejectedError: any = null;
+    try {
+      await mutateRubric(testUserId, safetySystemId, {
+        name: "Safety Check Rubric",
+        type: "tier",
+        tiers: [
+          { id: tierS, name: "S Tier", color: "#EF4444" },
+          { id: tierA, name: "A Tier", color: "#F97316" },
+        ],
+      });
+    } catch (err) {
+      rejectedError = err;
+    }
+
+    assert.ok(rejectedError instanceof RubricError, "Must reject with RubricError");
+    assert.strictEqual(rejectedError.status, 409, "Must return status 409 Conflict");
+    assert.deepStrictEqual(rejectedError.conflict, {
+      tierId: tierB,
+      tierName: "B Tier",
+      activeCount: 1,
+    }, "Must return structured conflict details for frontend UI");
+
+    // Verify rating was NOT modified
+    let checkRating = await db.query.ratings.findFirst({
+      where: (r, { eq }) => eq(r.id, ratingId),
+    });
+    assert.strictEqual(checkRating?.tierId, tierB, "Rating tier assignment must remain completely unchanged");
+    assert.strictEqual(checkRating?.reviewText, "A memorable gem that belongs in B tier.", "Review must remain intact");
+    assert.strictEqual(checkRating?.personalNotes, "Private note that must be preserved.", "Personal notes must remain intact");
+
+    // 2. Reassignment via tierMigrations must safely move the item to Tier A
+    await mutateRubric(testUserId, safetySystemId, {
+      name: "Safety Check Rubric",
+      type: "tier",
+      tiers: [
+        { id: tierS, name: "S Tier", color: "#EF4444" },
+        { id: tierA, name: "A Tier", color: "#F97316" },
+      ],
+      tierMigrations: {
+        [tierB]: tierA,
+      },
+    });
+
+    checkRating = await db.query.ratings.findFirst({
+      where: (r, { eq }) => eq(r.id, ratingId),
+    });
+    assert.strictEqual(checkRating?.tierId, tierA, "Rating must be safely migrated to Tier A");
+    assert.strictEqual(checkRating?.reviewText, "A memorable gem that belongs in B tier.", "Review preserved");
+    assert.strictEqual(checkRating?.personalNotes, "Private note that must be preserved.", "Personal notes preserved");
+
+    // 3. Explicit unassignment via unassignRemovedTiers: true must only succeed when intentionally requested
+    await mutateRubric(testUserId, safetySystemId, {
+      name: "Safety Check Rubric",
+      type: "tier",
+      tiers: [
+        { id: tierS, name: "S Tier", color: "#EF4444" },
+      ],
+      unassignRemovedTiers: true,
+    });
+
+    checkRating = await db.query.ratings.findFirst({
+      where: (r, { eq }) => eq(r.id, ratingId),
+    });
+    assert.strictEqual(checkRating?.tierId, null, "Rating tierId is set to null (unranked) only upon explicit request");
+    assert.strictEqual(checkRating?.reviewText, "A memorable gem that belongs in B tier.", "Review preserved even when unassigned");
+    assert.strictEqual(checkRating?.personalNotes, "Private note that must be preserved.", "Personal notes preserved even when unassigned");
+  });
 });

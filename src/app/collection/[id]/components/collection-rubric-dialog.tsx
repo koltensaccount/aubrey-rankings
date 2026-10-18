@@ -3,6 +3,13 @@
 import React, { useState } from "react";
 import { Check, Loader2, X, Plus, Trash2, ArrowUp, ArrowDown, Layers, Sliders } from "lucide-react";
 import { CinematicSlider } from "@/components/cinematic-slider";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 
 const COLOR_SWATCHES = [
   "#EF4444", // Red
@@ -127,32 +134,23 @@ export function CollectionRubricDialog({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs">
-      <div className="w-full max-w-xl rounded-dialog bg-card border border-border-dialog p-6 shadow-dialog space-y-5">
-        <div className="flex items-center justify-between pb-3 border-b border-border">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-primary/20 text-primary flex items-center justify-center">
-              {isTierMode ? <Layers size={18} /> : <Sliders size={18} />}
-            </div>
-            <div>
-              <h3 className="font-display text-xl uppercase font-bold text-foreground">
-                {isTierMode ? "Tier Rating System" : "Numerical Weighted Rubric"}
-              </h3>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {isTierMode
-                  ? "Configure tier lanes, colors, labels, and hierarchy for this collection."
-                  : "Calibrate the multiplier weights for each evaluation category."}
-              </p>
-            </div>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
+      <DialogContent className="max-w-xl p-6 gap-5 bg-card border-border-dialog shadow-dialog rounded-dialog">
+        <DialogHeader className="pb-3 border-b border-border text-left sm:text-left flex flex-row items-center gap-2.5 space-y-0">
+          <div className="w-8 h-8 rounded-lg bg-primary/20 text-primary flex items-center justify-center shrink-0">
+            {isTierMode ? <Layers size={18} /> : <Sliders size={18} />}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-muted-foreground hover:text-foreground p-1 cursor-pointer transition-colors"
-          >
-            <X size={18} />
-          </button>
-        </div>
+          <div>
+            <DialogTitle className="font-display text-xl uppercase font-bold text-foreground">
+              {isTierMode ? "Tier Rating System" : "Numerical Weighted Rubric"}
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+              {isTierMode
+                ? "Configure tier lanes, colors, labels, and hierarchy for this collection."
+                : "Calibrate the multiplier weights for each evaluation category."}
+            </DialogDescription>
+          </div>
+        </DialogHeader>
 
         {/* Evaluation Method Switcher */}
         <div className="space-y-1.5">
@@ -376,7 +374,7 @@ export function CollectionRubricDialog({
             )}
           </button>
         </div>
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

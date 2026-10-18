@@ -82,7 +82,7 @@ export default function CollectionDetailPage({
   const [editingRubricCategories, setEditingRubricCategories] = useState<any[]>([]);
   const [editingRubricTiers, setEditingRubricTiers] = useState<any[]>([]);
   const [savingRubric, setSavingRubric] = useState(false);
-  const [customizeForCollectionOnly, setCustomizeForCollectionOnly] = useState(true);
+  const [customizeForCollectionOnly, setCustomizeForCollectionOnly] = useState(false);
 
   // Dedicated Visual Tier-Board Editor Modal
   const [showTierEditor, setShowTierEditor] = useState(false);
@@ -111,6 +111,8 @@ export default function CollectionDetailPage({
   const handleOpenRubricModal = (targetMethod?: "numerical" | "tier") => {
     const sys = collection?.defaultRatingSystem;
     setRubricTargetMethod(targetMethod);
+    const isTemplate = sys?.isSystemTemplate || !sys?.userId;
+    setCustomizeForCollectionOnly(Boolean(isTemplate));
     if (sys) {
       if (sys.tiers && sys.tiers.length > 0) {
         setEditingRubricTiers((sys.tiers || []).map((t: any) => ({ ...t })));
@@ -178,17 +180,41 @@ export default function CollectionDetailPage({
         const dupData = await dupRes.json();
         const newSystemId = dupData.ratingSystem.id;
 
+        const duplicatedTiers = dupData.ratingSystem.tiers || [];
+        const duplicatedCategories = dupData.ratingSystem.categories || [];
+
+        const collectionPayload = isTierSys
+          ? {
+              type: "tier",
+              tiers: editingRubricTiers.map((t, idx) => ({
+                id: duplicatedTiers[idx]?.id,
+                name: t.name,
+                description: t.description,
+                color: t.color,
+                sortOrder: idx + 1,
+              })),
+            }
+          : {
+              type: "numerical",
+              categories: editingRubricCategories.map((c, idx) => ({
+                id: duplicatedCategories[idx]?.id,
+                name: c.name,
+                weight: c.weight,
+                isRequired: c.isRequired,
+                sortOrder: idx + 1,
+              })),
+            };
+
         // Step 2: Apply the updated categories/tiers and title
         const patchRes = await fetch(`/api/rating-systems/${newSystemId}`, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: `${collectionTitle} Rubric`,
-            ...payload,
+            ...collectionPayload,
           }),
         });
         if (!patchRes.ok) throw new Error("Failed to update collection rubric");
-        const patchData = await patchRes.json();
 
         // Step 3: Assign to this collection
         await fetch(`/api/collections/${id}`, {
@@ -489,7 +515,9 @@ export default function CollectionDetailPage({
 
   const fetchCollection = useCallback(async () => {
     try {
-      setLoading(true);
+      if (!collection) {
+        setLoading(true);
+      }
       const res = await fetch(`/api/collections/${id}`);
       if (!res.ok) {
         throw new Error("Failed to load collection");
@@ -806,6 +834,19 @@ export default function CollectionDetailPage({
         isDeleting={deletingEntry}
       />
 
+      {/* 5. Dedicated Visual Tier-Board Editor Modal */}
+      {isTierCollection && (
+        <TierBoardEditorModal
+          isOpen={showTierEditor}
+          onClose={() => setShowTierEditor(false)}
+          collection={collection}
+          processedEntries={processedEntries}
+          onOpenCustomizeTiers={() => handleOpenRubricModal("tier")}
+          onQuickAssignTier={handleQuickAssignTier}
+          onRefreshCollection={fetchCollection}
+        />
+      )}
+
       <CollectionRubricDialog
         isOpen={showRubricModal}
         onClose={() => setShowRubricModal(false)}
@@ -820,19 +861,6 @@ export default function CollectionDetailPage({
         onSave={handleSaveRubric}
         isSaving={savingRubric}
       />
-
-      {/* 5. Dedicated Visual Tier-Board Editor Modal */}
-      {isTierCollection && (
-        <TierBoardEditorModal
-          isOpen={showTierEditor}
-          onClose={() => setShowTierEditor(false)}
-          collection={collection}
-          processedEntries={processedEntries}
-          onOpenCustomizeTiers={() => handleOpenRubricModal("tier")}
-          onQuickAssignTier={handleQuickAssignTier}
-          onRefreshCollection={fetchCollection}
-        />
-      )}
 
       <CollectionBannerDialog
         isOpen={showBannerModal}

@@ -107,6 +107,14 @@ function SortableMediaCard({
 
   const media = entry?.mediaItem || {};
   const isStill = media.mediaType === "episode" || Boolean(media.stillPath);
+  const isEpisode =
+    (media.mediaType === "episode" || media.seasonNumber != null || media.episodeNumber != null) &&
+    media.seasonNumber != null &&
+    media.episodeNumber != null &&
+    media.mediaType !== "movie";
+  const episodeBadgeText = isEpisode
+    ? `S${String(media.seasonNumber).padStart(2, "0")} · E${String(media.episodeNumber).padStart(2, "0")}`
+    : null;
 
   // Close menu when clicking outside
   useEffect(() => {
@@ -148,6 +156,16 @@ function SortableMediaCard({
           title={media.title}
           aspect={isStill ? "video" : "poster"}
         />
+
+        {/* Compact TV Episode Badge visible without hover */}
+        {episodeBadgeText && (
+          <div
+            data-testid="episode-badge"
+            className="absolute top-1 left-1 z-10 pointer-events-none px-1.5 py-0.5 rounded bg-black/80 backdrop-blur-md text-foreground border border-border/60 text-[9px] font-mono font-bold tracking-wider shadow-sm select-none"
+          >
+            {episodeBadgeText}
+          </div>
+        )}
 
         {/* Accessible Non-Drag Move Trigger (always available, visible on hover / focus) */}
         {!isOverlay && (
@@ -220,7 +238,7 @@ function SortableMediaCard({
       {/* Title footer */}
       <div className="p-1 bg-card/95 border-t border-border/50">
         <div
-          title={media.title}
+          title={episodeBadgeText ? `${episodeBadgeText} — ${media.title}` : media.title}
           className="text-[10px] font-medium text-foreground truncate font-display leading-tight"
         >
           {media.title}
@@ -324,6 +342,7 @@ function DroppableUnrankedTray({
   return (
     <div
       ref={setNodeRef}
+      data-testid="unranked-tray"
       className={`border border-dashed rounded-lg p-3 sm:p-4 transition-colors ${
         isOver
           ? "border-primary bg-primary/10 shadow-inner"
@@ -417,8 +436,36 @@ export function TierBoardEditorModal({
         nextState.unranked.push(entry.id);
       }
     }
+
+    // Default sort unranked items: if TV episodes with season & episode numbers, sort in chronological season/episode order
+    nextState.unranked.sort((aId, bId) => {
+      const a = entriesById.get(aId)?.mediaItem;
+      const b = entriesById.get(bId)?.mediaItem;
+      if (a?.seasonNumber != null && b?.seasonNumber != null) {
+        if (a.seasonNumber !== b.seasonNumber) {
+          return a.seasonNumber - b.seasonNumber;
+        }
+        if (a.episodeNumber != null && b.episodeNumber != null) {
+          return a.episodeNumber - b.episodeNumber;
+        }
+      }
+      return 0;
+    });
+
     setItemsByContainer(nextState);
-  }, [processedEntries, collection?.defaultRatingSystem?.tiers]);
+  }, [processedEntries, collection?.defaultRatingSystem?.tiers, entriesById]);
+
+  // Handle Escape key to close editor modal when no dialog is open
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isOpen, onClose]);
 
   // Sensors: pointer with distance constraint for click tolerance, and keyboard
   const sensors = useSensors(
@@ -589,7 +636,7 @@ export function TierBoardEditorModal({
   const activeEntry = activeId ? entriesById.get(activeId) : null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex flex-col animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-40 bg-black/85 backdrop-blur-md flex flex-col animate-in fade-in duration-200">
       {/* 1. Header Bar */}
       <header className="border-b border-border bg-card/90 px-4 sm:px-6 py-3 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">

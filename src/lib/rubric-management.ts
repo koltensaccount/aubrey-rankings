@@ -15,6 +15,11 @@ export class RubricError extends Error {
   constructor(
     message: string,
     public status = 400,
+    public conflict?: {
+      tierId: string;
+      tierName: string;
+      activeCount: number;
+    },
   ) {
     super(message);
   }
@@ -288,6 +293,11 @@ export async function mutateRubric(
               throw new RubricError(
                 `Tier "${rt.name}" has ${assignedToTier.length} active ratings. Reassign them or confirm unassignment to delete this tier.`,
                 409,
+                {
+                  tierId: rt.id,
+                  tierName: rt.name,
+                  activeCount: assignedToTier.length,
+                },
               );
             }
           }
@@ -314,10 +324,21 @@ export async function mutateRubric(
             .set(values)
             .where(eq(ratingTiers.id, t.id));
         } else {
+          let newId = `tier_${Date.now()}_${randomUUID().slice(0, 6)}`;
+          if (t.id && !t.id.startsWith("tier_temp_")) {
+            const [conflict] = await tx
+              .select({ id: ratingTiers.id })
+              .from(ratingTiers)
+              .where(eq(ratingTiers.id, t.id))
+              .limit(1);
+            if (!conflict) {
+              newId = t.id;
+            }
+          }
           await tx
             .insert(ratingTiers)
             .values({
-              id: t.id || `tier_${Date.now()}_${randomUUID().slice(0, 6)}`,
+              id: newId,
               ratingSystemId: id,
               ...values,
             });

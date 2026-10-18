@@ -46,7 +46,7 @@ export function CollectionToolbar({
   onOpenTierEditor,
 }: CollectionToolbarProps) {
   return (
-    <div className="sticky top-20 z-30 bg-background/95 backdrop-blur-md border-b border-border">
+    <div className="sticky top-20 z-20 bg-background/95 backdrop-blur-md border-b border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 text-xs">
         {/* Left: Action, Status Filters, & Season Filters */}
         <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">

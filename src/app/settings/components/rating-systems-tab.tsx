@@ -45,6 +45,17 @@ export function RatingSystemsTab({ initialSystemId }: { initialSystemId?: string
   const [deletingSystemLoading, setDeletingSystemLoading] = useState(false);
   const [showCreateDropdown, setShowCreateDropdown] = useState(false);
 
+  // Tier Removal Confirmation / Reassignment Modal State
+  const [tierRemovalConflict, setTierRemovalConflict] = useState<{
+    tierId: string;
+    tierName: string;
+    activeCount: number;
+    pendingPayload: any;
+  } | null>(null);
+  const [selectedTargetTierId, setSelectedTargetTierId] = useState<string>("");
+  const [tierResolutionMode, setTierResolutionMode] = useState<"reassign" | "unassign">("reassign");
+  const [confirmUnassignCheckbox, setConfirmUnassignCheckbox] = useState(false);
+
   useEffect(() => {
     fetchRatingSystems(initialSystemId);
   }, [initialSystemId]);
@@ -206,7 +217,6 @@ export function RatingSystemsTab({ initialSystemId }: { initialSystemId?: string
           color: t.color || "#EF4444",
           sortOrder: idx + 1,
         }));
-        payload.unassignRemovedTiers = true;
       } else {
         payload.scale = editingSystem.scale || 10;
         payload.categories = (editingSystem.categories || []).map((c: any, idx: number) => ({
@@ -232,11 +242,74 @@ export function RatingSystemsTab({ initialSystemId }: { initialSystemId?: string
         fetchRatingSystems(savedId);
       } else {
         const err = await res.json();
-        setSaveError(err.error || "Failed to save rating system");
+        if (res.status === 409 && err.conflict) {
+          const remainingTiers = (editingSystem.tiers || []).filter(
+            (t: any) => t.id && t.id !== err.conflict.tierId && !t.id.startsWith("temp_")
+          );
+          setSelectedTargetTierId(remainingTiers[0]?.id || "");
+          setTierResolutionMode("reassign");
+          setConfirmUnassignCheckbox(false);
+          setTierRemovalConflict({
+            ...err.conflict,
+            pendingPayload: payload,
+          });
+        } else {
+          setSaveError(err.error || "Failed to save rating system");
+        }
       }
     } catch (err: any) {
       console.error(err);
       setSaveError(err?.message || "Failed to save rating system");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleResolveTierRemoval = async () => {
+    if (!tierRemovalConflict || !editingSystem) return;
+    setIsSaving(true);
+    setSaveError(null);
+    try {
+      const url = `/api/rating-systems/${editingSystem.id}`;
+      const payload = { ...tierRemovalConflict.pendingPayload };
+
+      if (tierResolutionMode === "reassign") {
+        if (!selectedTargetTierId) {
+          setSaveError("Please select a target tier to reassign items to.");
+          setIsSaving(false);
+          return;
+        }
+        payload.tierMigrations = {
+          [tierRemovalConflict.tierId]: selectedTargetTierId,
+        };
+      } else {
+        if (!confirmUnassignCheckbox) {
+          setSaveError("Please confirm leaving items unassigned.");
+          setIsSaving(false);
+          return;
+        }
+        payload.unassignRemovedTiers = true;
+      }
+
+      const res = await fetch(url, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (res.ok) {
+        const saved = await res.json();
+        setTierRemovalConflict(null);
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 2000);
+        const savedId = saved.ratingSystem?.id || saved.id || editingSystem.id;
+        fetchRatingSystems(savedId);
+      } else {
+        const err = await res.json();
+        setSaveError(err.error || "Failed to save tier system");
+      }
+    } catch (err: any) {
+      setSaveError(err?.message || "Failed to resolve tier removal");
     } finally {
       setIsSaving(false);
     }
@@ -886,6 +959,148 @@ export function RatingSystemsTab({ initialSystemId }: { initialSystemId?: string
                   <>
                     <Trash2 size={13} />
                     <span>Delete System</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Tier Removal Confirmation / Reassignment Modal */}
+      {tierRemovalConflict && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
+          <div className="w-full max-w-lg rounded-dialog bg-card border border-border-dialog p-6 shadow-dialog space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center gap-3">
+              <div className="h-10 w-10 rounded-full bg-primary/20 text-primary border border-border flex items-center justify-center shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+              <div>
+                <h4 className="font-display text-base font-bold uppercase tracking-tight text-foreground">
+                  Tier In Use: &ldquo;{tierRemovalConflict.tierName}&rdquo;
+                </h4>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  This tier contains <strong className="text-foreground">{tierRemovalConflict.activeCount} active {tierRemovalConflict.activeCount === 1 ? "rating" : "ratings"}</strong> across your collections.
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Aubrey protects your rating history. Choose whether to reassign these items to another tier or move them to the unranked tray.
+            </p>
+
+            <div className="space-y-3 p-3 bg-surface rounded-lg border border-border">
+              {/* Option 1: Reassign */}
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="radio"
+                  name="tierResolutionMode"
+                  value="reassign"
+                  checked={tierResolutionMode === "reassign"}
+                  onChange={() => setTierResolutionMode("reassign")}
+                  className="mt-0.5 text-primary accent-primary"
+                />
+                <div className="flex-1 space-y-1.5">
+                  <div className="text-xs font-semibold text-foreground flex items-center gap-2">
+                    <span>Reassign items to another tier</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-primary/20 text-primary font-normal">Recommended</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">
+                    All {tierRemovalConflict.activeCount} items will be moved directly into the selected tier.
+                  </p>
+                  {tierResolutionMode === "reassign" && (
+                    <div className="pt-1.5">
+                      <select
+                        value={selectedTargetTierId}
+                        onChange={(e) => setSelectedTargetTierId(e.target.value)}
+                        className="w-full bg-card border border-border rounded px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:border-primary"
+                      >
+                        {(editingSystem?.tiers || [])
+                          .filter((t: any) => t.id && t.id !== tierRemovalConflict.tierId && !t.id.startsWith("temp_"))
+                          .map((t: any) => (
+                            <option key={t.id} value={t.id}>
+                              Move to &ldquo;{t.name}&rdquo; {t.description ? `(${t.description})` : ""}
+                            </option>
+                          ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+              </label>
+
+              {/* Option 2: Leave Unassigned */}
+              <div className="border-t border-border pt-3">
+                <label className="flex items-start gap-2.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="tierResolutionMode"
+                    value="unassign"
+                    checked={tierResolutionMode === "unassign"}
+                    onChange={() => setTierResolutionMode("unassign")}
+                    className="mt-0.5 text-primary accent-primary"
+                  />
+                  <div className="flex-1 space-y-1.5">
+                    <span className="text-xs font-semibold text-foreground">
+                      Leave items unassigned (Move to Unranked Tray)
+                    </span>
+                    <p className="text-[11px] text-muted-foreground">
+                      Items will become unranked in their rankings. Scores, notes, reviews, and watch history are completely preserved.
+                    </p>
+                    {tierResolutionMode === "unassign" && (
+                      <div className="pt-1.5">
+                        <label className="flex items-center gap-2 cursor-pointer p-2 bg-card rounded border border-border">
+                          <input
+                            type="checkbox"
+                            checked={confirmUnassignCheckbox}
+                            onChange={(e) => setConfirmUnassignCheckbox(e.target.checked)}
+                            className="rounded border-border text-primary accent-primary"
+                          />
+                          <span className="text-[11px] text-foreground font-medium">
+                            I confirm unassigning {tierRemovalConflict.activeCount} {tierRemovalConflict.activeCount === 1 ? "item" : "items"} from &ldquo;{tierRemovalConflict.tierName}&rdquo;
+                          </span>
+                        </label>
+                      </div>
+                    )}
+                  </div>
+                </label>
+              </div>
+            </div>
+
+            {saveError && (
+              <p className="text-xs text-destructive bg-destructive/10 border border-destructive/20 p-2 rounded">
+                {saveError}
+              </p>
+            )}
+
+            <div className="flex items-center justify-end gap-3 pt-2 border-t border-border">
+              <button
+                type="button"
+                onClick={() => {
+                  setTierRemovalConflict(null);
+                  if (editingSystem?.id) {
+                    fetchRatingSystems(editingSystem.id);
+                  }
+                }}
+                disabled={isSaving}
+                className="px-4 py-2 rounded-button bg-surface-elevated hover:bg-muted text-foreground border border-border text-xs font-semibold transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleResolveTierRemoval}
+                disabled={isSaving || (tierResolutionMode === "unassign" && !confirmUnassignCheckbox)}
+                className="px-5 py-2.5 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50 shadow-sm"
+              >
+                {isSaving ? (
+                  <>
+                    <Loader2 size={13} className="animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <>
+                    <Check size={14} />
+                    <span>Confirm &amp; Save</span>
                   </>
                 )}
               </button>

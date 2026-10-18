@@ -75,12 +75,17 @@ export async function PATCH(
     );
     return NextResponse.json({ success: true, ratingSystem });
   } catch (error) {
+    console.error("[mutateRubric error]", error);
     return NextResponse.json(
       {
         error:
           error instanceof RubricError
             ? error.message
             : "Failed to update rubric",
+        conflict:
+          error instanceof RubricError && error.conflict
+            ? error.conflict
+            : undefined,
       },
       { status: error instanceof RubricError ? error.status : 500 },
     );
