@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { collections, follows, likes, savedRankings, comments, ratings, user } from "@/db/schema";
+import { collections, follows, likes, savedRankings, comments, ratings, user, reviews } from "@/db/schema";
 import { desc, eq, inArray, and, or, sql, isNotNull, ne } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
@@ -209,7 +209,91 @@ export async function GET(request: NextRequest) {
   // 2. Fetch Published Reviews (if filter allows)
   let reviewItems: any[] = [];
   if (filter === "all" || filter === "reviews") {
-    // A review is published when it has non-empty reviewText and belongs to a public collection
+    // 2a. First-class published reviews
+    const rawFirstClassReviews = await db.query.reviews.findMany({
+      where: (rv, { and, inArray, eq }) =>
+        and(
+          followingIds ? inArray(rv.userId, followingIds) : undefined,
+          eq(rv.status, "published"),
+          eq(rv.visibility, "public")
+        ),
+      orderBy: [desc(reviews.publishedAt), desc(reviews.createdAt)],
+      limit: limit * 2,
+      with: {
+        user: {
+          columns: {
+            id: true,
+            name: true,
+            username: true,
+            image: true,
+          },
+        },
+        mediaItem: true,
+        rating: {
+          columns: {
+            id: true,
+            calculatedOverallScore: true,
+            sourceRating: true,
+            tierId: true,
+          },
+          with: {
+            tier: {
+              columns: {
+                id: true,
+                name: true,
+                color: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const publicFirstClassReviews = rawFirstClassReviews
+      .filter((r) => !blockedUserIds.has(r.userId))
+      .slice(0, limit)
+      .map((r) => ({
+        type: "review",
+        id: `review_${r.id}`,
+        contentId: r.id,
+        reviewType: "independent" as const,
+        reviewUrl: `/review/${r.id}`,
+        timestamp: r.publishedAt || r.updatedAt || r.createdAt,
+        author: {
+          id: r.user.id,
+          name: r.user.name,
+          username: r.user.username,
+          image: r.user.image,
+        },
+        review: {
+          id: r.id,
+          title: r.title,
+          reviewText: r.content,
+          isSpoiler: r.isSpoiler,
+          score: r.rating ? (r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null) : null,
+          scale: 10,
+          tier: r.rating?.tier
+            ? {
+                id: r.rating.tier.id,
+                name: r.rating.tier.name,
+                color: r.rating.tier.color,
+              }
+            : null,
+          watchDate: null,
+        },
+        mediaItem: {
+          id: r.mediaItem.id,
+          title: r.mediaItem.title,
+          mediaType: r.mediaItem.mediaType,
+          posterPath: r.mediaItem.posterPath,
+          stillPath: r.mediaItem.stillPath,
+          seasonNumber: r.mediaItem.seasonNumber,
+          episodeNumber: r.mediaItem.episodeNumber,
+        },
+        collection: null,
+      }));
+
+    // 2b. Legacy collection ratings reviews
     const rawRatings = await db.query.ratings.findMany({
       where: (r, { and, inArray, isNotNull, ne }) =>
         and(
@@ -256,10 +340,12 @@ export async function GET(request: NextRequest) {
         !blockedUserIds.has(r.userId)
     );
 
-    reviewItems = publicRatings.slice(0, limit).map((r) => ({
+    const legacyReviews = publicRatings.slice(0, limit).map((r) => ({
       type: "review",
       id: `review_${r.id}`,
       contentId: r.id,
+      reviewType: "collection" as const,
+      reviewUrl: r.collection ? `/collection/${r.collection.id}` : null,
       timestamp: r.updatedAt || r.createdAt,
       author: {
         id: r.user.id,
@@ -269,9 +355,12 @@ export async function GET(request: NextRequest) {
       },
       review: {
         id: r.id,
+        title: null,
         reviewText: r.reviewText,
+        isSpoiler: false,
         score: r.calculatedOverallScore ?? r.sourceRating ?? null,
         scale: r.ratingSystem?.scale ?? 10,
+        tier: null,
         watchDate: r.watchDate,
       },
       mediaItem: {
@@ -288,6 +377,8 @@ export async function GET(request: NextRequest) {
         title: r.collection!.title,
       },
     }));
+
+    reviewItems = [...publicFirstClassReviews, ...legacyReviews];
   }
 
   // 3. Merge, sort by timestamp descending, and enforce limit

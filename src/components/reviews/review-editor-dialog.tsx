@@ -1,0 +1,396 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Loader2, Globe, Link2, Lock, EyeOff, Trash2 } from "lucide-react";
+import { getTmdbImageUrl } from "@/lib/tmdb";
+import { resolvePosterUrl } from "@/lib/artwork";
+
+export interface ReviewEditorData {
+  id?: string;
+  title?: string | null;
+  content: string;
+  draftContent?: string | null;
+  status: "draft" | "published" | "unpublished";
+  visibility: "public" | "unlisted" | "private";
+  isSpoiler: boolean;
+  ratingId?: string | null;
+}
+
+interface ReviewEditorDialogProps {
+  isOpen: boolean;
+  onClose: () => void;
+  mediaItemId: string;
+  mediaTitle: string;
+  posterPath?: string | null;
+  existingReview?: ReviewEditorData | null;
+  onSaved: (savedReview: any) => void;
+  onDeleted?: (deletedId: string) => void;
+}
+
+export function ReviewEditorDialog({
+  isOpen,
+  onClose,
+  mediaItemId,
+  mediaTitle,
+  posterPath,
+  existingReview,
+  onSaved,
+  onDeleted,
+}: ReviewEditorDialogProps) {
+  const [title, setTitle] = useState(existingReview?.title || "");
+  const [content, setContent] = useState(
+    existingReview?.draftContent || existingReview?.content || ""
+  );
+  const [visibility, setVisibility] = useState<"public" | "unlisted" | "private">(
+    existingReview?.visibility || "public"
+  );
+  const [isSpoiler, setIsSpoiler] = useState(existingReview?.isSpoiler || false);
+  const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+
+  useEffect(() => {
+    if (isOpen) {
+      setTitle(existingReview?.title || "");
+      setContent(existingReview?.draftContent || existingReview?.content || "");
+      setVisibility(existingReview?.visibility || "public");
+      setIsSpoiler(existingReview?.isSpoiler || false);
+      setError(null);
+      setShowDeleteConfirm(false);
+    }
+  }, [isOpen, existingReview]);
+
+  const isEditing = Boolean(existingReview?.id);
+  const isCurrentlyPublished = existingReview?.status === "published";
+
+  const handleSave = async (targetStatus: "draft" | "published" | "unpublished") => {
+    if (targetStatus === "published" && !content.trim()) {
+      setError("Review content cannot be empty when publishing.");
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+
+    try {
+      if (isEditing) {
+        const res = await fetch(`/api/reviews/${existingReview!.id}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            title: title.trim() || null,
+            content: targetStatus === "published" ? content.trim() : existingReview?.content || content.trim(),
+            draftContent: targetStatus !== "published" ? content : null,
+            commitDraft: targetStatus === "published",
+            status: targetStatus,
+            visibility,
+            isSpoiler,
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || "Failed to update review");
+        }
+
+        const data = await res.json();
+        onSaved(data.review);
+        onClose();
+      } else {
+        const res = await fetch("/api/reviews", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mediaItemId,
+            title: title.trim() || null,
+            content: content.trim(),
+            draftContent: targetStatus === "draft" ? content : null,
+            status: targetStatus,
+            visibility,
+            isSpoiler,
+          }),
+        });
+
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || "Failed to create review");
+        }
+
+        const data = await res.json();
+        onSaved(data.review);
+        onClose();
+      }
+    } catch (err: any) {
+      setError(err?.message || "An error occurred while saving");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!existingReview?.id) return;
+    setDeleting(true);
+    setError(null);
+
+    try {
+      const res = await fetch(`/api/reviews/${existingReview.id}`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to delete review");
+      }
+
+      if (onDeleted) onDeleted(existingReview.id);
+      onClose();
+    } catch (err: any) {
+      setError(err?.message || "Failed to delete review");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const posterUrl = posterPath ? resolvePosterUrl(posterPath, "w185") : null;
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && !saving && onClose()}>
+      <DialogContent className="max-w-2xl bg-card border border-border text-foreground p-6 rounded-2xl shadow-2xl">
+        <DialogHeader className="space-y-1">
+          <div className="flex items-center gap-3">
+            {posterUrl && (
+              <div className="w-10 h-14 rounded overflow-hidden bg-surface border border-border flex-shrink-0">
+                <img src={posterUrl} alt="" className="w-full h-full object-cover" />
+              </div>
+            )}
+            <div>
+              <DialogTitle className="font-display text-xl uppercase font-bold tracking-tight text-foreground">
+                {isEditing ? "Edit Review" : "Write a Review"}
+              </DialogTitle>
+              <DialogDescription className="text-xs text-muted-foreground">
+                {mediaTitle}
+              </DialogDescription>
+            </div>
+          </div>
+        </DialogHeader>
+
+        {error && (
+          <div className="p-3 rounded-lg bg-destructive/15 border border-destructive/30 text-destructive text-xs font-semibold">
+            {error}
+          </div>
+        )}
+
+        <div className="space-y-4 pt-2">
+          {/* Review Title / Headline */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+              Headline / Title (Optional)
+            </label>
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="e.g. A bleak, razor-sharp masterpiece of technological dread"
+              className="w-full px-3.5 py-2 rounded-lg bg-surface border border-border text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
+              disabled={saving || deleting}
+            />
+          </div>
+
+          {/* Review Content */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
+              <span>Review Content</span>
+              <span className="text-[11px] font-normal text-muted-foreground/80 lowercase">
+                markdown plain-text
+              </span>
+            </label>
+            <textarea
+              rows={8}
+              value={content}
+              onChange={(e) => setContent(e.target.value)}
+              placeholder="Write your thoughts, critical analysis, or reaction..."
+              className="w-full px-3.5 py-2.5 rounded-lg bg-surface border border-border text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors resize-y leading-relaxed font-sans"
+              disabled={saving || deleting}
+            />
+          </div>
+
+          {/* Controls: Visibility & Spoiler */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-border">
+            {/* Visibility Selector */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Visibility
+              </label>
+              <div className="grid grid-cols-3 gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setVisibility("public")}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 border transition-colors cursor-pointer ${
+                    visibility === "public"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-surface border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                  disabled={saving || deleting}
+                >
+                  <Globe size={13} />
+                  <span>Public</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVisibility("unlisted")}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 border transition-colors cursor-pointer ${
+                    visibility === "unlisted"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-surface border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                  disabled={saving || deleting}
+                >
+                  <Link2 size={13} />
+                  <span>Unlisted</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setVisibility("private")}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 border transition-colors cursor-pointer ${
+                    visibility === "private"
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-surface border-border text-muted-foreground hover:text-foreground"
+                  }`}
+                  disabled={saving || deleting}
+                >
+                  <Lock size={13} />
+                  <span>Private</span>
+                </button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {visibility === "public"
+                  ? "Visible on media page, community feeds, and your profile."
+                  : visibility === "unlisted"
+                    ? "Accessible only via direct link. Hidden from feeds and discovery."
+                    : "Private draft visible only to you."}
+              </p>
+            </div>
+
+            {/* Spoiler Toggle */}
+            <div className="space-y-1.5 flex flex-col justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Content Flags
+              </label>
+              <label className="flex items-center gap-2.5 p-2.5 rounded-lg bg-surface border border-border cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={isSpoiler}
+                  onChange={(e) => setIsSpoiler(e.target.checked)}
+                  className="rounded border-border text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                  disabled={saving || deleting}
+                />
+                <div className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                  <EyeOff size={14} className="text-muted-foreground" />
+                  <span>Contains Major Spoilers</span>
+                </div>
+              </label>
+              <p className="text-[11px] text-muted-foreground">
+                Spoilers are concealed behind an opt-in click warning.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Delete confirmation modal view */}
+        {showDeleteConfirm && (
+          <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/30 space-y-3 mt-2">
+            <p className="text-xs font-semibold text-destructive">
+              Are you sure you want to permanently delete this review? This action cannot be undone and will delete all associated comments and likes.
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleting}
+                className="px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground text-xs font-bold hover:bg-destructive/90 transition-colors cursor-pointer inline-flex items-center gap-1.5"
+              >
+                {deleting && <Loader2 size={13} className="animate-spin" />}
+                <span>Permanently Delete</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="px-3 py-1.5 rounded-lg bg-surface border border-border text-xs font-medium text-foreground hover:bg-surface-raised transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        <DialogFooter className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 border-t border-border mt-2">
+          <div>
+            {isEditing && !showDeleteConfirm && (
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={saving || deleting}
+                className="inline-flex items-center gap-1.5 text-xs font-semibold text-destructive hover:underline cursor-pointer transition-colors"
+              >
+                <Trash2 size={13} />
+                <span>Delete Review</span>
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 justify-end">
+            <button
+              type="button"
+              onClick={onClose}
+              disabled={saving || deleting}
+              className="px-3.5 py-2 rounded-lg bg-surface border border-border text-xs font-semibold text-foreground hover:bg-surface-raised transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+
+            {/* Unpublish button if currently published */}
+            {isCurrentlyPublished ? (
+              <button
+                type="button"
+                onClick={() => handleSave("unpublished")}
+                disabled={saving || deleting}
+                className="px-3.5 py-2 rounded-lg bg-surface border border-border text-xs font-semibold text-foreground hover:bg-surface-raised transition-colors cursor-pointer"
+              >
+                {saving ? <Loader2 size={13} className="animate-spin" /> : "Unpublish"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => handleSave("draft")}
+                disabled={saving || deleting}
+                className="px-3.5 py-2 rounded-lg bg-surface border border-border text-xs font-semibold text-foreground hover:bg-surface-raised transition-colors cursor-pointer"
+              >
+                {saving ? <Loader2 size={13} className="animate-spin" /> : "Save Draft"}
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={() => handleSave("published")}
+              disabled={saving || deleting || !content.trim()}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:bg-primary-hover transition-colors cursor-pointer disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={13} className="animate-spin" /> : null}
+              <span>{isCurrentlyPublished ? "Save & Update" : "Publish Review"}</span>
+            </button>
+          </div>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

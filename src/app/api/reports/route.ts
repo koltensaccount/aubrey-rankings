@@ -76,17 +76,29 @@ export async function POST(request: NextRequest) {
         collection: {
           columns: { id: true, userId: true, visibility: true, isPublic: true },
         },
+        review: {
+          columns: { id: true, userId: true, status: true, visibility: true },
+        },
       },
     });
-    if (c && c.collection) {
-      const isColOwner = c.collection.userId === session.user.id;
+    if (c) {
       const isCommentAuthor = c.userId === session.user.id;
-      const isPublicOrUnlisted =
-        c.collection.visibility === "public" ||
-        c.collection.visibility === "unlisted" ||
-        c.collection.isPublic;
-      // Accessible if reporter owns the collection, authored the comment, or collection is public/unlisted
-      targetExists = isColOwner || isCommentAuthor || isPublicOrUnlisted;
+      let isContentAccessible = false;
+      if (c.collection) {
+        const isColOwner = c.collection.userId === session.user.id;
+        const isPublicOrUnlisted =
+          c.collection.visibility === "public" ||
+          c.collection.visibility === "unlisted" ||
+          c.collection.isPublic;
+        isContentAccessible = isColOwner || isPublicOrUnlisted;
+      } else if (c.review) {
+        const isRevOwner = c.review.userId === session.user.id;
+        const isPublicOrUnlisted =
+          c.review.status === "published" &&
+          (c.review.visibility === "public" || c.review.visibility === "unlisted");
+        isContentAccessible = isRevOwner || isPublicOrUnlisted;
+      }
+      targetExists = isCommentAuthor || isContentAccessible;
     }
   } else if (targetType === "ranking") {
     const col = await db.query.collections.findFirst({
@@ -102,25 +114,39 @@ export async function POST(request: NextRequest) {
       targetExists = isOwner || isPublicOrUnlisted;
     }
   } else if (targetType === "review") {
-    const r = await db.query.ratings.findFirst({
-      where: (r, { eq }) => eq(r.id, targetId),
-      with: {
-        collection: {
-          columns: { id: true, userId: true, visibility: true, isPublic: true },
-        },
-      },
+    // Check first-class reviews table first
+    const rev = await db.query.reviews.findFirst({
+      where: (rv, { eq }) => eq(rv.id, targetId),
+      columns: { id: true, userId: true, status: true, visibility: true },
     });
-    // A review must actually have review text (not merely an unreviewed numeric rating)
-    const hasReviewText = Boolean(r && r.reviewText && r.reviewText.trim().length > 0);
-    if (r && hasReviewText) {
-      const isAuthor = r.userId === session.user.id;
-      const isPublicOrUnlisted = Boolean(
-        r.collection &&
-          (r.collection.visibility === "public" ||
-            r.collection.visibility === "unlisted" ||
-            r.collection.isPublic)
-      );
+    if (rev) {
+      const isAuthor = rev.userId === session.user.id;
+      const isPublicOrUnlisted =
+        rev.status === "published" &&
+        (rev.visibility === "public" || rev.visibility === "unlisted");
       targetExists = isAuthor || isPublicOrUnlisted;
+    } else {
+      // Legacy ratings review fallback
+      const r = await db.query.ratings.findFirst({
+        where: (r, { eq }) => eq(r.id, targetId),
+        with: {
+          collection: {
+            columns: { id: true, userId: true, visibility: true, isPublic: true },
+          },
+        },
+      });
+      // A review must actually have review text (not merely an unreviewed numeric rating)
+      const hasReviewText = Boolean(r && r.reviewText && r.reviewText.trim().length > 0);
+      if (r && hasReviewText) {
+        const isAuthor = r.userId === session.user.id;
+        const isPublicOrUnlisted = Boolean(
+          r.collection &&
+            (r.collection.visibility === "public" ||
+              r.collection.visibility === "unlisted" ||
+              r.collection.isPublic)
+        );
+        targetExists = isAuthor || isPublicOrUnlisted;
+      }
     }
   } else if (targetType === "user") {
     const u = await db.query.user.findFirst({

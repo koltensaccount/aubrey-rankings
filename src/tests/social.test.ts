@@ -170,13 +170,13 @@ describe("Stage 5: Social Features (Follows, Likes, Comments)", () => {
     // Test Moderation Rule:
     // User 3 is neither comment author nor collection owner -> should be forbidden
     const isUser3Allowed =
-      userCritic3 === retrieved.userId || userCritic3 === retrieved.collection.userId;
+      userCritic3 === retrieved.userId || userCritic3 === retrieved.collection?.userId;
     assert.equal(isUser3Allowed, false, "Third-party user cannot delete comment");
 
     // Test Moderation Rule:
     // Collection owner (userCritic1) HAS moderation right to delete comment on their collection
     const isOwnerAllowed =
-      userCritic1 === retrieved.userId || userCritic1 === retrieved.collection.userId;
+      userCritic1 === retrieved.userId || userCritic1 === retrieved.collection?.userId;
     assert.equal(isOwnerAllowed, true, "Collection owner should have moderation deletion right");
 
     // Perform deletion

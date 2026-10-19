@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { mediaItems, ratings, collections, user } from "@/db/schema";
+import { mediaItems, ratings, collections, user, reviews } from "@/db/schema";
 import { eq, and, isNotNull, ne, desc } from "drizzle-orm";
 
 export async function GET(
@@ -118,7 +118,83 @@ export async function GET(
 
   // Fetch all public ratings with reviews for this media item (if media exists in DB)
   const isEphemeral = typeof media.id === "string" && media.id.startsWith("tmdb-");
-  const rawReviews = isEphemeral
+
+  const session = await (await import("@/lib/server-session")).getServerSession(request);
+  const { getBlockedUserIds } = await import("@/lib/safety");
+  const blockedUserIds = session ? await getBlockedUserIds(session.user.id) : new Set<string>();
+
+  // 1. Fetch published, public first-class reviews
+  const rawFirstClassReviews = isEphemeral
+    ? []
+    : await db.query.reviews.findMany({
+        where: (rv, { and, eq }) =>
+          and(
+            eq(rv.mediaItemId, media.id),
+            eq(rv.status, "published"),
+            eq(rv.visibility, "public")
+          ),
+        orderBy: [desc(reviews.publishedAt), desc(reviews.createdAt)],
+        with: {
+          user: {
+            columns: {
+              id: true,
+              name: true,
+              username: true,
+              image: true,
+            },
+          },
+          rating: {
+            columns: {
+              id: true,
+              calculatedOverallScore: true,
+              sourceRating: true,
+              tierId: true,
+            },
+            with: {
+              tier: {
+                columns: {
+                  id: true,
+                  name: true,
+                  color: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+  const firstClassReviews = rawFirstClassReviews
+    .filter((r) => !blockedUserIds.has(r.userId))
+    .map((r) => ({
+      id: r.id,
+      reviewType: "independent" as const,
+      title: r.title,
+      reviewText: r.content,
+      score: r.rating ? (r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null) : null,
+      scale: 10,
+      tier: r.rating?.tier
+        ? {
+            id: r.rating.tier.id,
+            name: r.rating.tier.name,
+            color: r.rating.tier.color,
+          }
+        : null,
+      isSpoiler: r.isSpoiler,
+      watchDate: null,
+      publishedAt: r.publishedAt,
+      updatedAt: r.updatedAt,
+      createdAt: r.createdAt,
+      author: {
+        id: r.user.id,
+        name: r.user.name,
+        username: r.user.username,
+        image: r.user.image,
+      },
+      collection: null,
+    }));
+
+  // 2. Fetch existing collection ratings with reviews (Preserving legitimate legacy display)
+  const rawLegacyRatings = isEphemeral
     ? []
     : await db.query.ratings.findMany({
         where: (r, { and, eq, isNotNull, ne }) =>
@@ -128,40 +204,36 @@ export async function GET(
             ne(r.reviewText, ""),
             isNotNull(r.collectionId)
           ),
-    orderBy: [desc(ratings.updatedAt)],
-    columns: {
-      personalNotes: false, // Strict privacy: Never expose private notes
-    },
-    with: {
-      user: {
+        orderBy: [desc(ratings.updatedAt)],
         columns: {
-          id: true,
-          name: true,
-          username: true,
-          image: true,
+          personalNotes: false, // Strict privacy: Never expose private notes
         },
-      },
-      collection: {
-        columns: {
-          id: true,
-          title: true,
-          visibility: true,
+        with: {
+          user: {
+            columns: {
+              id: true,
+              name: true,
+              username: true,
+              image: true,
+            },
+          },
+          collection: {
+            columns: {
+              id: true,
+              title: true,
+              visibility: true,
+            },
+          },
+          ratingSystem: {
+            columns: {
+              scale: true,
+            },
+          },
         },
-      },
-      ratingSystem: {
-        columns: {
-          scale: true,
-        },
-      },
-    },
-  });
-
-  const session = await (await import("@/lib/server-session")).getServerSession(request);
-  const { getBlockedUserIds } = await import("@/lib/safety");
-  const blockedUserIds = session ? await getBlockedUserIds(session.user.id) : new Set<string>();
+      });
 
   // Filter to reviews in public collections only (excluding unlisted and private) and not blocked
-  const publicReviews = rawReviews
+  const legacyCollectionReviews = rawLegacyRatings
     .filter(
       (r) =>
         r.collection &&
@@ -170,10 +242,15 @@ export async function GET(
     )
     .map((r) => ({
       id: r.id,
+      reviewType: "collection" as const,
+      title: null,
       reviewText: r.reviewText,
       score: r.calculatedOverallScore ?? r.sourceRating ?? null,
       scale: r.ratingSystem?.scale ?? 10,
+      tier: null,
+      isSpoiler: false,
       watchDate: r.watchDate,
+      publishedAt: r.updatedAt,
       updatedAt: r.updatedAt,
       createdAt: r.createdAt,
       author: {
@@ -188,7 +265,15 @@ export async function GET(
       },
     }));
 
-  const scores = publicReviews
+  // Combine reviews: first-class reviews first, then collection reviews
+  const combinedReviews = [...firstClassReviews, ...legacyCollectionReviews];
+  combinedReviews.sort((a, b) => {
+    const timeA = new Date(a.publishedAt || a.updatedAt || a.createdAt).getTime();
+    const timeB = new Date(b.publishedAt || b.updatedAt || b.createdAt).getTime();
+    return timeB - timeA;
+  });
+
+  const scores = combinedReviews
     .map((r) => r.score)
     .filter((s): s is number => typeof s === "number" && Number.isFinite(s));
 
@@ -209,9 +294,9 @@ export async function GET(
       seasonNumber: media.seasonNumber,
       episodeNumber: media.episodeNumber,
     },
-    reviews: publicReviews,
+    reviews: combinedReviews,
     stats: {
-      totalReviews: publicReviews.length,
+      totalReviews: combinedReviews.length,
       averageScore,
     },
   });

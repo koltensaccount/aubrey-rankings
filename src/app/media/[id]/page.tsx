@@ -1,13 +1,14 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
-import { mediaItems, ratings, collections, user } from "@/db/schema";
+import { mediaItems, ratings, collections, user, reviews } from "@/db/schema";
 import { eq, and, isNotNull, ne, desc } from "drizzle-orm";
 import { getTmdbImageUrl, tmdb } from "@/lib/tmdb";
 import { resolvePosterUrl } from "@/lib/artwork";
 import { getServerSession } from "@/lib/server-session";
 import { getBlockedUserIds } from "@/lib/safety";
-import { ArrowLeft, Star, Film, Tv, MessageSquare, ExternalLink } from "lucide-react";
+import { ArrowLeft, Star, Film, Tv, MessageSquare, ExternalLink, EyeOff } from "lucide-react";
+import { WriteReviewButton } from "@/components/reviews/write-review-button";
 
 export default async function MediaDetailsPage({
   params,
@@ -16,16 +17,22 @@ export default async function MediaDetailsPage({
   params: Promise<{ id: string }>;
   searchParams?: Promise<{ type?: string }>;
 }) {
-  const { id: mediaId } = await params;
+  const { id: rawMediaId } = await params;
+  let decodedId = rawMediaId;
+  try {
+    decodedId = decodeURIComponent(rawMediaId);
+  } catch {}
+
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const requestedType = resolvedSearchParams.type?.toLowerCase();
 
   let media: any = await db.query.mediaItems.findFirst({
-    where: (m, { eq }) => eq(m.id, mediaId),
+    where: (m, { eq, or }) => or(eq(m.id, rawMediaId), eq(m.id, decodedId)),
   });
 
-  if (!media && /^\d+$/.test(mediaId)) {
-    const tmdbNum = parseInt(mediaId, 10);
+  const lookupId = media ? media.id : decodedId;
+  if (!media && /^\d+$/.test(lookupId)) {
+    const tmdbNum = parseInt(lookupId, 10);
     if (requestedType === "movie" || requestedType === "tv") {
       media = await db.query.mediaItems.findFirst({
         where: (m, { eq, and }) =>
@@ -129,8 +136,80 @@ export default async function MediaDetailsPage({
   const session = await getServerSession();
   const blockedUserIds = session ? await getBlockedUserIds(session.user.id) : new Set<string>();
 
-  // Fetch all public ratings with reviews for this media item (if media exists in DB)
+  // Fetch published public first-class reviews and legacy collection reviews
   const isEphemeral = typeof media.id === "string" && media.id.startsWith("tmdb-");
+
+  // 1. First-class published reviews
+  const rawFirstClassReviews = isEphemeral
+    ? []
+    : await db.query.reviews.findMany({
+        where: (rv, { and, eq }) =>
+          and(
+            eq(rv.mediaItemId, media!.id),
+            eq(rv.status, "published"),
+            eq(rv.visibility, "public")
+          ),
+        orderBy: [desc(reviews.publishedAt), desc(reviews.createdAt)],
+        with: {
+          user: {
+            columns: {
+              id: true,
+              name: true,
+              username: true,
+              image: true,
+            },
+          },
+          rating: {
+            columns: {
+              id: true,
+              calculatedOverallScore: true,
+              sourceRating: true,
+              tierId: true,
+            },
+            with: {
+              tier: {
+                columns: {
+                  id: true,
+                  name: true,
+                  color: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+  const firstClassReviews = rawFirstClassReviews
+    .filter((r) => !blockedUserIds.has(r.userId))
+    .map((r) => ({
+      id: r.id,
+      reviewType: "independent" as const,
+      reviewUrl: `/review/${r.id}`,
+      title: r.title,
+      reviewText: r.content,
+      score: r.rating ? (r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null) : null,
+      scale: 10,
+      tier: r.rating?.tier
+        ? {
+            id: r.rating.tier.id,
+            name: r.rating.tier.name,
+            color: r.rating.tier.color,
+          }
+        : null,
+      isSpoiler: r.isSpoiler,
+      watchDate: null,
+      publishedAt: r.publishedAt,
+      updatedAt: r.updatedAt,
+      author: {
+        id: r.user.id,
+        name: r.user.name,
+        username: r.user.username,
+        image: r.user.image,
+      },
+      collection: null,
+    }));
+
+  // 2. Legacy public collection ratings reviews
   const rawReviews = isEphemeral
     ? []
     : await db.query.ratings.findMany({
@@ -170,7 +249,7 @@ export default async function MediaDetailsPage({
       });
 
   // Filter to public collections only and exclude blocked users
-  const publicReviews = rawReviews
+  const legacyCollectionReviews = rawReviews
     .filter(
       (r) =>
         r.collection &&
@@ -179,10 +258,16 @@ export default async function MediaDetailsPage({
     )
     .map((r) => ({
       id: r.id,
-      reviewText: r.reviewText,
+      reviewType: "collection" as const,
+      reviewUrl: `/collection/${r.collection!.id}`,
+      title: null,
+      reviewText: r.reviewText || "",
       score: r.calculatedOverallScore ?? r.sourceRating ?? null,
       scale: r.ratingSystem?.scale ?? 10,
+      tier: null,
+      isSpoiler: false,
       watchDate: r.watchDate,
+      publishedAt: r.updatedAt,
       updatedAt: r.updatedAt,
       author: {
         id: r.user.id,
@@ -195,6 +280,13 @@ export default async function MediaDetailsPage({
         title: r.collection!.title,
       },
     }));
+
+  const publicReviews = [...firstClassReviews, ...legacyCollectionReviews];
+  publicReviews.sort((a, b) => {
+    const timeA = new Date(a.publishedAt || a.updatedAt).getTime();
+    const timeB = new Date(b.publishedAt || b.updatedAt).getTime();
+    return timeB - timeA;
+  });
 
   const scores = publicReviews
     .map((r) => r.score)
@@ -298,18 +390,29 @@ export default async function MediaDetailsPage({
                 Community Reviews ({publicReviews.length})
               </h2>
             </div>
+
+            <WriteReviewButton
+              mediaItemId={media.id}
+              mediaTitle={media.title}
+              posterPath={media.posterPath}
+            />
           </div>
 
           {publicReviews.length === 0 ? (
-            <div className="py-12 text-center rounded-xl border border-dashed border-border bg-card/60 p-6 space-y-2">
+            <div className="py-12 text-center rounded-xl border border-dashed border-border bg-card/60 p-6 space-y-3">
               <p className="text-sm font-semibold text-foreground">No published reviews yet</p>
               <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                Be the first to rank and write a critical evaluation for &ldquo;{media.title}&rdquo;.
+                Be the first to write a critical dispatch or rank &ldquo;{media.title}&rdquo;.
               </p>
-              <div className="pt-2">
+              <div className="pt-2 flex items-center justify-center gap-3 flex-wrap">
+                <WriteReviewButton
+                  mediaItemId={media.id}
+                  mediaTitle={media.title}
+                  posterPath={media.posterPath}
+                />
                 <Link
                   href={`/create?suggest=${encodeURIComponent(media.title)}`}
-                  className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground font-semibold text-xs transition-colors"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-border bg-surface hover:bg-surface-raised text-foreground font-semibold text-xs transition-colors"
                 >
                   Start a Ranking with this Title
                 </Link>
@@ -377,29 +480,70 @@ export default async function MediaDetailsPage({
                               <span className="text-muted-foreground">@{rev.author.username}</span>
                             )}
                           </div>
-                          <span className="text-[11px] text-muted-foreground">
-                            from canon:{" "}
-                            <Link
-                              href={`/collection/${rev.collection.id}`}
-                              className="text-primary-text hover:underline"
-                            >
-                              {rev.collection.title}
-                            </Link>
-                          </span>
+                          {rev.collection ? (
+                            <span className="text-[11px] text-muted-foreground">
+                              from canon:{" "}
+                              <Link
+                                href={rev.reviewUrl}
+                                className="text-primary-text hover:underline"
+                              >
+                                {rev.collection.title}
+                              </Link>
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-muted-foreground">
+                              Independent Review ·{" "}
+                              <Link
+                                href={rev.reviewUrl}
+                                className="text-primary-text hover:underline"
+                              >
+                                View Dispatch
+                              </Link>
+                            </span>
+                          )}
                         </div>
                       </div>
 
-                      {rev.score !== null && (
-                        <div className="px-2.5 py-1 rounded-md bg-surface border border-border text-xs font-bold text-primary-text">
-                          ★ {rev.score.toFixed(1)}
+                      <div className="flex items-center gap-2">
+                        {rev.tier && (
+                          <div
+                            className="px-2 py-0.5 rounded text-[10px] font-mono font-bold text-white shadow-sm"
+                            style={{ backgroundColor: rev.tier.color }}
+                          >
+                            Tier {rev.tier.name}
+                          </div>
+                        )}
+                        {rev.score !== null && (
+                          <div className="px-2.5 py-1 rounded-md bg-surface border border-border text-xs font-bold text-primary-text">
+                            ★ {rev.score.toFixed(1)}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Review Title & Text */}
+                    <div className="pl-10 border-l border-border/60 space-y-1.5">
+                      {rev.title && (
+                        <h4 className="font-display text-sm uppercase font-bold text-foreground">
+                          <Link href={rev.reviewUrl} className="hover:text-primary-text transition-colors">
+                            {rev.title}
+                          </Link>
+                        </h4>
+                      )}
+                      <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed whitespace-pre-line">
+                        &ldquo;{rev.reviewText}&rdquo;
+                      </p>
+                      {rev.reviewType === "independent" && (
+                        <div className="pt-1">
+                          <Link
+                            href={rev.reviewUrl}
+                            className="text-xs font-semibold text-primary-text hover:underline inline-flex items-center gap-1"
+                          >
+                            <span>Read full review & join discussion →</span>
+                          </Link>
                         </div>
                       )}
                     </div>
-
-                    {/* Review Text */}
-                    <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed whitespace-pre-line pl-10 border-l border-border/60">
-                      &ldquo;{rev.reviewText}&rdquo;
-                    </p>
                   </article>
                 );
               })}
