@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { mediaItems, ratings, collections, user, reviews } from "@/db/schema";
-import { eq, and, isNotNull, ne, desc } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, ne, desc } from "drizzle-orm";
 import { getTmdbImageUrl, tmdb } from "@/lib/tmdb";
 import { resolvePosterUrl } from "@/lib/artwork";
 import { getServerSession } from "@/lib/server-session";
@@ -139,14 +139,34 @@ export default async function MediaDetailsPage({
 
   // Fetch published public first-class reviews and legacy collection reviews
   const isEphemeral = typeof media.id === "string" && media.id.startsWith("tmdb-");
+  const syntheticMatch = isEphemeral ? /^tmdb-(movie|tv)-(\d+)$/.exec(media.id) : null;
+  const restoredMedia = syntheticMatch ? await db.query.mediaItems.findFirst({
+    where: (m, { and, eq }) => and(eq(m.tmdbId, Number(syntheticMatch[2])), eq(m.mediaType, syntheticMatch[1])),
+  }) : null;
+  const journalMediaId = restoredMedia?.id ?? media.id;
+  const ownerGlobalRating = session
+    ? await db.query.ratings.findFirst({
+        where: (r, { and, eq, isNull }) => and(eq(r.userId, session.user.id), eq(r.mediaItemId, journalMediaId), isNull(r.collectionId)),
+        with: { categoryScores: true },
+      })
+    : null;
+  const ownerJournalReview = session
+    ? await db.query.reviews.findFirst({
+        where: (rv, { and, eq, or }) => and(
+          eq(rv.userId, session.user.id),
+          eq(rv.mediaItemId, journalMediaId),
+          eq(rv.isJournal, true),
+          ownerGlobalRating ? or(eq(rv.ratingId, ownerGlobalRating.id), isNull(rv.ratingId)) : isNull(rv.ratingId)
+        ),
+        orderBy: [desc(reviews.updatedAt)],
+      })
+    : null;
 
   // 1. First-class published reviews
-  const rawFirstClassReviews = isEphemeral
-    ? []
-    : await db.query.reviews.findMany({
+  const rawFirstClassReviews = await db.query.reviews.findMany({
         where: (rv, { and, eq }) =>
           and(
-            eq(rv.mediaItemId, media!.id),
+            eq(rv.mediaItemId, journalMediaId),
             eq(rv.status, "published"),
             eq(rv.visibility, "public")
           ),
@@ -254,7 +274,7 @@ export default async function MediaDetailsPage({
 
         <div className="absolute top-6 left-4 sm:left-8 z-20">
           <Link
-            href="/explore"
+            href="/discover"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card/80 backdrop-blur-sm text-xs font-semibold text-foreground hover:bg-surface transition-colors"
           >
             <ArrowLeft size={13} />
@@ -317,9 +337,23 @@ export default async function MediaDetailsPage({
             </div>
 
             <WriteReviewButton
-              mediaItemId={media.id}
+              mediaItemId={journalMediaId}
               mediaTitle={media.title}
               posterPath={media.posterPath}
+              initialQuickScore={ownerGlobalRating?.calculatedOverallScore ?? null}
+              initialDetailedRating={ownerGlobalRating?.ratingSystemId ? { ratingSystemId: ownerGlobalRating.ratingSystemId, categoryScores: ownerGlobalRating.categoryScores.map((score) => ({ categoryId: score.categoryId, score: score.score })) } : null}
+              existingReview={ownerJournalReview ? {
+                id: ownerJournalReview.id,
+                title: ownerJournalReview.title,
+                content: ownerJournalReview.content,
+                draftContent: ownerJournalReview.draftContent,
+                contentFormat: ownerJournalReview.contentFormat as "plain" | "markdown",
+                draftContentFormat: ownerJournalReview.draftContentFormat as "plain" | "markdown" | null,
+                status: ownerJournalReview.status as "draft" | "published" | "unpublished",
+                visibility: ownerJournalReview.visibility as "private" | "unlisted" | "public",
+                isSpoiler: ownerJournalReview.isSpoiler,
+                ratingId: ownerJournalReview.ratingId,
+              } : null}
             />
           </div>
 
@@ -331,9 +365,23 @@ export default async function MediaDetailsPage({
               </p>
               <div className="pt-2 flex items-center justify-center gap-3 flex-wrap">
                 <WriteReviewButton
-                  mediaItemId={media.id}
+                  mediaItemId={journalMediaId}
                   mediaTitle={media.title}
                   posterPath={media.posterPath}
+                  initialQuickScore={ownerGlobalRating?.calculatedOverallScore ?? null}
+                  initialDetailedRating={ownerGlobalRating?.ratingSystemId ? { ratingSystemId: ownerGlobalRating.ratingSystemId, categoryScores: ownerGlobalRating.categoryScores.map((score) => ({ categoryId: score.categoryId, score: score.score })) } : null}
+                  existingReview={ownerJournalReview ? {
+                    id: ownerJournalReview.id,
+                    title: ownerJournalReview.title,
+                    content: ownerJournalReview.content,
+                    draftContent: ownerJournalReview.draftContent,
+                    contentFormat: ownerJournalReview.contentFormat as "plain" | "markdown",
+                    draftContentFormat: ownerJournalReview.draftContentFormat as "plain" | "markdown" | null,
+                    status: ownerJournalReview.status as "draft" | "published" | "unpublished",
+                    visibility: ownerJournalReview.visibility as "private" | "unlisted" | "public",
+                    isSpoiler: ownerJournalReview.isSpoiler,
+                    ratingId: ownerJournalReview.ratingId,
+                  } : null}
                 />
                 <Link
                   href={`/create?suggest=${encodeURIComponent(media.title)}`}
