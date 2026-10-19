@@ -7,6 +7,7 @@ export interface UnifiedPublicReview {
   reviewType: "independent" | "collection";
   title?: string | null;
   reviewText: string;
+  contentFormat?: "plain" | "markdown";
   isSpoiler?: boolean;
   sourceRating?: number | null;
   calculatedOverallScore?: number | null;
@@ -56,6 +57,7 @@ export async function getPublicReviews(
     reviewType: "independent",
     title: r.title,
     reviewText: r.content,
+    contentFormat: r.contentFormat as "plain" | "markdown",
     isSpoiler: r.isSpoiler,
     sourceRating: r.rating?.sourceRating ?? null,
     calculatedOverallScore: r.rating?.calculatedOverallScore ?? null,
@@ -102,6 +104,7 @@ export async function getPublicReviews(
     reviewType: "collection",
     title: null,
     reviewText: r.reviewText || "",
+    contentFormat: "plain",
     isSpoiler: false,
     sourceRating: r.sourceRating,
     calculatedOverallScore: r.calculatedOverallScore,

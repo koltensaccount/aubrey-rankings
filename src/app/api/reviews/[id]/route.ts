@@ -7,6 +7,9 @@ import { isBlocked } from "@/lib/safety";
 
 export const dynamic = "force-dynamic";
 
+const isContentFormat = (value: unknown): value is "plain" | "markdown" =>
+  value === "plain" || value === "markdown";
+
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -100,6 +103,8 @@ export async function GET(
       title: review.title,
       content: review.content,
       draftContent: isAuthor ? review.draftContent : null,
+      contentFormat: review.contentFormat,
+      draftContentFormat: isAuthor ? review.draftContentFormat : null,
       status: review.status,
       visibility: review.visibility,
       isSpoiler: review.isSpoiler,
@@ -177,7 +182,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid request payload" }, { status: 400 });
   }
 
-  const { title, content, draftContent, status, visibility, isSpoiler, ratingId } = body;
+  const { title, content, draftContent, contentFormat, draftContentFormat, status, visibility, isSpoiler, ratingId } = body;
 
   const validStatuses = ["draft", "published", "unpublished"];
   const newStatus = status && validStatuses.includes(status) ? status : review.status;
@@ -188,12 +193,23 @@ export async function PATCH(
   // Determine updated content
   let newContent = review.content;
   let newDraftContent = review.draftContent;
+  let newContentFormat = review.contentFormat;
+  let newDraftContentFormat = review.draftContentFormat;
+
+  if ((contentFormat !== undefined && !isContentFormat(contentFormat)) ||
+      (draftContentFormat !== undefined && draftContentFormat !== null && !isContentFormat(draftContentFormat))) {
+    return NextResponse.json({ error: "Invalid review content format" }, { status: 400 });
+  }
 
   if (typeof content === "string") {
     newContent = content;
+    if (isContentFormat(contentFormat)) newContentFormat = contentFormat;
   }
   if (typeof draftContent === "string" || draftContent === null) {
     newDraftContent = draftContent;
+    newDraftContentFormat = typeof draftContent === "string"
+      ? (isContentFormat(draftContentFormat) ? draftContentFormat : newContentFormat)
+      : null;
   }
 
   // If publishing or republishing: ensure content is valid
@@ -201,7 +217,9 @@ export async function PATCH(
     // If user published while editing draftContent, promote draftContent if provided
     if (body.commitDraft && newDraftContent) {
       newContent = newDraftContent;
+      newContentFormat = newDraftContentFormat || newContentFormat;
       newDraftContent = null;
+      newDraftContentFormat = null;
     }
     if (!newContent.trim()) {
       return NextResponse.json({ error: "Review content cannot be empty when published" }, { status: 400 });
@@ -235,6 +253,8 @@ export async function PATCH(
       title: title !== undefined ? (typeof title === "string" && title.trim() ? title.trim() : null) : review.title,
       content: newContent,
       draftContent: newDraftContent,
+      contentFormat: newContentFormat,
+      draftContentFormat: newDraftContentFormat,
       status: newStatus,
       visibility: newVisibility,
       isSpoiler: typeof isSpoiler === "boolean" ? isSpoiler : review.isSpoiler,

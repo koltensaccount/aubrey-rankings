@@ -323,6 +323,7 @@ export async function GET(request: NextRequest) {
         id: r.id,
         title: r.title,
         reviewText: r.content,
+        contentFormat: r.contentFormat,
         isSpoiler: r.isSpoiler,
         score: r.rating ? (r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null) : null,
         scale: 10,

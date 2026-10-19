@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -9,14 +9,17 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { Loader2, Globe, Link2, Lock, EyeOff, Trash2 } from "lucide-react";
+import { Loader2, Globe, Link2, Lock, EyeOff, Trash2, Bold, Italic, List, ListOrdered, Quote, Heading2, Link as LinkIcon, Eye } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
+import { MarkdownRenderer, ReviewContentFormat } from "@/components/reviews/markdown-renderer";
 
 export interface ReviewEditorData {
   id?: string;
   title?: string | null;
   content: string;
   draftContent?: string | null;
+  contentFormat?: ReviewContentFormat;
+  draftContentFormat?: ReviewContentFormat | null;
   status: "draft" | "published" | "unpublished";
   visibility: "public" | "unlisted" | "private";
   isSpoiler: boolean;
@@ -52,6 +55,10 @@ export function ReviewEditorDialog({
   const [content, setContent] = useState(
     existingReview?.draftContent || existingReview?.content || ""
   );
+  const [contentFormat, setContentFormat] = useState<ReviewContentFormat>(
+    existingReview?.draftContent ? existingReview.draftContentFormat || existingReview.contentFormat || "plain" : existingReview?.contentFormat || "markdown"
+  );
+  const [mode, setMode] = useState<"write" | "preview">("write");
   const [visibility, setVisibility] = useState<"public" | "unlisted" | "private">(
     existingReview?.visibility || "public"
   );
@@ -63,11 +70,14 @@ export function ReviewEditorDialog({
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     if (isOpen) {
       setTitle(existingReview?.title || "");
       setContent(existingReview?.draftContent || existingReview?.content || "");
+      setContentFormat(existingReview?.draftContent ? existingReview.draftContentFormat || existingReview.contentFormat || "plain" : existingReview?.contentFormat || "markdown");
+      setMode("write");
       setVisibility(existingReview?.visibility || "public");
       setIsSpoiler(existingReview?.isSpoiler || false);
       setAttachRating(Boolean(existingReview?.id && existingReview?.ratingId));
@@ -77,6 +87,35 @@ export function ReviewEditorDialog({
   }, [isOpen, existingReview]);
 
   const isCurrentlyPublished = existingReview?.status === "published";
+
+  const applyFormatting = (before: string, after = before, linePrefix?: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = content.slice(start, end) || "text";
+    const formatted = linePrefix
+      ? selected.split("\n").map((line, index) => `${linePrefix}${line || (index === 0 ? "text" : "")}`).join("\n")
+      : `${before}${selected}${after}`;
+    const next = `${content.slice(0, start)}${formatted}${content.slice(end)}`;
+    setContent(next);
+    setContentFormat("markdown");
+    requestAnimationFrame(() => {
+      textarea.focus();
+      const cursor = start + formatted.length;
+      textarea.setSelectionRange(cursor, cursor);
+    });
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!isOpen || document.activeElement !== textareaRef.current || !(event.metaKey || event.ctrlKey)) return;
+      if (event.key.toLowerCase() === "b") { event.preventDefault(); applyFormatting("**"); }
+      if (event.key.toLowerCase() === "i") { event.preventDefault(); applyFormatting("_"); }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [isOpen, content]);
 
   const handleSave = async (targetStatus: "draft" | "published" | "unpublished") => {
     if (targetStatus === "published" && !content.trim()) {
@@ -96,6 +135,8 @@ export function ReviewEditorDialog({
             title: title.trim() || null,
             content: targetStatus === "published" ? content.trim() : existingReview?.content || content.trim(),
             draftContent: targetStatus !== "published" ? content : null,
+            contentFormat: targetStatus === "published" ? contentFormat : existingReview?.contentFormat || "plain",
+            draftContentFormat: targetStatus !== "published" ? contentFormat : null,
             commitDraft: targetStatus === "published",
             status: targetStatus,
             visibility,
@@ -121,6 +162,8 @@ export function ReviewEditorDialog({
             title: title.trim() || null,
             content: content.trim(),
             draftContent: targetStatus === "draft" ? content : null,
+            contentFormat,
+            draftContentFormat: targetStatus === "draft" ? contentFormat : null,
             status: targetStatus,
             visibility,
             isSpoiler,
@@ -215,18 +258,22 @@ export function ReviewEditorDialog({
           <div className="space-y-1.5">
             <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center justify-between">
               <span>Review Content</span>
-              <span className="text-[11px] font-normal text-muted-foreground/80 lowercase">
-                markdown plain-text
+              <span className="inline-flex rounded-button border border-border bg-card p-0.5 text-[11px] font-semibold normal-case tracking-normal">
+                <button type="button" onClick={() => setMode("write")} aria-pressed={mode === "write"} className={`px-2 py-1 rounded ${mode === "write" ? "bg-surface text-foreground" : "text-muted-foreground hover:text-foreground"}`}>Write</button>
+                <button type="button" onClick={() => setMode("preview")} aria-pressed={mode === "preview"} className={`px-2 py-1 rounded ${mode === "preview" ? "bg-surface text-foreground" : "text-muted-foreground hover:text-foreground"}`}>Preview</button>
               </span>
             </label>
-            <textarea
-              rows={8}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              placeholder="Write your thoughts, critical analysis, or reaction..."
-              className="w-full px-3.5 py-2.5 rounded-input bg-surface border border-border-input text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors resize-y leading-relaxed font-sans"
-              disabled={saving || deleting}
-            />
+            {mode === "write" ? <>
+              <div role="toolbar" aria-label="Markdown formatting" className="flex flex-wrap gap-1 rounded-card border border-border bg-card p-1.5">
+                {([
+                  { Icon: Bold, label: "Bold", action: () => applyFormatting("**") }, { Icon: Italic, label: "Italic", action: () => applyFormatting("_") }, { Icon: Heading2, label: "Heading", action: () => applyFormatting("", "", "## ") },
+                  { Icon: List, label: "Bullet list", action: () => applyFormatting("", "", "- ") }, { Icon: ListOrdered, label: "Numbered list", action: () => applyFormatting("", "", "1. ") }, { Icon: Quote, label: "Quote", action: () => applyFormatting("", "", "> ") },
+                  { Icon: LinkIcon, label: "Link", action: () => applyFormatting("[", "](https://)") },
+                ] as const).map(({ Icon, label, action }) => <button key={label} type="button" title={label} aria-label={label} aria-keyshortcuts={label === "Bold" ? "Control+B Meta+B" : label === "Italic" ? "Control+I Meta+I" : undefined} onClick={action} disabled={saving || deleting} className="inline-flex h-8 w-8 items-center justify-center rounded-button text-muted-foreground hover:bg-surface hover:text-foreground"><Icon size={15} /></button>)}
+              </div>
+              <textarea ref={textareaRef} rows={10} value={content} onChange={(e) => setContent(e.target.value)} placeholder="Write your thoughts, critical analysis, or reaction..." className="w-full min-h-56 px-3.5 py-2.5 rounded-input bg-surface border border-border-input text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors resize-y leading-relaxed font-sans" disabled={saving || deleting} />
+              <label className="inline-flex items-center gap-2 text-[11px] text-muted-foreground cursor-pointer"><input type="checkbox" checked={contentFormat === "markdown"} onChange={(e) => setContentFormat(e.target.checked ? "markdown" : "plain")} className="accent-primary" disabled={saving || deleting} /> Use Markdown formatting</label>
+            </> : <div className="min-h-56 rounded-card border border-border bg-surface p-4"><MarkdownRenderer content={content} format={contentFormat} className="text-sm leading-relaxed" /></div>}
           </div>
 
           {/* Explicit Rating Attachment Disclosure */}

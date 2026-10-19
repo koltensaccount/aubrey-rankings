@@ -99,6 +99,8 @@ export default async function ReviewPage({ params }: ReviewPageProps) {
     title: review.title,
     content: review.content,
     draftContent: isAuthor ? review.draftContent : null,
+    contentFormat: review.contentFormat as "plain" | "markdown",
+    draftContentFormat: isAuthor ? review.draftContentFormat as "plain" | "markdown" | null : null,
     status: review.status as any,
     visibility: review.visibility as any,
     isSpoiler: review.isSpoiler,

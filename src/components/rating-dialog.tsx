@@ -711,6 +711,7 @@ export function RatingDialog({
           posterPath={mediaItem.posterPath}
           existingReview={{
             content: reviewText || "",
+            contentFormat: "plain",
             status: "draft",
             visibility: "public",
             isSpoiler: false,

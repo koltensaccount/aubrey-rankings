@@ -1,5 +1,17 @@
 @import "tailwindcss";
 
+.review-markdown > * + * { margin-top: 1em; }
+.review-markdown h1, .review-markdown h2, .review-markdown h3 { font-family: var(--font-display); font-weight: 700; color: var(--foreground); line-height: 1.1; }
+.review-markdown h1 { font-size: 1.5em; }
+.review-markdown h2 { font-size: 1.25em; }
+.review-markdown h3 { font-size: 1.1em; }
+.review-markdown ul, .review-markdown ol { padding-left: 1.35em; }
+.review-markdown ul { list-style: disc; }
+.review-markdown ol { list-style: decimal; }
+.review-markdown blockquote { border-left: 2px solid color-mix(in srgb, var(--primary) 45%, transparent); padding-left: 0.9em; color: var(--muted-foreground); font-style: italic; }
+.review-markdown-compact > * + * { margin-top: 0.5em; }
+.review-markdown-compact h1, .review-markdown-compact h2, .review-markdown-compact h3 { font-size: 1em; }
+
 /* =========================================================================
    APPROVED CINEMATIC TYPOGRAPHY — Self-hosted Barlow Condensed & Inter
    ========================================================================= */

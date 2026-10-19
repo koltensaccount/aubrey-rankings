@@ -10,6 +10,9 @@ import { tmdb } from "@/lib/tmdb";
 
 export const dynamic = "force-dynamic";
 
+const isContentFormat = (value: unknown): value is "plain" | "markdown" =>
+  value === "plain" || value === "markdown";
+
 async function resolveMediaItem(mediaId: string): Promise<string | null> {
   // 1. Direct DB lookup by id
   const existing = await db.query.mediaItems.findFirst({
@@ -170,6 +173,8 @@ export async function GET(request: NextRequest) {
       title: r.title,
       content: r.content,
       draftContent: isOwnQuery ? r.draftContent : null,
+      contentFormat: r.contentFormat,
+      draftContentFormat: isOwnQuery ? r.draftContentFormat : null,
       status: r.status,
       visibility: r.visibility,
       isSpoiler: r.isSpoiler,
@@ -228,10 +233,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request payload" }, { status: 400 });
   }
 
-  const { mediaItemId, title, content, draftContent, status, visibility, isSpoiler, ratingId } = body;
+  const { mediaItemId, title, content, draftContent, contentFormat, draftContentFormat, status, visibility, isSpoiler, ratingId } = body;
 
   if (!mediaItemId || typeof mediaItemId !== "string") {
     return NextResponse.json({ error: "mediaItemId is required" }, { status: 400 });
+  }
+
+  if ((contentFormat !== undefined && !isContentFormat(contentFormat)) ||
+      (draftContentFormat !== undefined && draftContentFormat !== null && !isContentFormat(draftContentFormat))) {
+    return NextResponse.json({ error: "Invalid review content format" }, { status: 400 });
   }
 
   const resolvedMediaId = await resolveMediaItem(mediaItemId);
@@ -292,6 +302,10 @@ export async function POST(request: NextRequest) {
     title: typeof title === "string" && title.trim() ? title.trim() : null,
     content: finalContent,
     draftContent: typeof draftContent === "string" ? draftContent : null,
+    contentFormat: isContentFormat(contentFormat) ? contentFormat : "markdown",
+    draftContentFormat: typeof draftContent === "string"
+      ? (isContentFormat(draftContentFormat) ? draftContentFormat : isContentFormat(contentFormat) ? contentFormat : "markdown")
+      : null,
     status: reviewStatus,
     visibility: reviewVisibility,
     isSpoiler: reviewSpoiler,

@@ -49,6 +49,7 @@ export interface FeedReview {
   id: string;
   title?: string | null;
   reviewText: string;
+  contentFormat?: "plain" | "markdown";
   isSpoiler?: boolean;
   score: number | null;
   scale: number;
@@ -562,6 +563,7 @@ export function CommunityFeed({
 
                       <SpoilerConcealedText
                         content={rv.reviewText}
+                        format={rv.contentFormat}
                         isSpoiler={rv.isSpoiler}
                         quoteStyle={true}
                         className="text-xs sm:text-sm text-foreground/90 leading-relaxed italic border-l-2 border-primary/40 pl-3 line-clamp-4"

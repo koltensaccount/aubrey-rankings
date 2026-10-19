@@ -23,6 +23,7 @@ import { LikeButton } from "@/components/social/like-button";
 import { ReportDialog } from "@/components/social/report-dialog";
 import { CommentsSection } from "@/components/social/comments-section";
 import { ReviewEditorDialog } from "@/components/reviews/review-editor-dialog";
+import { MarkdownRenderer, ReviewContentFormat } from "@/components/reviews/markdown-renderer";
 import { resolvePosterUrl } from "@/lib/artwork";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 
@@ -33,6 +34,8 @@ interface ReviewDetailClientProps {
     title: string | null;
     content: string;
     draftContent?: string | null;
+    contentFormat: ReviewContentFormat;
+    draftContentFormat?: ReviewContentFormat | null;
     status: "draft" | "published" | "unpublished";
     visibility: "public" | "unlisted" | "private";
     isSpoiler: boolean;
@@ -291,11 +294,7 @@ export function ReviewDetailClient({
               </button>
             </div>
           ) : (
-            <div className="prose prose-invert max-w-none">
-              <p className="text-base sm:text-lg leading-relaxed text-foreground/90 whitespace-pre-wrap font-sans">
-                {review.content}
-              </p>
-            </div>
+            <MarkdownRenderer content={review.content} format={review.contentFormat} className="text-base sm:text-lg leading-relaxed text-foreground/90" />
           )}
         </article>
 
@@ -359,6 +358,8 @@ export function ReviewDetailClient({
           title: review.title,
           content: review.content,
           draftContent: review.draftContent,
+          contentFormat: review.contentFormat,
+          draftContentFormat: review.draftContentFormat,
           status: review.status,
           visibility: review.visibility,
           isSpoiler: review.isSpoiler,
@@ -370,6 +371,8 @@ export function ReviewDetailClient({
             title: updated.title,
             content: updated.content,
             draftContent: updated.draftContent,
+            contentFormat: updated.contentFormat,
+            draftContentFormat: updated.draftContentFormat,
             status: updated.status,
             visibility: updated.visibility,
             isSpoiler: updated.isSpoiler,
