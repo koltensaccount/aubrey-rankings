@@ -691,7 +691,18 @@ export default function CollectionDetailPage({
       );
     }
 
-    // Sorting
+    // Sorting: Tier Board always preserves saved item ordering within tiers,
+    // regardless of the previous List/Grid sort selection.
+    if (viewMode === "tier_board") {
+      list.sort((a: any, b: any) => {
+        const aOrder = typeof a.sortOrder === "number" ? a.sortOrder : 0;
+        const bOrder = typeof b.sortOrder === "number" ? b.sortOrder : 0;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return (a.id || "").localeCompare(b.id || "");
+      });
+      return list;
+    }
+
     list.sort((a: any, b: any) => {
       if (sortBy === "score_desc") {
         if (isTierCollection) {

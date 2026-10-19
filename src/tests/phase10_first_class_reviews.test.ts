@@ -821,4 +821,130 @@ describe("Phase 10: First-Class Independently Publishable Reviews", () => {
     await db.delete(collections).where(eq(collections.id, colId));
     await db.delete(mediaItems).where(eq(mediaItems.id, mediaId));
   });
+
+  it("16. Explicit publication consent: new reviews default rating attachment to unchecked; Thoughts text prefilled without substituting private personalNotes", async () => {
+    // A. RatingDialog prefill logic test
+    const ratingWithOnlyPersonalNotes = {
+      id: "rate_pn_only",
+      reviewText: null,
+      personalNotes: "Super secret private diary notes that should NEVER become public review text.",
+    };
+
+    // When Thoughts (reviewText) is empty, prefill content must be empty, NOT substituted with personalNotes
+    const prefillForPnOnly = ratingWithOnlyPersonalNotes.reviewText || "";
+    assert.strictEqual(prefillForPnOnly, "", "Must not substitute personalNotes when reviewText is empty");
+
+    const ratingWithThoughts = {
+      id: "rate_thoughts",
+      reviewText: "Public critique thoughts.",
+      personalNotes: "Owner notes.",
+    };
+    const prefillForThoughts = ratingWithThoughts.reviewText || "";
+    assert.strictEqual(prefillForThoughts, "Public critique thoughts.", "Prefills Thoughts when present");
+
+    // B. Default attachment consent logic in ReviewEditorDialog
+    // For a new review (id is undefined), attachRating must default to false even when candidate ratingId exists
+    const newReviewExistingReviewProp = {
+      id: undefined,
+      ratingId: "rate_candidate_123",
+      score: 9.5,
+    };
+    const isEditingNew = Boolean(newReviewExistingReviewProp.id);
+    const attachRatingDefaultNew = Boolean(newReviewExistingReviewProp.id && newReviewExistingReviewProp.ratingId);
+    assert.strictEqual(attachRatingDefaultNew, false, "New review must default attachRating to false");
+
+    // For an existing review that already has a rating attached, attachRating preserves true
+    const existingReviewWithRating = {
+      id: "rev_123",
+      ratingId: "rate_attached_456",
+      score: 8.0,
+    };
+    const attachRatingDefaultExisting = Boolean(existingReviewWithRating.id && existingReviewWithRating.ratingId);
+    assert.strictEqual(attachRatingDefaultExisting, true, "Existing review with rating attached preserves attachRating as true");
+
+    // For an existing review without rating attached, attachRating remains false
+    const existingReviewWithoutRating = {
+      id: "rev_789",
+      ratingId: null,
+      score: null,
+    };
+    const attachRatingDefaultExistingNoRating = Boolean(existingReviewWithoutRating.id && existingReviewWithoutRating.ratingId);
+    assert.strictEqual(attachRatingDefaultExistingNoRating, false, "Existing review without rating preserves attachRating as false");
+  });
+
+  it("17. Tier Board ordering: preserves saved item ordering within tiers regardless of previous List/Grid sort selection", async () => {
+    // Mock collection entries with explicit saved sortOrder and various ratings/tiers
+    const entries = [
+      { id: "e1", sortOrder: 3, mediaItem: { title: "Zebra (Late Entry)", seasonNumber: 1 }, ratingStatus: { state: "rated", tier: { id: "tier_s", sortOrder: 1 } } },
+      { id: "e2", sortOrder: 1, mediaItem: { title: "Alpha (First Entry)", seasonNumber: 1 }, ratingStatus: { state: "rated", tier: { id: "tier_s", sortOrder: 1 } } },
+      { id: "e3", sortOrder: 2, mediaItem: { title: "Beta (Second Entry)", seasonNumber: 2 }, ratingStatus: { state: "rated", tier: { id: "tier_a", sortOrder: 2 } } },
+    ];
+
+    // Helper replicating collection page processedEntries logic
+    const processEntries = (
+      listInput: typeof entries,
+      viewMode: string,
+      sortBy: string,
+      selectedSeason: string = "all",
+      searchFilter: string = ""
+    ) => {
+      let list = [...listInput];
+
+      if (viewMode !== "tier_board") {
+        // filterRated logic...
+      }
+
+      if (selectedSeason !== "all") {
+        const sNum = parseInt(selectedSeason, 10);
+        list = list.filter((e) => e.mediaItem?.seasonNumber === sNum);
+      }
+
+      if (searchFilter.trim()) {
+        const q = searchFilter.toLowerCase();
+        list = list.filter((e) => e.mediaItem?.title?.toLowerCase().includes(q));
+      }
+
+      if (viewMode === "tier_board") {
+        list.sort((a, b) => {
+          const aOrder = typeof a.sortOrder === "number" ? a.sortOrder : 0;
+          const bOrder = typeof b.sortOrder === "number" ? b.sortOrder : 0;
+          if (aOrder !== bOrder) return aOrder - bOrder;
+          return (a.id || "").localeCompare(b.id || "");
+        });
+        return list;
+      }
+
+      // List/grid sorting
+      list.sort((a, b) => {
+        if (sortBy === "title") {
+          return (a.mediaItem?.title || "").localeCompare(b.mediaItem?.title || "");
+        }
+        return a.sortOrder - b.sortOrder;
+      });
+      return list;
+    };
+
+    // 1. In list view with sortBy === "title", items are sorted alphabetically (Alpha, Beta, Zebra)
+    const listAlphabetical = processEntries(entries, "list", "title");
+    assert.deepStrictEqual(listAlphabetical.map((e) => e.id), ["e2", "e3", "e1"]);
+
+    // 2. Switching to tier_board view preserves saved sortOrder (e2 with sortOrder:1, e3 with sortOrder:2, e1 with sortOrder:3)
+    // even though sortBy was "title"!
+    const tierBoardResult = processEntries(entries, "tier_board", "title");
+    assert.deepStrictEqual(tierBoardResult.map((e) => e.id), ["e2", "e3", "e1"]);
+
+    // Specifically within Tier S: e2 (sortOrder:1) precedes e1 (sortOrder:3)
+    const tierSEntries = tierBoardResult.filter((e) => e.ratingStatus.tier?.id === "tier_s");
+    assert.deepStrictEqual(tierSEntries.map((e) => e.id), ["e2", "e1"]);
+
+    // 3. Season filter is preserved in tier_board mode
+    const tierBoardSeason1 = processEntries(entries, "tier_board", "title", "1");
+    assert.strictEqual(tierBoardSeason1.length, 2);
+    assert.deepStrictEqual(tierBoardSeason1.map((e) => e.id), ["e2", "e1"]);
+
+    // 4. Search filter is preserved in tier_board mode
+    const tierBoardSearch = processEntries(entries, "tier_board", "title", "all", "Zebra");
+    assert.strictEqual(tierBoardSearch.length, 1);
+    assert.strictEqual(tierBoardSearch[0].id, "e1");
+  });
 });

@@ -48,6 +48,7 @@ export function ReviewEditorDialog({
   onSaved,
   onDeleted,
 }: ReviewEditorDialogProps) {
+  const isEditing = Boolean(existingReview?.id);
   const [title, setTitle] = useState(existingReview?.title || "");
   const [content, setContent] = useState(
     existingReview?.draftContent || existingReview?.content || ""
@@ -56,7 +57,9 @@ export function ReviewEditorDialog({
     existingReview?.visibility || "public"
   );
   const [isSpoiler, setIsSpoiler] = useState(existingReview?.isSpoiler || false);
-  const [attachRating, setAttachRating] = useState(Boolean(existingReview?.ratingId));
+  const [attachRating, setAttachRating] = useState(
+    Boolean(existingReview?.id && existingReview?.ratingId)
+  );
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -68,13 +71,12 @@ export function ReviewEditorDialog({
       setContent(existingReview?.draftContent || existingReview?.content || "");
       setVisibility(existingReview?.visibility || "public");
       setIsSpoiler(existingReview?.isSpoiler || false);
-      setAttachRating(Boolean(existingReview?.ratingId));
+      setAttachRating(Boolean(existingReview?.id && existingReview?.ratingId));
       setError(null);
       setShowDeleteConfirm(false);
     }
   }, [isOpen, existingReview]);
 
-  const isEditing = Boolean(existingReview?.id);
   const isCurrentlyPublished = existingReview?.status === "published";
 
   const handleSave = async (targetStatus: "draft" | "published" | "unpublished") => {

@@ -710,7 +710,7 @@ export function RatingDialog({
           mediaTitle={mediaItem.title}
           posterPath={mediaItem.posterPath}
           existingReview={{
-            content: reviewText || personalNotes || "",
+            content: reviewText || "",
             status: "draft",
             visibility: "public",
             isSpoiler: false,
