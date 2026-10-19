@@ -158,7 +158,7 @@ export function CommunityFeed({
     <section className="space-y-6">
       {/* Feed Controls Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-4">
-        {/* Mode Switcher: Following vs Discover */}
+        {/* Mode Switcher: Following vs Community */}
         <div className="flex items-center gap-1 p-1 rounded-xl bg-surface border border-border">
           {isAuthenticated && (
             <button
@@ -185,7 +185,7 @@ export function CommunityFeed({
             }`}
           >
             <Compass size={13} />
-            <span>Discover</span>
+            <span>Community</span>
           </button>
         </div>
 
@@ -258,10 +258,10 @@ export function CommunityFeed({
               </p>
               <div className="pt-2">
                 <Link
-                  href="/explore?tab=people"
+                  href="/discover?tab=people"
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground font-semibold text-xs transition-colors"
                 >
-                  <span>Find Curators in Explore</span>
+                  <span>Find Curators</span>
                   <ArrowRight size={13} />
                 </Link>
               </div>
@@ -273,14 +273,14 @@ export function CommunityFeed({
                 No recent activity from your network
               </h3>
               <p className="text-xs text-muted-foreground">
-                The people you follow haven&apos;t published new rankings or reviews recently. Switch to Discover to view platform-wide activity.
+                The people you follow haven&apos;t published new rankings or reviews recently. Switch to Community to view platform-wide activity.
               </p>
               <button
                 type="button"
                 onClick={() => setMode("discover")}
                 className="mt-2 text-xs text-primary font-semibold hover:underline cursor-pointer"
               >
-                Switch to Discover
+                Switch to Community
               </button>
             </div>
           ) : (

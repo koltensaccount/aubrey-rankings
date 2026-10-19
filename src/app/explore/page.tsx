@@ -2,11 +2,14 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { Search, Film, Tv, Users, Compass, ArrowRight, Loader2, UserPlus, UserCheck } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { useSession } from "@/lib/auth-client";
 
 export default function ExplorePage() {
+  const pathname = usePathname();
+  const router = useRouter();
   const { data: session } = useSession();
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "media" | "people">("all");
@@ -17,6 +20,12 @@ export default function ExplorePage() {
   const [searchError, setSearchError] = useState<string | null>(null);
   const [togglingMap, setTogglingMap] = useState<Record<string, boolean>>({});
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (pathname === "/explore") {
+      router.replace(`/discover${window.location.search}`);
+    }
+  }, [pathname, router]);
 
   const handleToggleFollow = async (e: React.MouseEvent, targetUser: any) => {
     e.preventDefault();
@@ -112,14 +121,20 @@ export default function ExplorePage() {
       <div>
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary uppercase tracking-wider mb-2">
           <Compass size={13} />
-          <span>Social Discovery</span>
+          <span>Find what to watch</span>
         </div>
         <h1 className="font-display text-4xl sm:text-5xl font-bold uppercase tracking-tight text-foreground">
-          Explore & Discover
+          Discover
         </h1>
         <p className="text-xs text-muted-foreground mt-1 max-w-xl">
-          Search movies, television series, community curators, and public rankings across Aubrey Rankings.
+          Search movies, television series, and community members. Start a ranking whenever you find a collection worth making your own.
         </p>
+        {session && (
+          <Link href="/create" className="inline-flex items-center gap-1.5 mt-4 px-4 py-2 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold transition-colors">
+            <Film size={14} />
+            Create Ranking
+          </Link>
+        )}
       </div>
 
       {/* Search Input */}
