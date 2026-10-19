@@ -366,6 +366,7 @@ export default async function ProfilePage() {
                       )}
                       <SpoilerConcealedText
                         content={rev.content}
+                        format={rev.contentFormat as "plain" | "markdown"}
                         isSpoiler={rev.isSpoiler}
                       />
                       <div className="ar-postScore">

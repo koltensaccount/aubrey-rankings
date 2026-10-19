@@ -2,12 +2,14 @@
 
 import { useState } from "react";
 import { Eye, EyeOff } from "lucide-react";
+import { MarkdownRenderer, ReviewContentFormat } from "@/components/reviews/markdown-renderer";
 
 interface SpoilerConcealedTextProps {
   content?: string | null;
   isSpoiler?: boolean;
   className?: string;
   quoteStyle?: boolean;
+  format?: ReviewContentFormat | null;
 }
 
 export function SpoilerConcealedText({
@@ -15,18 +17,17 @@ export function SpoilerConcealedText({
   isSpoiler = false,
   className = "",
   quoteStyle = false,
+  format = "plain",
 }: SpoilerConcealedTextProps) {
   const [revealed, setRevealed] = useState(false);
 
   if (!content) return null;
 
-  if (!isSpoiler) {
-    return quoteStyle ? (
-      <blockquote className={className}>&ldquo;{content}&rdquo;</blockquote>
-    ) : (
-      <p className={className}>{content}</p>
-    );
-  }
+  const rendered = quoteStyle ? (
+    <blockquote className={className}><MarkdownRenderer content={content} format={format} compact /></blockquote>
+  ) : <MarkdownRenderer content={content} format={format} compact className={className} />;
+
+  if (!isSpoiler) return rendered;
 
   if (!revealed) {
     return (
@@ -69,11 +70,7 @@ export function SpoilerConcealedText({
           Conceal
         </button>
       </div>
-      {quoteStyle ? (
-        <blockquote className={className}>&ldquo;{content}&rdquo;</blockquote>
-      ) : (
-        <p className={className}>{content}</p>
-      )}
+      {rendered}
     </div>
   );
 }

@@ -479,6 +479,7 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                   </div>
                   <SpoilerConcealedText
                     content={rev.reviewText}
+                        format={rev.contentFormat}
                     isSpoiler={rev.isSpoiler}
                     quoteStyle={true}
                     className="text-xs text-foreground/80 leading-relaxed line-clamp-4 italic border-l-2 border-primary/30 pl-2.5"

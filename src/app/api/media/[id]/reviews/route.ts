@@ -170,6 +170,7 @@ export async function GET(
       reviewType: "independent" as const,
       title: r.title,
       reviewText: r.content,
+      contentFormat: r.contentFormat,
       score: r.rating ? (r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null) : null,
       scale: 10,
       tier: r.rating?.tier

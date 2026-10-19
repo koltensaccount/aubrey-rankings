@@ -358,6 +358,8 @@ export const reviews = pgTable(
     title: text("title"),
     content: text("content").notNull(),
     draftContent: text("draft_content"),
+    contentFormat: text("content_format").notNull().default("plain"),
+    draftContentFormat: text("draft_content_format"),
     status: text("status").notNull().default("draft"), // 'draft' | 'published' | 'unpublished'
     visibility: text("visibility").notNull().default("public"), // 'public' | 'unlisted' | 'private'
     isSpoiler: boolean("is_spoiler").notNull().default(false),

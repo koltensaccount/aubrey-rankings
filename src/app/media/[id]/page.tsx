@@ -188,6 +188,7 @@ export default async function MediaDetailsPage({
       reviewUrl: `/review/${r.id}`,
       title: r.title,
       reviewText: r.content,
+      contentFormat: r.contentFormat,
       score: r.rating ? (r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null) : null,
       scale: 10,
       tier: r.rating?.tier
@@ -444,6 +445,7 @@ export default async function MediaDetailsPage({
                       )}
                       <SpoilerConcealedText
                         content={rev.reviewText}
+                        format={rev.contentFormat as "plain" | "markdown"}
                         isSpoiler={rev.isSpoiler}
                         quoteStyle={true}
                         className="text-xs sm:text-sm text-foreground/90 leading-relaxed whitespace-pre-line italic"
