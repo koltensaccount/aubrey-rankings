@@ -463,4 +463,192 @@ describe("Phase 10: First-Class Independently Publishable Reviews", () => {
     });
     assert.strictEqual(remainingComments.length, 0, "Comments must cascade upon review deletion");
   });
+
+  it("9. Enforces explicit commentary sharing: thoughts are private by default and only shared items are visible to visitors", async () => {
+    const colId = "col_sharing_" + Date.now();
+    const mediaId1 = "tmdb:movie:share1_" + Date.now();
+    const mediaId2 = "tmdb:movie:share2_" + Date.now();
+
+    await db.insert(mediaItems).values([
+      { id: mediaId1, mediaType: "movie", title: "In the Mood for Love" },
+      { id: mediaId2, mediaType: "movie", title: "2046" },
+    ]);
+
+    await db.insert(collections).values({
+      id: colId,
+      userId: authorId,
+      title: "Wong Kar-wai Diptych",
+      collectionType: "custom",
+      visibility: "public",
+      isPublic: true,
+    });
+
+    await db.insert(collectionEntries).values([
+      { id: "ent1_" + Date.now(), collectionId: colId, mediaItemId: mediaId1, sortOrder: 1 },
+      { id: "ent2_" + Date.now(), collectionId: colId, mediaItemId: mediaId2, sortOrder: 2 },
+    ]);
+
+    // Item 1: Private thoughts (shareCommentary: false)
+    const rating1Id = "rate_priv_" + Date.now();
+    await db.insert(ratings).values({
+      id: rating1Id,
+      collectionId: colId,
+      mediaItemId: mediaId1,
+      userId: authorId,
+      reviewText: "Secret critique: private personal reflections.",
+      personalNotes: "Do not share.",
+      shareCommentary: false,
+    });
+
+    // Item 2: Explicitly shared thoughts (shareCommentary: true)
+    const rating2Id = "rate_pub_" + Date.now();
+    await db.insert(ratings).values({
+      id: rating2Id,
+      collectionId: colId,
+      mediaItemId: mediaId2,
+      userId: authorId,
+      reviewText: "Publicly shared commentary: visual poetry.",
+      personalNotes: "Private reminder to buy bluray.",
+      shareCommentary: true,
+    });
+
+    // 1. Check Owner access: sees both thoughts and personal notes
+    const ownerRatings = await db.query.ratings.findMany({
+      where: and(eq(ratings.userId, authorId), eq(ratings.collectionId, colId)),
+    });
+    const r1Owner = ownerRatings.find((r) => r.id === rating1Id);
+    const r2Owner = ownerRatings.find((r) => r.id === rating2Id);
+    assert.strictEqual(r1Owner?.reviewText, "Secret critique: private personal reflections.");
+    assert.strictEqual(r1Owner?.personalNotes, "Do not share.");
+    assert.strictEqual(r2Owner?.reviewText, "Publicly shared commentary: visual poetry.");
+
+    // 2. Check Visitor access (simulating /api/collections/[id] logic)
+    const visitorRatings = ownerRatings.map((r) => ({
+      ...r,
+      personalNotes: null,
+      reviewText: r.shareCommentary ? r.reviewText : null,
+    }));
+    const r1Visitor = visitorRatings.find((r) => r.id === rating1Id);
+    const r2Visitor = visitorRatings.find((r) => r.id === rating2Id);
+
+    assert.strictEqual(r1Visitor?.reviewText, null, "Unshared thoughts must be null for visitors");
+    assert.strictEqual(r1Visitor?.personalNotes, null, "Personal notes must be null for visitors");
+    assert.strictEqual(
+      r2Visitor?.reviewText,
+      "Publicly shared commentary: visual poetry.",
+      "Explicitly shared commentary must be visible to visitors"
+    );
+    assert.strictEqual(r2Visitor?.personalNotes, null, "Personal notes must still be null even for shared items");
+
+    // 3. Check public reviews query: only rating 2 is included, rating 1 is strictly excluded
+    const publicReviews = await getPublicReviews(authorId);
+    const foundR1 = publicReviews.some((r) => r.id === rating1Id);
+    const foundR2 = publicReviews.some((r) => r.id === rating2Id);
+    assert.strictEqual(foundR1, false, "Rating with shareCommentary:false must never appear in getPublicReviews");
+    assert.strictEqual(foundR2, true, "Rating with shareCommentary:true must appear in getPublicReviews");
+
+    // Cleanup
+    await db.delete(ratings).where(and(eq(ratings.collectionId, colId)));
+    await db.delete(collectionEntries).where(eq(collectionEntries.collectionId, colId));
+    await db.delete(collections).where(eq(collections.id, colId));
+    await db.delete(mediaItems).where(eq(mediaItems.id, mediaId1));
+    await db.delete(mediaItems).where(eq(mediaItems.id, mediaId2));
+  });
+
+  it("10. Preserves private writing separately from published reviews snapshot", async () => {
+    const colId = "col_snap_" + Date.now();
+    const mediaId = "tmdb:movie:snap_" + Date.now();
+
+    await db.insert(mediaItems).values({ id: mediaId, mediaType: "movie", title: "Days of Being Wild" });
+    await db.insert(collections).values({
+      id: colId,
+      userId: authorId,
+      title: "Snapshot Test Collection",
+      collectionType: "custom",
+      visibility: "public",
+      isPublic: true,
+    });
+
+    const ratingId = "rate_snap_" + Date.now();
+    await db.insert(ratings).values({
+      id: ratingId,
+      collectionId: colId,
+      mediaItemId: mediaId,
+      userId: authorId,
+      reviewText: "Initial draft thoughts while rating.",
+      personalNotes: "Initial note",
+      shareCommentary: false,
+    });
+
+    // User publishes as standalone review
+    const reviewId = randomUUID();
+    await db.insert(reviews).values({
+      id: reviewId,
+      userId: authorId,
+      mediaItemId: mediaId,
+      ratingId,
+      title: "Published Review Title",
+      content: "Snapshot of review content published to community.",
+      status: "published",
+      visibility: "public",
+      publishedAt: new Date(),
+    });
+
+    // User subsequently edits private thoughts in the rating dialog
+    await db
+      .update(ratings)
+      .set({
+        reviewText: "Edited private thoughts after re-watch months later.",
+        updatedAt: new Date(),
+      })
+      .where(eq(ratings.id, ratingId));
+
+    // Verify: Published review was NOT silently altered by editing private notes
+    const reviewInDb = await db.query.reviews.findFirst({ where: eq(reviews.id, reviewId) });
+    const ratingInDb = await db.query.ratings.findFirst({ where: eq(ratings.id, ratingId) });
+
+    assert.strictEqual(reviewInDb?.content, "Snapshot of review content published to community.");
+    assert.strictEqual(ratingInDb?.reviewText, "Edited private thoughts after re-watch months later.");
+
+    // Cleanup
+    await db.delete(reviews).where(eq(reviews.id, reviewId));
+    await db.delete(ratings).where(eq(ratings.id, ratingId));
+    await db.delete(collections).where(eq(collections.id, colId));
+    await db.delete(mediaItems).where(eq(mediaItems.id, mediaId));
+  });
+
+  it("11. Unpublishing review removes it immediately from public discovery and getPublicReviews", async () => {
+    const reviewId = randomUUID();
+    await db.insert(reviews).values({
+      id: reviewId,
+      userId: authorId,
+      mediaItemId: movieMediaId,
+      title: "Discoverable Review",
+      content: "This will be unpublished.",
+      status: "published",
+      visibility: "public",
+      publishedAt: new Date(),
+    });
+
+    // 1. Initially appears in getPublicReviews
+    let publicRevs = await getPublicReviews(authorId);
+    assert.strictEqual(publicRevs.some((r) => r.id === reviewId), true);
+
+    // 2. Unpublish it
+    await db
+      .update(reviews)
+      .set({ status: "unpublished", updatedAt: new Date() })
+      .where(eq(reviews.id, reviewId));
+
+    // 3. Immediately disappears from getPublicReviews
+    publicRevs = await getPublicReviews(authorId);
+    assert.strictEqual(publicRevs.some((r) => r.id === reviewId), false, "Unpublished review must not appear in public reviews");
+
+    // Content remains intact in DB for owner
+    const unpubReview = await db.query.reviews.findFirst({ where: eq(reviews.id, reviewId) });
+    assert.strictEqual(unpubReview?.status, "unpublished");
+    assert.strictEqual(unpubReview?.content, "This will be unpublished.");
+
+    await db.delete(reviews).where(eq(reviews.id, reviewId));
+  });
 });

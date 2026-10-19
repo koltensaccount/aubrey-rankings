@@ -84,10 +84,12 @@ export async function GET(
     if (isOwner) {
       collectionRatings = rawRatings;
     } else {
-      // Securely strip personal notes for visitors and guests
+      // Securely strip personal notes for visitors and guests,
+      // and only expose commentary if explicitly authorized by owner (shareCommentary === true)
       collectionRatings = rawRatings.map((r) => ({
         ...r,
         personalNotes: null,
+        reviewText: r.shareCommentary ? r.reviewText : null,
       }));
     }
 

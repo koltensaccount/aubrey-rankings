@@ -142,12 +142,12 @@ export function CollectionRubricDialog({
           </div>
           <div>
             <DialogTitle className="font-display text-xl uppercase font-bold text-foreground">
-              {isTierMode ? "Tier Rating System" : "Numerical Weighted Rubric"}
+              Rating Setup
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground mt-0.5">
               {isTierMode
-                ? "Configure tier lanes, colors, labels, and hierarchy for this collection."
-                : "Calibrate the multiplier weights for each evaluation category."}
+                ? "Configure tier lanes, colors, labels, and hierarchy, or switch rating method."
+                : "Calibrate category multiplier weights, or switch to a tier-based system."}
             </DialogDescription>
           </div>
         </DialogHeader>

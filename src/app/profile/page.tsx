@@ -8,6 +8,7 @@ import { ArrowRight, Settings } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { getTopRankedEntries, getRatingSummary } from "@/lib/scoring";
 import { ProfileSocialStats } from "@/components/social/profile-social-stats";
+import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
 
 export default async function ProfilePage() {
   const session = await getServerSession();
@@ -347,7 +348,7 @@ export default async function ProfilePage() {
                   <div className="ar-reviewBody">
                     <div>
                       <h3>{rev.mediaItem?.title}</h3>
-                      <p>{rev.reviewText}</p>
+                      <SpoilerConcealedText content={rev.reviewText} />
                       <div className="ar-postScore">
                         <span>★ {rev.calculatedOverallScore ? rev.calculatedOverallScore.toFixed(1) : "—"}</span>
                         <i />

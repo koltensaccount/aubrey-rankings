@@ -19,6 +19,7 @@ import { getTmdbImageUrl } from "@/lib/tmdb";
 import { resolvePosterUrl } from "@/lib/artwork";
 import { LikeButton } from "@/components/social/like-button";
 import { SaveRankingButton } from "@/components/social/save-ranking-button";
+import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
 
 export interface FeedAuthor {
   id: string;
@@ -46,7 +47,9 @@ export interface FeedRanking {
 
 export interface FeedReview {
   id: string;
+  title?: string | null;
   reviewText: string;
+  isSpoiler?: boolean;
   score: number | null;
   scale: number;
   watchDate: string | null;
@@ -459,10 +462,12 @@ export function CommunityFeed({
               );
             }
 
-            if (item.type === "review" && item.review && item.mediaItem && item.collection) {
+            if (item.type === "review" && item.review && item.mediaItem) {
               const rv = item.review;
               const md = item.mediaItem;
               const col = item.collection;
+              const isIndependent = !col;
+              const reviewHref = isIndependent ? `/review/${item.contentId}` : `/collection/${col.id}`;
 
               const isTvEp = md.mediaType === "episode" || Boolean(md.seasonNumber);
               const stillUrl = md.stillPath ? getTmdbImageUrl(md.stillPath, "w300") : null;
@@ -517,7 +522,12 @@ export function CommunityFeed({
                           )}
                         </div>
                         <span className="text-[11px] text-muted-foreground">
-                          reviewed an episode · {formatFeedTime(item.timestamp)}
+                          {isIndependent
+                            ? "published a review"
+                            : isTvEp
+                              ? "reviewed an episode"
+                              : "reviewed a film"}{" "}
+                          · {formatFeedTime(item.timestamp)}
                         </span>
                       </div>
                     </div>
@@ -534,7 +544,7 @@ export function CommunityFeed({
                   <div className="flex flex-col sm:flex-row items-start gap-4">
                     {artUrl && (
                       <Link
-                        href={`/media/${md.id}`}
+                        href={reviewHref}
                         className="w-full sm:w-36 h-24 sm:h-24 rounded-lg overflow-hidden border border-border bg-black shrink-0 relative group"
                       >
                         <img
@@ -545,7 +555,7 @@ export function CommunityFeed({
                       </Link>
                     )}
 
-                    <div className="min-w-0 flex-1 space-y-1.5">
+                    <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <Link
                           href={`/media/${md.id}`}
@@ -561,29 +571,57 @@ export function CommunityFeed({
                         )}
                       </div>
 
-                      <blockquote className="text-xs sm:text-sm text-foreground/90 leading-relaxed italic border-l-2 border-primary/40 pl-3 line-clamp-4">
-                        &ldquo;{rv.reviewText}&rdquo;
-                      </blockquote>
+                      {rv.title && (
+                        <h4 className="font-display text-sm uppercase font-bold text-foreground">
+                          <Link href={reviewHref} className="hover:text-primary-text transition-colors">
+                            {rv.title}
+                          </Link>
+                        </h4>
+                      )}
+
+                      <SpoilerConcealedText
+                        content={rv.reviewText}
+                        isSpoiler={rv.isSpoiler}
+                        quoteStyle={true}
+                        className="text-xs sm:text-sm text-foreground/90 leading-relaxed italic border-l-2 border-primary/40 pl-3 line-clamp-4"
+                      />
                     </div>
                   </div>
 
-                  {/* Footer Attribution Link */}
-                  <div className="pt-2 border-t border-border/70 flex items-center justify-between text-xs text-muted-foreground">
-                    <span>
-                      from canon:{" "}
-                      <Link
-                        href={`/collection/${col.id}`}
-                        className="text-foreground hover:text-primary-text font-medium transition-colors"
-                      >
-                        {col.title}
-                      </Link>
-                    </span>
+                  {/* Footer Attribution & Social Actions */}
+                  <div className="pt-2 border-t border-border/70 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
+                    {isIndependent ? (
+                      <div className="flex items-center gap-4">
+                        <LikeButton
+                          reviewId={item.contentId}
+                          initialLikeCount={item.stats?.likeCount || 0}
+                          initialIsLiked={item.stats?.isLiked || false}
+                        />
+                        <Link
+                          href={`/review/${item.contentId}#comments`}
+                          className="inline-flex items-center gap-1.5 hover:text-foreground transition-colors"
+                        >
+                          <MessageSquare size={13} />
+                          <span>{item.stats?.commentCount || 0}</span>
+                        </Link>
+                      </div>
+                    ) : (
+                      <span>
+                        from canon:{" "}
+                        <Link
+                          href={`/collection/${col.id}`}
+                          className="text-foreground hover:text-primary-text font-medium transition-colors"
+                        >
+                          {col.title}
+                        </Link>
+                      </span>
+                    )}
 
                     <Link
-                      href={`/media/${md.id}`}
+                      href={reviewHref}
                       className="inline-flex items-center gap-1 text-xs font-semibold text-primary-text hover:underline"
                     >
-                      <span>All Reviews</span>
+                      <span>{isIndependent ? "Read Review" : "View Ranking"}</span>
                       <ArrowRight size={12} />
                     </Link>
                   </div>

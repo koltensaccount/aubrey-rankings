@@ -268,6 +268,7 @@ export const ratings = pgTable(
     watchDate: timestamp("watch_date"),
     reviewText: text("review_text"),
     personalNotes: text("personal_notes"),
+    shareCommentary: boolean("share_commentary").notNull().default(false),
     isWatched: boolean("is_watched").notNull().default(false),
     isFavorite: boolean("is_favorite").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -286,6 +287,7 @@ export const ratings = pgTable(
     index("idx_ratings_collection").on(table.collectionId),
     index("idx_ratings_media").on(table.mediaItemId),
     index("idx_ratings_tier").on(table.tierId),
+    index("idx_ratings_share_commentary").on(table.shareCommentary),
   ]
 );
 

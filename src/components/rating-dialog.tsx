@@ -11,6 +11,8 @@ import {
   Trash2,
   AlertTriangle,
   Sparkles,
+  MessageSquare,
+  Globe,
 } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { calculateWeightedAverage, CategoryDef, withSavedWeights } from "@/lib/scoring";
@@ -19,6 +21,7 @@ import { RatingCategorySlider } from "@/components/rating/rating-category-slider
 import { RatingScoreSummary } from "@/components/rating/rating-score-summary";
 import { RatingClearDialog } from "@/components/rating/rating-clear-dialog";
 import { RatingTierSelector } from "@/components/rating/rating-tier-selector";
+import { ReviewEditorDialog } from "@/components/reviews/review-editor-dialog";
 import { TierItem } from "@/lib/tier-system";
 
 interface RatingDialogProps {
@@ -65,6 +68,8 @@ export function RatingDialog({
   const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
   const [reviewText, setReviewText] = useState("");
   const [personalNotes, setPersonalNotes] = useState("");
+  const [shareCommentary, setShareCommentary] = useState(false);
+  const [showReviewEditor, setShowReviewEditor] = useState(false);
   const [isWatched, setIsWatched] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
   const [watchDate, setWatchDate] = useState("");
@@ -98,6 +103,7 @@ export function RatingDialog({
       setSelectedTierId(initialRating.tierId ?? null);
       setReviewText(initialRating.reviewText || "");
       setPersonalNotes(initialRating.personalNotes || "");
+      setShareCommentary(Boolean(initialRating.shareCommentary));
       setIsWatched(initialRating.isWatched !== false);
       setIsFavorite(Boolean(initialRating.isFavorite));
       setWatchDate(
@@ -111,6 +117,7 @@ export function RatingDialog({
       setSelectedTierId(null);
       setReviewText("");
       setPersonalNotes("");
+      setShareCommentary(false);
       setIsWatched(true);
       setIsFavorite(false);
       setWatchDate(new Date().toISOString().split("T")[0]);
@@ -280,6 +287,7 @@ export function RatingDialog({
         watchDate: watchDate ? new Date(watchDate).toISOString() : null,
         reviewText: reviewText.trim() || null,
         personalNotes: personalNotes.trim() || null,
+        shareCommentary,
         isWatched,
         isFavorite,
       };
@@ -318,6 +326,7 @@ export function RatingDialog({
             : initialRating?.categoryScores ?? [],
           reviewText: reviewText.trim() || null,
           personalNotes: personalNotes.trim() || null,
+          shareCommentary,
           isWatched,
           isFavorite,
         }
@@ -495,22 +504,77 @@ export function RatingDialog({
             </div>
           )}
 
-          {/* Review Text */}
-          <div className="space-y-2">
-            <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
-              Critique & Reflections
-            </label>
+          {/* Unified Thoughts & Commentary */}
+          <div className="space-y-2.5">
+            <div className="flex items-center justify-between border-b border-border pb-1.5">
+              <div className="flex items-center gap-1.5">
+                <MessageSquare size={13} className="text-primary" />
+                <label className="text-xs font-semibold text-foreground uppercase tracking-wider block">
+                  Thoughts & Commentary
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowReviewEditor(true)}
+                className="text-[11px] font-semibold text-primary-text hover:underline flex items-center gap-1 cursor-pointer"
+                title="Publish as standalone first-class review"
+              >
+                <Globe size={11} />
+                <span>Publish as Review</span>
+              </button>
+            </div>
+
             <textarea
               rows={3}
               placeholder={
                 isEpisode
-                  ? "What made this episode resonant, terrifying, or profound?"
-                  : "Critique, reflections, or highlights on this title..."
+                  ? "Write your thoughts, critique, or reflections on this episode..."
+                  : "Write your thoughts, critique, or reflections on this title..."
               }
               value={reviewText}
               onChange={(e) => setReviewText(e.target.value)}
               className="w-full text-xs rounded-input p-3 bg-surface border border-border-input text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary leading-relaxed resize-none"
             />
+
+            {/* Sharing Consent Option */}
+            {collectionId && (
+              <div className="flex items-center justify-between pt-0.5 text-xs">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={shareCommentary}
+                    onChange={(e) => setShareCommentary(e.target.checked)}
+                    className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer"
+                  />
+                  <span className="text-xs text-muted-foreground font-medium">
+                    Share thoughts with this ranking
+                  </span>
+                </label>
+                <span className="text-[10px] text-muted-foreground">
+                  {shareCommentary ? "Visible in public ranking" : "Private to you"}
+                </span>
+              </div>
+            )}
+
+            {/* Non-destructive preservation of legacy personal notes if different */}
+            {Boolean(
+              initialRating?.reviewText &&
+              initialRating?.personalNotes &&
+              initialRating.reviewText.trim() !== initialRating.personalNotes.trim()
+            ) && (
+              <div className="pt-2 border-t border-border/70 space-y-1.5">
+                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                  <span className="font-semibold text-foreground/80">Legacy Personal Notes (Preserved)</span>
+                  <span className="text-[10px]">Private historical note</span>
+                </div>
+                <textarea
+                  rows={2}
+                  value={personalNotes}
+                  onChange={(e) => setPersonalNotes(e.target.value)}
+                  className="w-full text-xs rounded-input p-2.5 bg-surface/80 border border-border text-foreground leading-relaxed resize-none"
+                />
+              </div>
+            )}
           </div>
 
           {/* Metadata Toggles: Watched, Favorite & Date */}
@@ -640,6 +704,26 @@ export function RatingDialog({
           </button>
         </div>
       </div>
+
+      {showReviewEditor && (
+        <ReviewEditorDialog
+          isOpen={showReviewEditor}
+          onClose={() => setShowReviewEditor(false)}
+          mediaItemId={mediaItem.id}
+          mediaTitle={mediaItem.title}
+          posterPath={mediaItem.posterPath}
+          existingReview={{
+            content: reviewText || personalNotes || "",
+            status: "draft",
+            visibility: "public",
+            isSpoiler: false,
+            ratingId: initialRating?.id || null,
+          }}
+          onSaved={() => {
+            setShowReviewEditor(false);
+          }}
+        />
+      )}
     </div>
   );
 }

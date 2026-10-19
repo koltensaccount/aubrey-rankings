@@ -73,53 +73,57 @@ export function CollectionToolbar({
             </button>
           )}
 
-          {/* Rating Status Filters */}
-          <div className="flex items-center gap-1 bg-card p-1 rounded-lg border border-border shrink-0">
-            <button
-              type="button"
-              onClick={() => setFilterRated("all")}
-              className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
-                filterRated === "all"
-                  ? "bg-surface text-primary-text font-semibold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              All ({totalEntries})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterRated("rated")}
-              className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
-                filterRated === "rated"
-                  ? "bg-primary text-primary-foreground font-bold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {isTierCollection ? `Tiered (${completedCount})` : `Rated (${completedCount})`}
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterRated("in_progress")}
-              className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
-                filterRated === "in_progress"
-                  ? "bg-primary/20 text-primary-text border border-primary/40 font-semibold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              In Progress ({inProgressCount})
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterRated("unrated")}
-              className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
-                filterRated === "unrated"
-                  ? "bg-surface text-foreground font-semibold"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {isTierCollection ? `Untiered (${unratedCount})` : `Unrated (${unratedCount})`}
-            </button>
-          </div>
+          {/* Rating Status Filters: Only shown in List and Grid views */}
+          {viewMode !== "tier_board" && (
+            <div className="flex items-center gap-1 bg-card p-1 rounded-lg border border-border shrink-0">
+              <button
+                type="button"
+                onClick={() => setFilterRated("all")}
+                className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
+                  filterRated === "all"
+                    ? "bg-surface text-primary-text font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                All ({totalEntries})
+              </button>
+              <button
+                type="button"
+                onClick={() => setFilterRated("rated")}
+                className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
+                  filterRated === "rated"
+                    ? "bg-primary text-primary-foreground font-bold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {isTierCollection ? `Ranked (${completedCount})` : `Rated (${completedCount})`}
+              </button>
+              {!isTierCollection && (
+                <button
+                  type="button"
+                  onClick={() => setFilterRated("in_progress")}
+                  className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
+                    filterRated === "in_progress"
+                      ? "bg-primary/20 text-primary-text border border-primary/40 font-semibold"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  In Progress ({inProgressCount})
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => setFilterRated("unrated")}
+                className={`px-2.5 py-1 rounded text-xs transition-colors whitespace-nowrap cursor-pointer ${
+                  filterRated === "unrated"
+                    ? "bg-surface text-foreground font-semibold"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {isTierCollection ? `Unranked (${unratedCount})` : `Unrated (${unratedCount})`}
+              </button>
+            </div>
+          )}
 
           {availableSeasons.length > 0 && (
             <div className="flex items-center gap-1.5 shrink-0 pl-1 border-l border-border">
@@ -152,20 +156,23 @@ export function CollectionToolbar({
 
         {/* Right Controls: Sort & View Mode */}
         <div className="flex items-center justify-between sm:justify-end gap-3 ml-auto">
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortOption)}
-            className="bg-surface text-xs text-foreground border border-border-input rounded px-3 py-1.5 focus:outline-none focus:border-primary"
-          >
-            <option value="score_desc">
-              {isTierCollection ? "Sort: Highest Tier" : "Sort: Highest Score"}
-            </option>
-            <option value="score_asc">
-              {isTierCollection ? "Sort: Lowest Tier" : "Sort: Lowest Score"}
-            </option>
-            <option value="order">Sort: Chronological</option>
-            <option value="title">Sort: Alphabetical</option>
-          </select>
+          {/* Sort dropdown is hidden in Tier Board view since tier rows establish the ordering */}
+          {viewMode !== "tier_board" && (
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as SortOption)}
+              className="bg-surface text-xs text-foreground border border-border-input rounded px-3 py-1.5 focus:outline-none focus:border-primary"
+            >
+              <option value="score_desc">
+                {isTierCollection ? "Sort: Highest Tier" : "Sort: Highest Score"}
+              </option>
+              <option value="score_asc">
+                {isTierCollection ? "Sort: Lowest Tier" : "Sort: Lowest Score"}
+              </option>
+              <option value="order">Sort: Chronological</option>
+              <option value="title">Sort: Alphabetical</option>
+            </select>
+          )}
 
           {/* View Mode Toggle */}
           <div className="flex items-center gap-1 bg-card p-1 rounded border border-border">

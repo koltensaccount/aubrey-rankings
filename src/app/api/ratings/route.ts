@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
     watchDate,
     reviewText,
     personalNotes,
+    shareCommentary,
     isWatched,
     isFavorite,
   } = body;
@@ -36,7 +37,7 @@ export async function POST(request: NextRequest) {
     (collectionId != null && typeof collectionId !== "string") ||
     (ratingSystemId != null && typeof ratingSystemId !== "string") ||
     (tierId != null && typeof tierId !== "string") ||
-    [isWatched, isFavorite].some(
+    [isWatched, isFavorite, shareCommentary].some(
       (value) => value !== undefined && typeof value !== "boolean",
     ) ||
     [reviewText, personalNotes].some(
@@ -222,6 +223,10 @@ export async function POST(request: NextRequest) {
             personalNotes === undefined
               ? (existing?.personalNotes ?? null)
               : personalNotes,
+          shareCommentary:
+            shareCommentary === undefined
+              ? (existing?.shareCommentary ?? false)
+              : Boolean(shareCommentary),
           isWatched: isWatched ?? existing?.isWatched ?? true,
           isFavorite: isFavorite ?? existing?.isFavorite ?? false,
           updatedAt: new Date(),

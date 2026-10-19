@@ -12,6 +12,7 @@ import { FollowButton } from "@/components/social/follow-button";
 import { ProfileSocialStats } from "@/components/social/profile-social-stats";
 import { ProfileActions } from "@/components/social/profile-actions";
 import { getAccentTokens } from "@/lib/theme";
+import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
 import {
   ArrowRight,
   Calendar,
@@ -424,17 +425,19 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {publicReviews.map((rev) => (
-                <Link
+                <article
                   key={rev.id}
-                  href={rev.reviewUrl}
-                  className="p-5 rounded-xl border border-border bg-card space-y-2.5 shadow-sm hover:border-primary/50 transition-colors block group cursor-pointer"
+                  className="p-5 rounded-xl border border-border bg-card space-y-2.5 shadow-sm hover:border-border transition-colors block group"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <h3 className="font-display text-base uppercase font-bold text-foreground group-hover:text-primary-text transition-colors truncate">
+                        <Link
+                          href={rev.reviewUrl}
+                          className="font-display text-base uppercase font-bold text-foreground group-hover:text-primary-text transition-colors truncate"
+                        >
                           {rev.mediaItem?.title || "Movie"}
-                        </h3>
+                        </Link>
                         {rev.tier && (
                           <span
                             className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono text-white"
@@ -474,10 +477,25 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                       </div>
                     </div>
                   </div>
-                  <p className="text-xs text-foreground/80 leading-relaxed line-clamp-4">
-                    &ldquo;{rev.reviewText}&rdquo;
-                  </p>
-                </Link>
+                  <SpoilerConcealedText
+                    content={rev.reviewText}
+                    isSpoiler={rev.isSpoiler}
+                    quoteStyle={true}
+                    className="text-xs text-foreground/80 leading-relaxed line-clamp-4 italic border-l-2 border-primary/30 pl-2.5"
+                  />
+                  <div className="pt-1 border-t border-border/60 flex items-center justify-between text-xs">
+                    <span className="text-[11px] text-muted-foreground">
+                      {rev.reviewType === "independent" ? "Standalone Review" : "Ranking Commentary"}
+                    </span>
+                    <Link
+                      href={rev.reviewUrl}
+                      className="text-xs font-semibold text-primary-text hover:underline inline-flex items-center gap-1"
+                    >
+                      <span>{rev.reviewType === "independent" ? "Read Review" : "View in Ranking"}</span>
+                      <ArrowRight size={12} />
+                    </Link>
+                  </div>
+                </article>
               ))}
             </div>
           </section>

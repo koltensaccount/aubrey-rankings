@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { collections, ratings, reviews } from "@/db/schema";
-import { eq, and, desc, isNotNull, isNull, inArray, or } from "drizzle-orm";
+import { eq, and, desc, isNotNull, isNull, inArray, or, ne } from "drizzle-orm";
 
 export interface UnifiedPublicReview {
   id: string;
@@ -64,7 +64,7 @@ export async function getPublicReviews(userId: string): Promise<UnifiedPublicRev
     mediaItem: r.mediaItem,
   }));
 
-  // 2. Legacy public ratings reviews
+  // 2. Legacy public collection ratings with explicit sharing consent
   const publicCollections = await db
     .select({ id: collections.id })
     .from(collections)
@@ -73,19 +73,22 @@ export async function getPublicReviews(userId: string): Promise<UnifiedPublicRev
     );
   const ids = publicCollections.map((collection) => collection.id);
 
-  const rawRatings = await db.query.ratings.findMany({
-    where: and(
-      eq(ratings.userId, userId),
-      isNotNull(ratings.reviewText),
-      ids.length
-        ? or(isNull(ratings.collectionId), inArray(ratings.collectionId, ids))
-        : isNull(ratings.collectionId),
-    ),
-    columns: { personalNotes: false },
-    orderBy: [desc(ratings.updatedAt)],
-    limit: 8,
-    with: { mediaItem: true },
-  });
+  const rawRatings =
+    ids.length === 0
+      ? []
+      : await db.query.ratings.findMany({
+          where: and(
+            eq(ratings.userId, userId),
+            isNotNull(ratings.reviewText),
+            ne(ratings.reviewText, ""),
+            eq(ratings.shareCommentary, true),
+            inArray(ratings.collectionId, ids),
+          ),
+          columns: { personalNotes: false },
+          orderBy: [desc(ratings.updatedAt)],
+          limit: 8,
+          with: { mediaItem: true },
+        });
 
   const formattedRatings: UnifiedPublicReview[] = rawRatings.map((r) => ({
     id: r.id,

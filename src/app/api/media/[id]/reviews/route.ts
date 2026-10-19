@@ -202,7 +202,8 @@ export async function GET(
             eq(r.mediaItemId, media.id),
             isNotNull(r.reviewText),
             ne(r.reviewText, ""),
-            isNotNull(r.collectionId)
+            isNotNull(r.collectionId),
+            eq(r.shareCommentary, true)
           ),
         orderBy: [desc(ratings.updatedAt)],
         columns: {

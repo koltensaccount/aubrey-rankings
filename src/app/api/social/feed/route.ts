@@ -249,58 +249,113 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    const publicFirstClassReviews = rawFirstClassReviews
+    const filteredFirstClass = rawFirstClassReviews
       .filter((r) => !blockedUserIds.has(r.userId))
-      .slice(0, limit)
-      .map((r) => ({
-        type: "review",
-        id: `review_${r.id}`,
-        contentId: r.id,
-        reviewType: "independent" as const,
-        reviewUrl: `/review/${r.id}`,
-        timestamp: r.publishedAt || r.updatedAt || r.createdAt,
-        author: {
-          id: r.user.id,
-          name: r.user.name,
-          username: r.user.username,
-          image: r.user.image,
-        },
-        review: {
-          id: r.id,
-          title: r.title,
-          reviewText: r.content,
-          isSpoiler: r.isSpoiler,
-          score: r.rating ? (r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null) : null,
-          scale: 10,
-          tier: r.rating?.tier
-            ? {
-                id: r.rating.tier.id,
-                name: r.rating.tier.name,
-                color: r.rating.tier.color,
-              }
-            : null,
-          watchDate: null,
-        },
-        mediaItem: {
-          id: r.mediaItem.id,
-          title: r.mediaItem.title,
-          mediaType: r.mediaItem.mediaType,
-          posterPath: r.mediaItem.posterPath,
-          stillPath: r.mediaItem.stillPath,
-          seasonNumber: r.mediaItem.seasonNumber,
-          episodeNumber: r.mediaItem.episodeNumber,
-        },
-        collection: null,
-      }));
+      .slice(0, limit);
 
-    // 2b. Legacy collection ratings reviews
+    const firstClassIds = filteredFirstClass.map((r) => r.id);
+    const reviewLikeCountMap = new Map<string, number>();
+    const reviewCommentCountMap = new Map<string, number>();
+    const viewerReviewLikedSet = new Set<string>();
+
+    if (firstClassIds.length > 0) {
+      const reviewLikeRows = await db
+        .select({
+          reviewId: likes.reviewId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(likes)
+        .where(inArray(likes.reviewId, firstClassIds))
+        .groupBy(likes.reviewId);
+      for (const row of reviewLikeRows) {
+        if (row.reviewId) reviewLikeCountMap.set(row.reviewId, row.count);
+      }
+
+      const reviewCommentRows = await db
+        .select({
+          reviewId: comments.reviewId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(comments)
+        .where(inArray(comments.reviewId, firstClassIds))
+        .groupBy(comments.reviewId);
+      for (const row of reviewCommentRows) {
+        if (row.reviewId) reviewCommentCountMap.set(row.reviewId, row.count);
+      }
+
+      if (session?.user?.id) {
+        const viewerReviewLikes = await db
+          .select({ reviewId: likes.reviewId })
+          .from(likes)
+          .where(
+            and(
+              eq(likes.userId, session.user.id),
+              inArray(likes.reviewId, firstClassIds)
+            )
+          );
+        for (const r of viewerReviewLikes) {
+          if (r.reviewId) viewerReviewLikedSet.add(r.reviewId);
+        }
+      }
+    }
+
+    const publicFirstClassReviews = filteredFirstClass.map((r) => ({
+      type: "review",
+      id: `review_${r.id}`,
+      contentId: r.id,
+      reviewType: "independent" as const,
+      reviewUrl: `/review/${r.id}`,
+      timestamp: r.publishedAt || r.updatedAt || r.createdAt,
+      author: {
+        id: r.user.id,
+        name: r.user.name,
+        username: r.user.username,
+        image: r.user.image,
+      },
+      stats: {
+        likeCount: reviewLikeCountMap.get(r.id) || 0,
+        saveCount: 0,
+        commentCount: reviewCommentCountMap.get(r.id) || 0,
+        isLiked: viewerReviewLikedSet.has(r.id),
+        isSaved: false,
+      },
+      review: {
+        id: r.id,
+        title: r.title,
+        reviewText: r.content,
+        isSpoiler: r.isSpoiler,
+        score: r.rating ? (r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null) : null,
+        scale: 10,
+        tier: r.rating?.tier
+          ? {
+              id: r.rating.tier.id,
+              name: r.rating.tier.name,
+              color: r.rating.tier.color,
+            }
+          : null,
+        watchDate: null,
+      },
+      mediaItem: {
+        id: r.mediaItem.id,
+        title: r.mediaItem.title,
+        mediaType: r.mediaItem.mediaType,
+        posterPath: r.mediaItem.posterPath,
+        stillPath: r.mediaItem.stillPath,
+        seasonNumber: r.mediaItem.seasonNumber,
+        episodeNumber: r.mediaItem.episodeNumber,
+      },
+      collection: null,
+    }));
+
+    // 2b. Legacy collection ratings reviews (requiring explicit sharing consent)
     const rawRatings = await db.query.ratings.findMany({
-      where: (r, { and, inArray, isNotNull, ne }) =>
+      where: (r, { and, inArray, isNotNull, ne, eq }) =>
         and(
           followingIds ? inArray(r.userId, followingIds) : undefined,
           isNotNull(r.reviewText),
           ne(r.reviewText, ""),
-          isNotNull(r.collectionId)
+          isNotNull(r.collectionId),
+          eq(r.shareCommentary, true)
         ),
       orderBy: [desc(ratings.updatedAt)],
       limit: limit * 2,

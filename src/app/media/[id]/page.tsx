@@ -9,6 +9,7 @@ import { getServerSession } from "@/lib/server-session";
 import { getBlockedUserIds } from "@/lib/safety";
 import { ArrowLeft, Star, Film, Tv, MessageSquare, ExternalLink, EyeOff } from "lucide-react";
 import { WriteReviewButton } from "@/components/reviews/write-review-button";
+import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
 
 export default async function MediaDetailsPage({
   params,
@@ -218,7 +219,8 @@ export default async function MediaDetailsPage({
             eq(r.mediaItemId, media!.id),
             isNotNull(r.reviewText),
             ne(r.reviewText, ""),
-            isNotNull(r.collectionId)
+            isNotNull(r.collectionId),
+            eq(r.shareCommentary, true)
           ),
         orderBy: [desc(ratings.updatedAt)],
         columns: {
@@ -530,9 +532,12 @@ export default async function MediaDetailsPage({
                           </Link>
                         </h4>
                       )}
-                      <p className="text-xs sm:text-sm text-foreground/90 leading-relaxed whitespace-pre-line">
-                        &ldquo;{rev.reviewText}&rdquo;
-                      </p>
+                      <SpoilerConcealedText
+                        content={rev.reviewText}
+                        isSpoiler={rev.isSpoiler}
+                        quoteStyle={true}
+                        className="text-xs sm:text-sm text-foreground/90 leading-relaxed whitespace-pre-line italic"
+                      />
                       {rev.reviewType === "independent" && (
                         <div className="pt-1">
                           <Link

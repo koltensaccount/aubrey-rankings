@@ -206,6 +206,7 @@ describe("Phase 7: Post-Phase-6 Stabilization and Acceptance Repair", () => {
       collectionId: publicColId,
       reviewText: "Phenomenal cinematic storytelling.",
       personalNotes: "Top secret curator notes: watched with pop-corn.",
+      shareCommentary: true,
       sourceRating: 9.5,
     });
 
