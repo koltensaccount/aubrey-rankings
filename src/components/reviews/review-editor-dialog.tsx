@@ -153,7 +153,7 @@ export function ReviewEditorDialog({
 
     try {
       if (journalMode) {
-        const shouldSaveWriting = Boolean(existingReview?.id || title.trim() || content.trim() || targetStatus === "draft");
+        const shouldSaveWriting = Boolean(existingReview?.id || title.trim() || content.trim());
         const res = await fetch("/api/journal", {
           method: "POST",
           headers: { "Content-Type": "application/json" },

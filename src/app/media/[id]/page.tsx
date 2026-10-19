@@ -139,17 +139,22 @@ export default async function MediaDetailsPage({
 
   // Fetch published public first-class reviews and legacy collection reviews
   const isEphemeral = typeof media.id === "string" && media.id.startsWith("tmdb-");
-  const ownerGlobalRating = session && !isEphemeral
+  const syntheticMatch = isEphemeral ? /^tmdb-(movie|tv)-(\d+)$/.exec(media.id) : null;
+  const restoredMedia = syntheticMatch ? await db.query.mediaItems.findFirst({
+    where: (m, { and, eq }) => and(eq(m.tmdbId, Number(syntheticMatch[2])), eq(m.mediaType, syntheticMatch[1])),
+  }) : null;
+  const journalMediaId = restoredMedia?.id ?? media.id;
+  const ownerGlobalRating = session
     ? await db.query.ratings.findFirst({
-        where: (r, { and, eq, isNull }) => and(eq(r.userId, session.user.id), eq(r.mediaItemId, media!.id), isNull(r.collectionId)),
+        where: (r, { and, eq, isNull }) => and(eq(r.userId, session.user.id), eq(r.mediaItemId, journalMediaId), isNull(r.collectionId)),
         with: { categoryScores: true },
       })
     : null;
-  const ownerJournalReview = session && !isEphemeral
+  const ownerJournalReview = session
     ? await db.query.reviews.findFirst({
         where: (rv, { and, eq, or }) => and(
           eq(rv.userId, session.user.id),
-          eq(rv.mediaItemId, media!.id),
+          eq(rv.mediaItemId, journalMediaId),
           eq(rv.isJournal, true),
           ownerGlobalRating ? or(eq(rv.ratingId, ownerGlobalRating.id), isNull(rv.ratingId)) : isNull(rv.ratingId)
         ),
@@ -158,12 +163,10 @@ export default async function MediaDetailsPage({
     : null;
 
   // 1. First-class published reviews
-  const rawFirstClassReviews = isEphemeral
-    ? []
-    : await db.query.reviews.findMany({
+  const rawFirstClassReviews = await db.query.reviews.findMany({
         where: (rv, { and, eq }) =>
           and(
-            eq(rv.mediaItemId, media!.id),
+            eq(rv.mediaItemId, journalMediaId),
             eq(rv.status, "published"),
             eq(rv.visibility, "public")
           ),
@@ -334,7 +337,7 @@ export default async function MediaDetailsPage({
             </div>
 
             <WriteReviewButton
-              mediaItemId={media.id}
+              mediaItemId={journalMediaId}
               mediaTitle={media.title}
               posterPath={media.posterPath}
               initialQuickScore={ownerGlobalRating?.calculatedOverallScore ?? null}
@@ -362,7 +365,7 @@ export default async function MediaDetailsPage({
               </p>
               <div className="pt-2 flex items-center justify-center gap-3 flex-wrap">
                 <WriteReviewButton
-                  mediaItemId={media.id}
+                  mediaItemId={journalMediaId}
                   mediaTitle={media.title}
                   posterPath={media.posterPath}
                   initialQuickScore={ownerGlobalRating?.calculatedOverallScore ?? null}
