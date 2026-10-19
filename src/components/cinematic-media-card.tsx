@@ -17,112 +17,47 @@ export function CinematicMediaCard({
   posterPath,
   title,
   className = "",
-  aspect = "video",
+  aspect = "auto",
 }: CinematicMediaCardProps) {
-  const [imgError, setImgError] = useState(false);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  const hasStill = Boolean(stillPath?.trim());
+  const hasPoster = Boolean(posterPath?.trim());
+  const targetAspect = aspect === "auto" ? (hasStill ? "video" : "poster") : aspect;
+  const useStill = hasStill && (targetAspect === "video" || !hasPoster);
+  const src = useStill
+    ? resolveStillUrl(stillPath, "w500")
+    : hasPoster ? resolvePosterUrl(posterPath, "w500") : null;
 
-  const hasStill = Boolean(stillPath && stillPath.trim() !== "");
-  const hasPoster = Boolean(posterPath && posterPath.trim() !== "");
-
-  // If aspect is auto:
-  // If still exists, video aspect. If only poster exists, poster aspect.
-  const targetAspect =
-    aspect === "auto" ? (hasStill ? "video" : "poster") : aspect;
-
-  // Case 1: Neither still nor poster exists, or image errored
-  if ((!hasStill && !hasPoster) || imgError) {
-    return (
-      <div
-        className={`${
-          targetAspect === "poster" ? "aspect-[2/3]" : "aspect-video"
-        } w-full rounded overflow-hidden bg-card border border-border flex flex-col items-center justify-center p-3 text-center text-muted-foreground ${className}`}
-      >
-        <Film size={20} className="text-muted-foreground/60 mb-1.5 shrink-0" />
-        <span className="text-[10px] uppercase tracking-wider font-semibold line-clamp-2 text-foreground/80">
-          {title}
-        </span>
-      </div>
-    );
-  }
-
-  // Case 2: We have a true 16:9 still and targetAspect is "video"
-  if (hasStill && targetAspect === "video") {
-    const src = resolveStillUrl(stillPath, "w500");
-    return (
-      <div
-        className={`aspect-video w-full rounded overflow-hidden bg-black relative border border-border/60 ${className}`}
-      >
-        <img
-          src={src}
-          alt={title}
-          onError={() => setImgError(true)}
-          className="w-full h-full object-cover"
-        />
-      </div>
-    );
-  }
-
-  // Case 3: We have a poster and targetAspect is "poster" (2:3)
-  if (hasPoster && targetAspect === "poster") {
-    const src = resolvePosterUrl(posterPath, "w500");
-    return (
-      <div
-        className={`aspect-[2/3] w-full rounded overflow-hidden bg-black relative border border-border/80 ${className}`}
-      >
-        <img
-          src={src}
-          alt={title}
-          onError={() => setImgError(true)}
-          className="w-full h-full object-cover"
-        />
-      </div>
-    );
-  }
-
-  // Case 4: We only have a portrait poster (e.g. Movie in an episode-style 16:9 container).
-  // DO NOT stretch or clumsily crop! Render Kodi/Plex style blurred backdrop + centered 2:3 poster.
-  if (hasPoster && targetAspect === "video") {
-    const posterSrc = resolvePosterUrl(posterPath, "w500");
-    return (
-      <div
-        className={`aspect-video w-full rounded overflow-hidden bg-background relative border border-border ${className}`}
-      >
-        {/* Ambient blurred backdrop fill */}
-        <img
-          src={posterSrc}
-          alt=""
-          aria-hidden="true"
-          className="w-full h-full object-cover scale-150 filter blur-xl opacity-35"
-        />
-        <div className="absolute inset-0 bg-black/40" />
-
-        {/* Centered crisp native 2:3 poster */}
-        <div className="absolute inset-0 flex items-center justify-center p-1.5">
-          <img
-            src={posterSrc}
-            alt={title}
-            onError={() => setImgError(true)}
-            className="h-full w-auto max-w-full aspect-[2/3] object-cover rounded shadow-lg border border-border"
-          />
-        </div>
-      </div>
-    );
-  }
-
-  // Fallback if stillPath is used in poster mode
-  const fallbackSrc = resolveStillUrl(stillPath || posterPath, "w500");
   return (
     <div
-      className={`${
-        targetAspect === "poster" ? "aspect-[2/3]" : "aspect-video"
-      } w-full rounded overflow-hidden bg-black relative ${className}`}
+      className={`${targetAspect === "poster" ? "aspect-[2/3]" : "aspect-video"} w-full rounded overflow-hidden bg-surface relative border border-border ${className}`}
     >
-      <img
-        src={fallbackSrc}
-        alt={title}
-        onError={() => setImgError(true)}
-        className="w-full h-full object-cover"
-      />
+      {src && failedSrc !== src ? (
+        <>
+          {/* Only this decorative layer crops; the primary artwork stays intact. */}
+          <img
+            src={src}
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+            className="absolute inset-0 w-full h-full object-cover scale-110 blur-xl opacity-25 pointer-events-none"
+          />
+          <img
+            src={src}
+            alt={title}
+            draggable={false}
+            onError={() => setFailedSrc(src)}
+            className="absolute inset-0 w-full h-full object-contain"
+          />
+        </>
+      ) : (
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-2 text-center text-muted-foreground" role="img" aria-label={`${title}: artwork unavailable`}>
+          <Film size={20} className="text-muted-foreground/60 mb-1.5 shrink-0" />
+          <span className="text-[10px] uppercase tracking-wider font-semibold line-clamp-2 text-foreground/80">
+            {title}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

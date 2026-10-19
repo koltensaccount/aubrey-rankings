@@ -10,8 +10,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Loader2, Globe, Link2, Lock, EyeOff, Trash2 } from "lucide-react";
-import { getTmdbImageUrl } from "@/lib/tmdb";
-import { resolvePosterUrl } from "@/lib/artwork";
+import { CinematicMediaCard } from "@/components/cinematic-media-card";
 
 export interface ReviewEditorData {
   id?: string;
@@ -169,18 +168,15 @@ export function ReviewEditorDialog({
     }
   };
 
-  const posterUrl = posterPath ? resolvePosterUrl(posterPath, "w185") : null;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && !saving && onClose()}>
       <DialogContent className="max-w-2xl bg-card border border-border text-foreground p-6 rounded-2xl shadow-2xl">
         <DialogHeader className="space-y-1">
           <div className="flex items-center gap-3">
-            {posterUrl && (
-              <div className="w-10 h-14 rounded overflow-hidden bg-surface border border-border flex-shrink-0">
-                <img src={posterUrl} alt="" className="w-full h-full object-cover" />
-              </div>
-            )}
+            <div className="w-10 flex-shrink-0">
+              <CinematicMediaCard posterPath={posterPath} title={mediaTitle} aspect="poster" />
+            </div>
             <div>
               <DialogTitle className="font-display text-xl uppercase font-bold tracking-tight text-foreground">
                 {isEditing ? "Edit Review" : "Write a Review"}

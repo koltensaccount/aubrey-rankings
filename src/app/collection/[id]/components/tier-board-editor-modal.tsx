@@ -38,6 +38,7 @@ import {
   ArrowUpDown,
   Sparkles,
 } from "lucide-react";
+import { getMediaArtworkAspect } from "@/lib/artwork";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 
 interface TierBoardEditorModalProps {
@@ -106,7 +107,7 @@ function SortableMediaCard({
   };
 
   const media = entry?.mediaItem || {};
-  const isStill = media.mediaType === "episode" || Boolean(media.stillPath);
+  const isStill = getMediaArtworkAspect(media) === "video";
   const isEpisode =
     (media.mediaType === "episode" || media.seasonNumber != null || media.episodeNumber != null) &&
     media.seasonNumber != null &&
