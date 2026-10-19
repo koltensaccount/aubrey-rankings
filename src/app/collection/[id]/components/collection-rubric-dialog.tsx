@@ -2,7 +2,7 @@
 
 import React, { useState } from "react";
 import { Check, Loader2, X, Plus, Trash2, ArrowUp, ArrowDown, Layers, Sliders } from "lucide-react";
-import { CinematicSlider } from "@/components/cinematic-slider";
+import { RubricCategoryFields } from "@/components/rating/rubric-category-fields";
 import {
   Dialog,
   DialogContent,
@@ -300,27 +300,16 @@ export function CollectionRubricDialog({
                 key={cat.id || idx}
                 className="p-3.5 rounded-lg border border-border bg-surface flex items-center justify-between gap-4"
               >
-                <span className="font-semibold text-xs text-foreground flex-1">
-                  {cat.name}
-                </span>
-                <div className="w-44">
-                  <CinematicSlider
-                    min={0}
-                    max={10}
-                    step={0.5}
-                    value={cat.weight}
-                    onChange={(val) => {
-                      onCategoriesChange((prev) =>
-                        prev.map((c, i) => (i === idx ? { ...c, weight: val ?? 1 } : c))
-                      );
-                    }}
-                    allowUnset={false}
-                    showValue={true}
-                    valueSuffix="x"
-                    size="sm"
-                    ariaLabel={`Weight for ${cat.name}`}
-                  />
-                </div>
+                <RubricCategoryFields
+                  name={cat.name}
+                  weight={cat.weight}
+                  onNameChange={(name) => onCategoriesChange((prev) =>
+                    prev.map((c, i) => i === idx ? { ...c, name } : c)
+                  )}
+                  onWeightChange={(weight) => onCategoriesChange((prev) =>
+                    prev.map((c, i) => i === idx ? { ...c, weight } : c)
+                  )}
+                />
               </div>
             ))
           )}
