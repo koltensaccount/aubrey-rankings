@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { db } from "@/db";
 import { mediaItems, ratings, collections, user, reviews } from "@/db/schema";
-import { eq, and, isNotNull, ne, desc } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, ne, desc } from "drizzle-orm";
 import { getTmdbImageUrl, tmdb } from "@/lib/tmdb";
 import { resolvePosterUrl } from "@/lib/artwork";
 import { getServerSession } from "@/lib/server-session";
@@ -139,6 +139,22 @@ export default async function MediaDetailsPage({
 
   // Fetch published public first-class reviews and legacy collection reviews
   const isEphemeral = typeof media.id === "string" && media.id.startsWith("tmdb-");
+  const ownerGlobalRating = session && !isEphemeral
+    ? await db.query.ratings.findFirst({
+        where: (r, { and, eq, isNull }) => and(eq(r.userId, session.user.id), eq(r.mediaItemId, media!.id), isNull(r.collectionId)),
+      })
+    : null;
+  const ownerJournalReview = session && !isEphemeral
+    ? await db.query.reviews.findFirst({
+        where: (rv, { and, eq, or }) => and(
+          eq(rv.userId, session.user.id),
+          eq(rv.mediaItemId, media!.id),
+          eq(rv.isJournal, true),
+          ownerGlobalRating ? or(eq(rv.ratingId, ownerGlobalRating.id), isNull(rv.ratingId)) : isNull(rv.ratingId)
+        ),
+        orderBy: [desc(reviews.updatedAt)],
+      })
+    : null;
 
   // 1. First-class published reviews
   const rawFirstClassReviews = isEphemeral
@@ -254,7 +270,7 @@ export default async function MediaDetailsPage({
 
         <div className="absolute top-6 left-4 sm:left-8 z-20">
           <Link
-            href="/explore"
+            href="/discover"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card/80 backdrop-blur-sm text-xs font-semibold text-foreground hover:bg-surface transition-colors"
           >
             <ArrowLeft size={13} />
@@ -320,6 +336,19 @@ export default async function MediaDetailsPage({
               mediaItemId={media.id}
               mediaTitle={media.title}
               posterPath={media.posterPath}
+              initialQuickScore={ownerGlobalRating?.calculatedOverallScore ?? null}
+              existingReview={ownerJournalReview ? {
+                id: ownerJournalReview.id,
+                title: ownerJournalReview.title,
+                content: ownerJournalReview.content,
+                draftContent: ownerJournalReview.draftContent,
+                contentFormat: ownerJournalReview.contentFormat as "plain" | "markdown",
+                draftContentFormat: ownerJournalReview.draftContentFormat as "plain" | "markdown" | null,
+                status: ownerJournalReview.status as "draft" | "published" | "unpublished",
+                visibility: ownerJournalReview.visibility as "private" | "unlisted" | "public",
+                isSpoiler: ownerJournalReview.isSpoiler,
+                ratingId: ownerJournalReview.ratingId,
+              } : null}
             />
           </div>
 
@@ -334,6 +363,19 @@ export default async function MediaDetailsPage({
                   mediaItemId={media.id}
                   mediaTitle={media.title}
                   posterPath={media.posterPath}
+                  initialQuickScore={ownerGlobalRating?.calculatedOverallScore ?? null}
+                  existingReview={ownerJournalReview ? {
+                    id: ownerJournalReview.id,
+                    title: ownerJournalReview.title,
+                    content: ownerJournalReview.content,
+                    draftContent: ownerJournalReview.draftContent,
+                    contentFormat: ownerJournalReview.contentFormat as "plain" | "markdown",
+                    draftContentFormat: ownerJournalReview.draftContentFormat as "plain" | "markdown" | null,
+                    status: ownerJournalReview.status as "draft" | "published" | "unpublished",
+                    visibility: ownerJournalReview.visibility as "private" | "unlisted" | "public",
+                    isSpoiler: ownerJournalReview.isSpoiler,
+                    ratingId: ownerJournalReview.ratingId,
+                  } : null}
                 />
                 <Link
                   href={`/create?suggest=${encodeURIComponent(media.title)}`}

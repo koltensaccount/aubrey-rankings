@@ -2,11 +2,12 @@ import Link from "next/link";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
 import { collections, ratings, savedRankings, reviews } from "@/db/schema";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, isNull } from "drizzle-orm";
 import { Plus, ArrowRight, Tv, Film, ListPlus, Bookmark, FileText, PenLine } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { getTopRankedEntries, getRatingSummary } from "@/lib/scoring";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
+import { CinematicMediaCard } from "@/components/cinematic-media-card";
 
 export default async function HomePage() {
   const session = await getServerSession();
@@ -173,7 +174,13 @@ export default async function HomePage() {
       rating: { columns: { calculatedOverallScore: true, sourceRating: true } },
     },
   });
-  const hasLibraryContent = userCollections.length > 0 || userReviews.length > 0 || accessibleSavedCollections.length > 0;
+  const linkedRatingIds = new Set(userReviews.map((review) => review.ratingId).filter(Boolean));
+  const ratingOnlyJournalEntries = (await db.query.ratings.findMany({
+    where: (r, { and, eq, isNull }) => and(eq(r.userId, session.user.id), isNull(r.collectionId)),
+    orderBy: [desc(ratings.updatedAt)],
+    with: { mediaItem: true },
+  })).filter((rating) => !linkedRatingIds.has(rating.id));
+  const hasLibraryContent = userCollections.length > 0 || userReviews.length > 0 || ratingOnlyJournalEntries.length > 0 || accessibleSavedCollections.length > 0;
 
   return (
     <div className="ar-homeContent ar-communityHome">
@@ -457,6 +464,29 @@ export default async function HomePage() {
                   </article>
                 );
               })}
+            </div>
+          </section>
+        )}
+
+        {ratingOnlyJournalEntries.length > 0 && (
+          <section className="space-y-4 pt-6">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
+              <div className="flex items-center gap-2">
+                <FileText size={16} className="text-primary" />
+                <h2 className="font-display text-2xl uppercase text-foreground">Rated in Your Journal</h2>
+              </div>
+              <span className="text-xs text-muted-foreground">{ratingOnlyJournalEntries.length} entries</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {ratingOnlyJournalEntries.map((rating) => (
+                <Link key={rating.id} href={`/media/${rating.mediaItemId}`} className="rounded-card border border-border bg-card p-4 flex items-center gap-3 hover:border-primary/40 transition-colors">
+                  <CinematicMediaCard posterPath={rating.mediaItem?.posterPath} title={rating.mediaItem?.title || "Media"} aspect="poster" className="w-12 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="font-semibold text-sm text-foreground truncate">{rating.mediaItem?.title}</h3>
+                    <p className="text-xs text-muted-foreground mt-1">Rating only · {rating.calculatedOverallScore !== null ? `★ ${rating.calculatedOverallScore.toFixed(1)} / 10` : "Unrated"}</p>
+                  </div>
+                </Link>
+              ))}
             </div>
           </section>
         )}

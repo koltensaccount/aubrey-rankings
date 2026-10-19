@@ -5,12 +5,15 @@ import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { Pencil, Plus } from "lucide-react";
 import { ReviewEditorDialog } from "./review-editor-dialog";
+import type { ReviewEditorData } from "./review-editor-dialog";
 
 interface WriteReviewButtonProps {
   mediaItemId: string;
   mediaTitle: string;
   posterPath?: string | null;
   className?: string;
+  existingReview?: ReviewEditorData | null;
+  initialQuickScore?: number | null;
 }
 
 export function WriteReviewButton({
@@ -18,6 +21,8 @@ export function WriteReviewButton({
   mediaTitle,
   posterPath,
   className,
+  existingReview,
+  initialQuickScore,
 }: WriteReviewButtonProps) {
   const router = useRouter();
   const { data: session } = useSession();
@@ -38,7 +43,7 @@ export function WriteReviewButton({
         }
       >
         <Pencil size={13} />
-        <span>Write a Review</span>
+        <span>{existingReview || initialQuickScore !== null ? "Edit Journal Entry" : "Add to Journal"}</span>
       </button>
 
       <ReviewEditorDialog
@@ -47,6 +52,9 @@ export function WriteReviewButton({
         mediaItemId={mediaItemId}
         mediaTitle={mediaTitle}
         posterPath={posterPath}
+        existingReview={existingReview}
+        initialQuickScore={initialQuickScore}
+        journalMode
         onSaved={(createdReview) => {
           if (createdReview?.id) {
             router.push(`/review/${createdReview.id}`);

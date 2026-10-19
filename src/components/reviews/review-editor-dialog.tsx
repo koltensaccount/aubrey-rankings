@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Dialog,
   DialogContent,
@@ -13,6 +13,7 @@ import { Loader2, Globe, Link2, Lock, EyeOff, Trash2, Bold, Italic, List, ListOr
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { MarkdownRenderer, ReviewContentFormat } from "@/components/reviews/markdown-renderer";
 import { prefixMarkdownLines } from "@/components/reviews/markdown-formatting";
+import { CinematicSlider } from "@/components/cinematic-slider";
 
 export interface ReviewEditorData {
   id?: string;
@@ -39,6 +40,8 @@ interface ReviewEditorDialogProps {
   existingReview?: ReviewEditorData | null;
   onSaved: (savedReview: any) => void;
   onDeleted?: (deletedId: string) => void;
+  journalMode?: boolean;
+  initialQuickScore?: number | null;
 }
 
 export function ReviewEditorDialog({
@@ -50,6 +53,8 @@ export function ReviewEditorDialog({
   existingReview,
   onSaved,
   onDeleted,
+  journalMode = false,
+  initialQuickScore = null,
 }: ReviewEditorDialogProps) {
   const isEditing = Boolean(existingReview?.id);
   const [title, setTitle] = useState(existingReview?.title || "");
@@ -71,6 +76,12 @@ export function ReviewEditorDialog({
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [quickScore, setQuickScore] = useState<number | null>(initialQuickScore);
+  const [quickScoreTouched, setQuickScoreTouched] = useState(false);
+  const [scoringMethod, setScoringMethod] = useState<"quick" | "detailed">("quick");
+  const [ratingSystems, setRatingSystems] = useState<any[]>([]);
+  const [ratingSystemId, setRatingSystemId] = useState("");
+  const [categoryValues, setCategoryValues] = useState<Record<string, number | null>>({});
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -79,13 +90,24 @@ export function ReviewEditorDialog({
       setContent(existingReview?.draftContent || existingReview?.content || "");
       setContentFormat(existingReview?.draftContent ? existingReview.draftContentFormat || existingReview.contentFormat || "plain" : existingReview?.contentFormat || "markdown");
       setMode("write");
-      setVisibility(existingReview?.visibility || "public");
+      setVisibility(existingReview?.visibility || (journalMode ? "private" : "public"));
       setIsSpoiler(existingReview?.isSpoiler || false);
       setAttachRating(Boolean(existingReview?.id && existingReview?.ratingId));
       setError(null);
       setShowDeleteConfirm(false);
+      setQuickScore(initialQuickScore);
+      setQuickScoreTouched(false);
+      setScoringMethod("quick");
+      setRatingSystemId("");
+      setCategoryValues({});
     }
-  }, [isOpen, existingReview]);
+  }, [isOpen, existingReview, initialQuickScore, journalMode]);
+
+  useEffect(() => {
+    if (!isOpen || !journalMode) return;
+    fetch("/api/rating-systems").then((response) => response.ok ? response.json() : []).then((systems) => setRatingSystems(Array.isArray(systems) ? systems.filter((system) => system.type === "numerical") : [])).catch(() => setRatingSystems([]));
+  }, [isOpen, journalMode]);
+  const selectedSystem = useMemo(() => ratingSystems.find((system) => system.id === ratingSystemId), [ratingSystems, ratingSystemId]);
 
   const isCurrentlyPublished = existingReview?.status === "published";
 
@@ -119,7 +141,7 @@ export function ReviewEditorDialog({
   }, [isOpen, content]);
 
   const handleSave = async (targetStatus: "draft" | "published" | "unpublished") => {
-    if (targetStatus === "published" && !content.trim()) {
+    if (targetStatus === "published" && !content.trim() && (!journalMode || (scoringMethod === "quick" ? quickScore === null : !selectedSystem))) {
       setError("Review content cannot be empty when publishing.");
       return;
     }
@@ -128,6 +150,35 @@ export function ReviewEditorDialog({
     setError(null);
 
     try {
+      if (journalMode) {
+        const shouldSaveWriting = Boolean(existingReview?.id || title.trim() || content.trim() || targetStatus === "draft");
+        const res = await fetch("/api/journal", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            mediaItemId,
+            quickScore: scoringMethod === "quick" && quickScoreTouched ? quickScore : undefined,
+            detailedRating: scoringMethod === "detailed" && selectedSystem ? { ratingSystemId, scores: categoryValues } : undefined,
+            clearRating: scoringMethod === "quick" && quickScoreTouched && quickScore === null,
+            review: shouldSaveWriting ? {
+              id: existingReview?.id,
+              title: title.trim() || null,
+              content,
+              status: targetStatus === "published" ? "published" : "draft",
+              visibility,
+              isSpoiler,
+            } : undefined,
+          }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || "Failed to save journal entry");
+        }
+        const data = await res.json();
+        onSaved(data.review || data.rating);
+        onClose();
+        return;
+      }
       if (isEditing) {
         const res = await fetch(`/api/reviews/${existingReview!.id}`, {
           method: "PATCH",
@@ -223,7 +274,7 @@ export function ReviewEditorDialog({
             </div>
             <div className="min-w-0">
               <DialogTitle className="font-display text-xl uppercase font-bold tracking-tight text-foreground">
-                {isEditing ? "Edit Review" : "Write a Review"}
+                {journalMode ? (isEditing ? "Edit Journal Entry" : "Add to Journal") : isEditing ? "Edit Review" : "Write a Review"}
               </DialogTitle>
               <DialogDescription className="text-xs text-muted-foreground break-words line-clamp-2">
                 {mediaTitle}
@@ -240,6 +291,19 @@ export function ReviewEditorDialog({
         )}
 
         <div className="space-y-4 pt-2">
+          {journalMode && (
+            <div className="space-y-2 rounded-card border border-border bg-surface/50 p-3.5">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">Rating <span className="text-muted-foreground normal-case font-normal">(optional)</span></h3>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Leave unset for writing only.</p>
+                </div>
+                {scoringMethod === "quick" && quickScore !== null && <button type="button" onClick={() => { setQuickScore(null); setQuickScoreTouched(true); }} className="text-[11px] font-semibold text-muted-foreground hover:text-foreground">Clear</button>}
+              </div>
+              <div className="flex gap-2 text-xs font-semibold"><button type="button" onClick={() => setScoringMethod("quick")} className={scoringMethod === "quick" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}>Quick score</button><button type="button" onClick={() => setScoringMethod("detailed")} className={scoringMethod === "detailed" ? "text-foreground" : "text-muted-foreground hover:text-foreground"}>Detailed rubric</button></div>
+              {scoringMethod === "quick" ? <CinematicSlider value={quickScore} min={0} max={10} step={0.5} valuePrecision={1} valueSuffix="/10" showValue ariaLabel="Quick rating out of 10" onChange={(value) => { setQuickScore(value); setQuickScoreTouched(true); }} /> : <div className="space-y-2"><select value={ratingSystemId} onChange={(event) => { setRatingSystemId(event.target.value); setCategoryValues({}); }} className="w-full rounded-input border border-border-input bg-surface px-3 py-2 text-sm text-foreground"><option value="">Choose a numerical rubric</option>{ratingSystems.map((system) => <option key={system.id} value={system.id}>{system.name}</option>)}</select>{selectedSystem?.categories?.map((category: any) => <div key={category.id} className="space-y-1"><div className="flex justify-between text-[11px] text-muted-foreground"><span>{category.name}</span><span>{category.weight.toFixed(1)}×</span></div><CinematicSlider value={categoryValues[category.id] ?? null} min={0} max={selectedSystem.scale || 10} step={0.5} valuePrecision={1} ariaLabel={`${category.name} score`} onChange={(value) => setCategoryValues((previous) => ({ ...previous, [category.id]: value }))} /></div>)}</div>}
+            </div>
+          )}
           {/* Review Title / Headline */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
@@ -479,11 +543,11 @@ export function ReviewEditorDialog({
             <button
               type="button"
               onClick={() => handleSave("published")}
-              disabled={saving || deleting || !content.trim()}
+              disabled={saving || deleting || (!journalMode && !content.trim()) || (journalMode && !content.trim() && (scoringMethod === "quick" ? quickScore === null : !selectedSystem))}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-primary text-primary-foreground text-xs font-bold hover:bg-primary-hover transition-colors cursor-pointer disabled:opacity-50"
             >
               {saving ? <Loader2 size={13} className="animate-spin" /> : null}
-              <span>{isCurrentlyPublished ? "Save & Update" : "Publish Review"}</span>
+              <span>{journalMode ? "Save Journal Entry" : isCurrentlyPublished ? "Save & Update" : "Publish Review"}</span>
             </button>
           </div>
         </DialogFooter>

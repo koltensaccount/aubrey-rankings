@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 const isContentFormat = (value: unknown): value is "plain" | "markdown" =>
   value === "plain" || value === "markdown";
 
-async function resolveMediaItem(mediaId: string): Promise<string | null> {
+export async function resolveMediaItem(mediaId: string): Promise<string | null> {
   // 1. Direct DB lookup by id
   const existing = await db.query.mediaItems.findFirst({
     where: eq(mediaItems.id, mediaId),
