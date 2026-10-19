@@ -303,10 +303,11 @@ describe("Phase 7: Post-Phase-6 Stabilization and Acceptance Repair", () => {
 
   it("1b. TMDB Media Resolution: unpersisted TMDB lookup does not create database records", async () => {
     const unpersistedTmdbId = 99999999;
-    const initialCountRes = await db
-      .select({ count: db.$count(mediaItems) })
-      .from(mediaItems);
-    const initialCount = Number(initialCountRes[0]?.count || 0);
+    const initialCount = await db.$count(
+      mediaItems,
+      eq(mediaItems.tmdbId, unpersistedTmdbId)
+    );
+    assert.equal(initialCount, 0, "Requested TMDB media must not already be persisted");
 
     // Request non-existent / external TMDB id
     const req = makeRequest(
@@ -315,12 +316,13 @@ describe("Phase 7: Post-Phase-6 Stabilization and Acceptance Repair", () => {
     );
     const res = await getMediaReviews(req, { params: Promise.resolve({ id: String(unpersistedTmdbId) }) });
     // Handled gracefully (either 404 or in-memory view, but NEVER inserting into DB)
-    const afterCountRes = await db
-      .select({ count: db.$count(mediaItems) })
-      .from(mediaItems);
-    const afterCount = Number(afterCountRes[0]?.count || 0);
+    // Other test files may insert unrelated media concurrently; only this lookup matters.
+    const afterCount = await db.$count(
+      mediaItems,
+      eq(mediaItems.tmdbId, unpersistedTmdbId)
+    );
 
-    assert.equal(afterCount, initialCount, "Visiting a media page must not insert new records into media_items");
+    assert.equal(afterCount, 0, "Visiting a media page must not persist the requested TMDB media item");
   });
 
   // ==========================================
