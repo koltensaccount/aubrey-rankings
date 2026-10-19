@@ -93,7 +93,7 @@ describe("Independent audit: privacy and data integrity", () => {
       );
   });
   it("public reviews omit private/unlisted collections and personal notes", async () => {
-    const reviews = await getPublicReviews(owner);
+    const reviews = await getPublicReviews(owner, { includeLegacyRatings: true });
     assert.deepEqual(reviews.map((r) => r.reviewText).sort(), [
       "audit-review-0",
     ]);

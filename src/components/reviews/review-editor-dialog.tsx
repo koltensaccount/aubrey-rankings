@@ -22,6 +22,9 @@ export interface ReviewEditorData {
   visibility: "public" | "unlisted" | "private";
   isSpoiler: boolean;
   ratingId?: string | null;
+  score?: number | null;
+  tierName?: string | null;
+  tierColor?: string | null;
 }
 
 interface ReviewEditorDialogProps {
@@ -53,6 +56,7 @@ export function ReviewEditorDialog({
     existingReview?.visibility || "public"
   );
   const [isSpoiler, setIsSpoiler] = useState(existingReview?.isSpoiler || false);
+  const [attachRating, setAttachRating] = useState(Boolean(existingReview?.ratingId));
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -64,6 +68,7 @@ export function ReviewEditorDialog({
       setContent(existingReview?.draftContent || existingReview?.content || "");
       setVisibility(existingReview?.visibility || "public");
       setIsSpoiler(existingReview?.isSpoiler || false);
+      setAttachRating(Boolean(existingReview?.ratingId));
       setError(null);
       setShowDeleteConfirm(false);
     }
@@ -94,6 +99,7 @@ export function ReviewEditorDialog({
             status: targetStatus,
             visibility,
             isSpoiler,
+            ratingId: attachRating ? (existingReview?.ratingId || null) : null,
           }),
         });
 
@@ -117,6 +123,7 @@ export function ReviewEditorDialog({
             status: targetStatus,
             visibility,
             isSpoiler,
+            ratingId: attachRating ? (existingReview?.ratingId || null) : null,
           }),
         });
 
@@ -222,6 +229,47 @@ export function ReviewEditorDialog({
               disabled={saving || deleting}
             />
           </div>
+
+          {/* Explicit Rating Attachment Disclosure */}
+          {Boolean(existingReview?.ratingId && (existingReview.score !== null || existingReview.tierName)) && (
+            <div className="p-3 rounded-lg bg-surface border border-border space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="flex items-center gap-2 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={attachRating}
+                    onChange={(e) => setAttachRating(e.target.checked)}
+                    className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer"
+                    disabled={saving || deleting}
+                  />
+                  <span className="text-xs font-semibold text-foreground">
+                    Include rating with this review
+                  </span>
+                </label>
+                <div className="flex items-center gap-1.5 text-xs font-bold text-foreground">
+                  {typeof existingReview?.score === "number" && (
+                    <span>★ {existingReview.score.toFixed(1)}/10</span>
+                  )}
+                  {existingReview?.tierName && (
+                    <span
+                      className="px-2 py-0.5 rounded text-[11px] font-bold border border-border"
+                      style={{
+                        backgroundColor: existingReview.tierColor ? `${existingReview.tierColor}20` : "var(--surface)",
+                        color: existingReview.tierColor || "var(--foreground)",
+                      }}
+                    >
+                      Tier {existingReview.tierName}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {attachRating
+                  ? "Your rating will be publicly visible alongside this review."
+                  : "Your rating will remain private to your ranking and will not be disclosed on this review."}
+              </p>
+            </div>
+          )}
 
           {/* Controls: Visibility & Spoiler */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2 border-t border-border">

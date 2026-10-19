@@ -556,22 +556,19 @@ export function RatingDialog({
               </div>
             )}
 
-            {/* Non-destructive preservation of legacy personal notes if different */}
-            {Boolean(
-              initialRating?.reviewText &&
-              initialRating?.personalNotes &&
-              initialRating.reviewText.trim() !== initialRating.personalNotes.trim()
-            ) && (
+            {/* Access and non-destructive preservation of private personal notes */}
+            {Boolean(initialRating?.personalNotes && initialRating.personalNotes.trim().length > 0) && (
               <div className="pt-2 border-t border-border/70 space-y-1.5">
                 <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span className="font-semibold text-foreground/80">Legacy Personal Notes (Preserved)</span>
-                  <span className="text-[10px]">Private historical note</span>
+                  <span className="font-semibold text-foreground/80">Private Personal Notes (Owner Only)</span>
+                  <span className="text-[10px]">Private to you</span>
                 </div>
                 <textarea
                   rows={2}
                   value={personalNotes}
                   onChange={(e) => setPersonalNotes(e.target.value)}
-                  className="w-full text-xs rounded-input p-2.5 bg-surface/80 border border-border text-foreground leading-relaxed resize-none"
+                  placeholder="Private personal notes..."
+                  className="w-full text-xs rounded-input p-2.5 bg-surface/80 border border-border text-foreground leading-relaxed resize-none focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                 />
               </div>
             )}
@@ -718,6 +715,13 @@ export function RatingDialog({
             visibility: "public",
             isSpoiler: false,
             ratingId: initialRating?.id || null,
+            score: !isTier ? (calculation.weightedScore ?? initialRating?.calculatedOverallScore ?? null) : null,
+            tierName: isTier
+              ? ((ratingSystem?.tiers || []).find((t: any) => t.id === selectedTierId)?.name || null)
+              : null,
+            tierColor: isTier
+              ? ((ratingSystem?.tiers || []).find((t: any) => t.id === selectedTierId)?.color || null)
+              : null,
           }}
           onSaved={() => {
             setShowReviewEditor(false);

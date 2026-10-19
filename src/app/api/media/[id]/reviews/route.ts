@@ -193,88 +193,8 @@ export async function GET(
       collection: null,
     }));
 
-  // 2. Fetch existing collection ratings with reviews (Preserving legitimate legacy display)
-  const rawLegacyRatings = isEphemeral
-    ? []
-    : await db.query.ratings.findMany({
-        where: (r, { and, eq, isNotNull, ne }) =>
-          and(
-            eq(r.mediaItemId, media.id),
-            isNotNull(r.reviewText),
-            ne(r.reviewText, ""),
-            isNotNull(r.collectionId),
-            eq(r.shareCommentary, true)
-          ),
-        orderBy: [desc(ratings.updatedAt)],
-        columns: {
-          personalNotes: false, // Strict privacy: Never expose private notes
-        },
-        with: {
-          user: {
-            columns: {
-              id: true,
-              name: true,
-              username: true,
-              image: true,
-            },
-          },
-          collection: {
-            columns: {
-              id: true,
-              title: true,
-              visibility: true,
-            },
-          },
-          ratingSystem: {
-            columns: {
-              scale: true,
-            },
-          },
-        },
-      });
-
-  // Filter to reviews in public collections only (excluding unlisted and private) and not blocked
-  const legacyCollectionReviews = rawLegacyRatings
-    .filter(
-      (r) =>
-        r.collection &&
-        r.collection.visibility === "public" &&
-        !blockedUserIds.has(r.userId)
-    )
-    .map((r) => ({
-      id: r.id,
-      reviewType: "collection" as const,
-      title: null,
-      reviewText: r.reviewText,
-      score: r.calculatedOverallScore ?? r.sourceRating ?? null,
-      scale: r.ratingSystem?.scale ?? 10,
-      tier: null,
-      isSpoiler: false,
-      watchDate: r.watchDate,
-      publishedAt: r.updatedAt,
-      updatedAt: r.updatedAt,
-      createdAt: r.createdAt,
-      author: {
-        id: r.user.id,
-        name: r.user.name,
-        username: r.user.username,
-        image: r.user.image,
-      },
-      collection: {
-        id: r.collection!.id,
-        title: r.collection!.title,
-      },
-    }));
-
-  // Combine reviews: first-class reviews first, then collection reviews
-  const combinedReviews = [...firstClassReviews, ...legacyCollectionReviews];
-  combinedReviews.sort((a, b) => {
-    const timeA = new Date(a.publishedAt || a.updatedAt || a.createdAt).getTime();
-    const timeB = new Date(b.publishedAt || b.updatedAt || b.createdAt).getTime();
-    return timeB - timeA;
-  });
-
-  const scores = combinedReviews
+  const reviewsList = firstClassReviews;
+  const scores = reviewsList
     .map((r) => r.score)
     .filter((s): s is number => typeof s === "number" && Number.isFinite(s));
 
@@ -295,9 +215,9 @@ export async function GET(
       seasonNumber: media.seasonNumber,
       episodeNumber: media.episodeNumber,
     },
-    reviews: combinedReviews,
+    reviews: reviewsList,
     stats: {
-      totalReviews: combinedReviews.length,
+      totalReviews: reviewsList.length,
       averageScore,
     },
   });

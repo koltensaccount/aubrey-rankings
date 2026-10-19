@@ -266,7 +266,7 @@ export async function POST(request: NextRequest) {
       ? isSpoiler
       : authorUser?.defaultReviewSpoiler ?? false;
 
-  // Verify ratingId if supplied
+  // Explicit rating attachment only: validate ownership if supplied
   let validRatingId: string | null = null;
   if (ratingId && typeof ratingId === "string") {
     const existingRating = await db.query.ratings.findFirst({
@@ -274,16 +274,10 @@ export async function POST(request: NextRequest) {
         and(eq(r.id, ratingId), eq(r.userId, session.user.id), eq(r.mediaItemId, resolvedMediaId)),
       columns: { id: true },
     });
-    if (existingRating) validRatingId = existingRating.id;
-  } else {
-    // Check if user already has an unlinked rating for this media item
-    const existingRating = await db.query.ratings.findFirst({
-      where: (r, { and, eq }) =>
-        and(eq(r.userId, session.user.id), eq(r.mediaItemId, resolvedMediaId)),
-      columns: { id: true },
-      orderBy: [desc(ratings.updatedAt)],
-    });
-    if (existingRating) validRatingId = existingRating.id;
+    if (!existingRating) {
+      return NextResponse.json({ error: "Invalid ratingId or unauthorized" }, { status: 400 });
+    }
+    validRatingId = existingRating.id;
   }
 
   const reviewId = `rev_${randomUUID()}`;

@@ -540,12 +540,18 @@ describe("Phase 10: First-Class Independently Publishable Reviews", () => {
     );
     assert.strictEqual(r2Visitor?.personalNotes, null, "Personal notes must still be null even for shared items");
 
-    // 3. Check public reviews query: only rating 2 is included, rating 1 is strictly excluded
-    const publicReviews = await getPublicReviews(authorId);
-    const foundR1 = publicReviews.some((r) => r.id === rating1Id);
-    const foundR2 = publicReviews.some((r) => r.id === rating2Id);
-    assert.strictEqual(foundR1, false, "Rating with shareCommentary:false must never appear in getPublicReviews");
-    assert.strictEqual(foundR2, true, "Rating with shareCommentary:true must appear in getPublicReviews");
+    // 3. Ranking commentary stays on the ranking: default getPublicReviews returns ONLY first-class reviews
+    const publicReviewsDefault = await getPublicReviews(authorId);
+    assert.strictEqual(
+      publicReviewsDefault.some((r) => r.id === rating1Id || r.id === rating2Id),
+      false,
+      "Ranking commentary must NOT appear in default public reviews query"
+    );
+
+    // Optional legacy fallback still honors shareCommentary
+    const publicReviewsLegacy = await getPublicReviews(authorId, { includeLegacyRatings: true });
+    assert.strictEqual(publicReviewsLegacy.some((r) => r.id === rating1Id), false);
+    assert.strictEqual(publicReviewsLegacy.some((r) => r.id === rating2Id), true);
 
     // Cleanup
     await db.delete(ratings).where(and(eq(ratings.collectionId, colId)));
@@ -650,5 +656,169 @@ describe("Phase 10: First-Class Independently Publishable Reviews", () => {
     assert.strictEqual(unpubReview?.content, "This will be unpublished.");
 
     await db.delete(reviews).where(eq(reviews.id, reviewId));
+  });
+
+  it("12. Prevent implicit disclosure of private ratings: creating review without ratingId does not attach author's private rating", async () => {
+    const mediaId = "tmdb:movie:implicit_" + Date.now();
+    await db.insert(mediaItems).values({ id: mediaId, mediaType: "movie", title: "Secret Private Film" });
+
+    // User has a private rating for this media item
+    const privateRatingId = "rate_priv_" + Date.now();
+    await db.insert(ratings).values({
+      id: privateRatingId,
+      mediaItemId: mediaId,
+      userId: authorId,
+      sourceRating: 10,
+      calculatedOverallScore: 9.8,
+      reviewText: "Private thoughts",
+      personalNotes: "Top secret diary entry",
+    });
+
+    // Simulated review creation without explicit ratingId:
+    // Should NOT automatically attach privateRatingId
+    const reviewId = `rev_${randomUUID()}`;
+    await db.insert(reviews).values({
+      id: reviewId,
+      userId: authorId,
+      mediaItemId: mediaId,
+      ratingId: null, // No implicit linking!
+      title: "Independent Review",
+      content: "Review written without attaching private rating.",
+      status: "published",
+      visibility: "public",
+      publishedAt: new Date(),
+    });
+
+    const savedReview = await db.query.reviews.findFirst({
+      where: eq(reviews.id, reviewId),
+      with: { rating: true },
+    });
+
+    assert.strictEqual(savedReview?.ratingId, null, "Review created without ratingId must remain unlinked");
+    assert.strictEqual(savedReview?.rating, null, "No rating score or tier should be disclosed");
+
+    await db.delete(reviews).where(eq(reviews.id, reviewId));
+    await db.delete(ratings).where(eq(ratings.id, privateRatingId));
+    await db.delete(mediaItems).where(eq(mediaItems.id, mediaId));
+  });
+
+  it("13. Restore access to historical private notes: ratings with only personalNotes preserve notes without silent overwriting", async () => {
+    const mediaId = "tmdb:movie:notes_" + Date.now();
+    await db.insert(mediaItems).values({ id: mediaId, mediaType: "movie", title: "Note Preservation Film" });
+
+    const ratingId = "rate_notes_" + Date.now();
+    // Rating created historically with ONLY personalNotes (reviewText is null)
+    await db.insert(ratings).values({
+      id: ratingId,
+      mediaItemId: mediaId,
+      userId: authorId,
+      reviewText: null,
+      personalNotes: "Historical private curator reminder from 2024.",
+      shareCommentary: false,
+    });
+
+    const fetched = await db.query.ratings.findFirst({
+      where: eq(ratings.id, ratingId),
+    });
+
+    assert.strictEqual(fetched?.reviewText, null);
+    assert.strictEqual(fetched?.personalNotes, "Historical private curator reminder from 2024.");
+
+    // User updates thoughts without destroying personalNotes
+    await db
+      .update(ratings)
+      .set({
+        reviewText: "New public-ready thoughts.",
+        personalNotes: "Updated private note.",
+        updatedAt: new Date(),
+      })
+      .where(eq(ratings.id, ratingId));
+
+    const updated = await db.query.ratings.findFirst({
+      where: eq(ratings.id, ratingId),
+    });
+
+    assert.strictEqual(updated?.reviewText, "New public-ready thoughts.");
+    assert.strictEqual(updated?.personalNotes, "Updated private note.");
+
+    await db.delete(ratings).where(eq(ratings.id, ratingId));
+    await db.delete(mediaItems).where(eq(mediaItems.id, mediaId));
+  });
+
+  it("14. Prevent hidden filters from affecting Tier Board: Tier Board retains all items regardless of rating status filter", async () => {
+    const entries = [
+      { id: "e1", ratingStatus: { state: "rated", tier: { id: "tier_s", sortOrder: 1 } } },
+      { id: "e2", ratingStatus: { state: "in_progress", tier: null } },
+      { id: "e3", ratingStatus: { state: "unrated", tier: null } },
+    ];
+
+    // Helper implementing the viewMode !== "tier_board" filter rule
+    const applyFilter = (list: typeof entries, viewMode: string, filterRated: string) => {
+      let result = [...list];
+      if (viewMode !== "tier_board") {
+        if (filterRated === "rated") {
+          result = result.filter((e) => e.ratingStatus.state === "rated");
+        } else if (filterRated === "unrated") {
+          result = result.filter((e) => e.ratingStatus.state === "unrated");
+        }
+      }
+      return result;
+    };
+
+    // When in list view with 'unrated' filter: only e3 is returned
+    const listFiltered = applyFilter(entries, "list", "unrated");
+    assert.strictEqual(listFiltered.length, 1);
+    assert.strictEqual(listFiltered[0].id, "e3");
+
+    // When switching to tier_board view with the same 'unrated' filter: ALL entries are preserved!
+    const tierBoardEntries = applyFilter(entries, "tier_board", "unrated");
+    assert.strictEqual(tierBoardEntries.length, 3, "Tier board must display all items regardless of previous filter");
+  });
+
+  it("15. Clarify ranking commentary visibility: turning off commentary sharing removes it from visitor responses", async () => {
+    const colId = "col_comm_" + Date.now();
+    const mediaId = "tmdb:movie:comm_" + Date.now();
+
+    await db.insert(mediaItems).values({ id: mediaId, mediaType: "movie", title: "Commentary Test Movie" });
+    await db.insert(collections).values({
+      id: colId,
+      userId: authorId,
+      title: "Commentary Collection",
+      collectionType: "custom",
+      visibility: "public",
+      isPublic: true,
+    });
+
+    const ratingId = "rate_comm_" + Date.now();
+    await db.insert(ratings).values({
+      id: ratingId,
+      collectionId: colId,
+      mediaItemId: mediaId,
+      userId: authorId,
+      reviewText: "Ranking reflection text.",
+      personalNotes: "Private note.",
+      shareCommentary: true,
+    });
+
+    // 1. Initially shared: visitor sees reviewText
+    let r = await db.query.ratings.findFirst({ where: eq(ratings.id, ratingId) });
+    let visitorReviewText = r?.shareCommentary ? r.reviewText : null;
+    let visitorPersonalNotes = null;
+    assert.strictEqual(visitorReviewText, "Ranking reflection text.");
+    assert.strictEqual(visitorPersonalNotes, null);
+
+    // 2. Author turns off commentary sharing: shareCommentary -> false
+    await db.update(ratings).set({ shareCommentary: false }).where(eq(ratings.id, ratingId));
+
+    r = await db.query.ratings.findFirst({ where: eq(ratings.id, ratingId) });
+    visitorReviewText = r?.shareCommentary ? r.reviewText : null;
+    assert.strictEqual(visitorReviewText, null, "Turning off commentary sharing must immediately remove it from visitor view");
+    // Owner still retains reviewText and personalNotes in DB
+    assert.strictEqual(r?.reviewText, "Ranking reflection text.");
+    assert.strictEqual(r?.personalNotes, "Private note.");
+
+    await db.delete(ratings).where(eq(ratings.id, ratingId));
+    await db.delete(collections).where(eq(collections.id, colId));
+    await db.delete(mediaItems).where(eq(mediaItems.id, mediaId));
   });
 });

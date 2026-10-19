@@ -484,14 +484,14 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                     className="text-xs text-foreground/80 leading-relaxed line-clamp-4 italic border-l-2 border-primary/30 pl-2.5"
                   />
                   <div className="pt-1 border-t border-border/60 flex items-center justify-between text-xs">
-                    <span className="text-[11px] text-muted-foreground">
-                      {rev.reviewType === "independent" ? "Standalone Review" : "Ranking Commentary"}
+                    <span className="text-[11px] text-muted-foreground font-medium">
+                      Published Review
                     </span>
                     <Link
                       href={rev.reviewUrl}
                       className="text-xs font-semibold text-primary-text hover:underline inline-flex items-center gap-1"
                     >
-                      <span>{rev.reviewType === "independent" ? "Read Review" : "View in Ranking"}</span>
+                      <span>Read Review</span>
                       <ArrowRight size={12} />
                     </Link>
                   </div>

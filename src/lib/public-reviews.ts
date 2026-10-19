@@ -18,7 +18,10 @@ export interface UnifiedPublicReview {
   mediaItem: any;
 }
 
-export async function getPublicReviews(userId: string): Promise<UnifiedPublicReview[]> {
+export async function getPublicReviews(
+  userId: string,
+  options?: { includeLegacyRatings?: boolean }
+): Promise<UnifiedPublicReview[]> {
   // 1. First-class published public reviews
   const firstClass = await db.query.reviews.findMany({
     where: and(
@@ -27,7 +30,7 @@ export async function getPublicReviews(userId: string): Promise<UnifiedPublicRev
       eq(reviews.visibility, "public")
     ),
     orderBy: [desc(reviews.publishedAt), desc(reviews.createdAt)],
-    limit: 8,
+    limit: 12,
     with: {
       mediaItem: true,
       rating: {
@@ -64,7 +67,11 @@ export async function getPublicReviews(userId: string): Promise<UnifiedPublicRev
     mediaItem: r.mediaItem,
   }));
 
-  // 2. Legacy public collection ratings with explicit sharing consent
+  if (!options?.includeLegacyRatings) {
+    return formattedFirstClass;
+  }
+
+  // 2. Legacy public collection ratings with explicit sharing consent (only when opted-in)
   const publicCollections = await db
     .select({ id: collections.id })
     .from(collections)

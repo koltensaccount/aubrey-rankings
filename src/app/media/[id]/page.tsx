@@ -210,85 +210,7 @@ export default async function MediaDetailsPage({
       collection: null,
     }));
 
-  // 2. Legacy public collection ratings reviews
-  const rawReviews = isEphemeral
-    ? []
-    : await db.query.ratings.findMany({
-        where: (r, { and, eq, isNotNull, ne }) =>
-          and(
-            eq(r.mediaItemId, media!.id),
-            isNotNull(r.reviewText),
-            ne(r.reviewText, ""),
-            isNotNull(r.collectionId),
-            eq(r.shareCommentary, true)
-          ),
-        orderBy: [desc(ratings.updatedAt)],
-        columns: {
-          personalNotes: false, // Strict privacy
-        },
-        with: {
-          user: {
-            columns: {
-              id: true,
-              name: true,
-              username: true,
-              image: true,
-            },
-          },
-          collection: {
-            columns: {
-              id: true,
-              title: true,
-              visibility: true,
-            },
-          },
-          ratingSystem: {
-            columns: {
-              scale: true,
-            },
-          },
-        },
-      });
-
-  // Filter to public collections only and exclude blocked users
-  const legacyCollectionReviews = rawReviews
-    .filter(
-      (r) =>
-        r.collection &&
-        r.collection.visibility === "public" &&
-        !blockedUserIds.has(r.user.id)
-    )
-    .map((r) => ({
-      id: r.id,
-      reviewType: "collection" as const,
-      reviewUrl: `/collection/${r.collection!.id}`,
-      title: null,
-      reviewText: r.reviewText || "",
-      score: r.calculatedOverallScore ?? r.sourceRating ?? null,
-      scale: r.ratingSystem?.scale ?? 10,
-      tier: null,
-      isSpoiler: false,
-      watchDate: r.watchDate,
-      publishedAt: r.updatedAt,
-      updatedAt: r.updatedAt,
-      author: {
-        id: r.user.id,
-        name: r.user.name,
-        username: r.user.username,
-        image: r.user.image,
-      },
-      collection: {
-        id: r.collection!.id,
-        title: r.collection!.title,
-      },
-    }));
-
-  const publicReviews = [...firstClassReviews, ...legacyCollectionReviews];
-  publicReviews.sort((a, b) => {
-    const timeA = new Date(a.publishedAt || a.updatedAt).getTime();
-    const timeB = new Date(b.publishedAt || b.updatedAt).getTime();
-    return timeB - timeA;
-  });
+  const publicReviews = firstClassReviews;
 
   const scores = publicReviews
     .map((r) => r.score)
@@ -482,27 +404,15 @@ export default async function MediaDetailsPage({
                               <span className="text-muted-foreground">@{rev.author.username}</span>
                             )}
                           </div>
-                          {rev.collection ? (
-                            <span className="text-[11px] text-muted-foreground">
-                              from canon:{" "}
-                              <Link
-                                href={rev.reviewUrl}
-                                className="text-primary-text hover:underline"
-                              >
-                                {rev.collection.title}
-                              </Link>
-                            </span>
-                          ) : (
-                            <span className="text-[11px] text-muted-foreground">
-                              Independent Review ·{" "}
-                              <Link
-                                href={rev.reviewUrl}
-                                className="text-primary-text hover:underline"
-                              >
-                                View Dispatch
-                              </Link>
-                            </span>
-                          )}
+                          <span className="text-[11px] text-muted-foreground">
+                            Published Review ·{" "}
+                            <Link
+                              href={rev.reviewUrl}
+                              className="text-primary-text hover:underline"
+                            >
+                              View Dispatch &rarr;
+                            </Link>
+                          </span>
                         </div>
                       </div>
 
