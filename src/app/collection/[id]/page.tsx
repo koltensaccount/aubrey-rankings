@@ -69,6 +69,18 @@ export default function CollectionDetailPage({
 
   // View preferences
   const [viewMode, setViewMode] = useState<"list" | "editorial" | "compact" | "tier_board">("list");
+  const lastInitializedCollectionId = useRef<string | null>(null);
+
+  const handleViewModeChange = useCallback(
+    (mode: "list" | "editorial" | "compact" | "tier_board") => {
+      setViewMode(mode);
+      try {
+        localStorage.setItem(`aubrey_collection_view_${id}`, mode);
+      } catch {}
+    },
+    [id]
+  );
+
   const [sortBy, setSortBy] = useState<SortOption>("score_desc");
   const [filterRated, setFilterRated] = useState<FilterOption>("all");
   const [selectedSeason, setSelectedSeason] = useState<string>("all");
@@ -141,6 +153,11 @@ export default function CollectionDetailPage({
         if (!patchRes.ok) {
           const err = await patchRes.json();
           throw new Error(err.error || "Failed to switch collection rating method");
+        }
+        if (chosenMethod === "tier") {
+          handleViewModeChange("tier_board");
+        } else {
+          handleViewModeChange("list");
         }
         await fetchCollection();
         setShowRubricModal(false);
@@ -535,6 +552,28 @@ export default function CollectionDetailPage({
         }
       }
       setRatingsMap(map);
+
+      // Initialize view mode from user's last saved preference or default by rating method
+      const isTier = data.collection?.defaultRatingSystem?.type === "tier";
+      if (lastInitializedCollectionId.current !== id) {
+        lastInitializedCollectionId.current = id;
+        let savedMode: string | null = null;
+        try {
+          savedMode = localStorage.getItem(`aubrey_collection_view_${id}`);
+        } catch {}
+
+        const validModes = isTier
+          ? ["tier_board", "list", "editorial", "compact"]
+          : ["list", "editorial", "compact"];
+
+        if (savedMode && validModes.includes(savedMode)) {
+          setViewMode(savedMode as any);
+        } else if (isTier) {
+          setViewMode("tier_board");
+        } else {
+          setViewMode("list");
+        }
+      }
     } catch (err: any) {
       setError(err?.message || "An error occurred");
     } finally {
@@ -795,7 +834,7 @@ export default function CollectionDetailPage({
         sortBy={sortBy}
         setSortBy={setSortBy}
         viewMode={viewMode}
-        setViewMode={setViewMode}
+        setViewMode={handleViewModeChange}
         isTierCollection={isTierCollection}
         onOpenTierEditor={() => setShowTierEditor(true)}
       />
