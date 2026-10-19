@@ -135,8 +135,8 @@ export function CollectionRubricDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="max-w-xl p-6 gap-5 bg-card border-border-dialog shadow-dialog rounded-dialog">
-        <DialogHeader className="pb-3 border-b border-border text-left sm:text-left flex flex-row items-center gap-2.5 space-y-0">
+      <DialogContent className="max-w-xl flex flex-col overflow-hidden p-4 sm:p-6 gap-5 [&_button]:min-h-11 [&_button]:min-w-11 sm:[&_button]:min-h-0 sm:[&_button]:min-w-0 bg-card border-border-dialog shadow-dialog rounded-dialog">
+        <DialogHeader className="shrink-0 pr-10 pb-3 border-b border-border text-left sm:text-left flex flex-row items-center gap-2.5 space-y-0">
           <div className="w-8 h-8 rounded-lg bg-primary/20 text-primary flex items-center justify-center shrink-0">
             {isTierMode ? <Layers size={18} /> : <Sliders size={18} />}
           </div>
@@ -152,6 +152,7 @@ export function CollectionRubricDialog({
           </div>
         </DialogHeader>
 
+        <div className="min-h-0 overflow-y-auto overscroll-contain space-y-4">
         {/* Evaluation Method Switcher */}
         <div className="space-y-1.5">
           <label className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider block">
@@ -192,13 +193,13 @@ export function CollectionRubricDialog({
         </div>
 
         {/* Content area: Tier Rows OR Numerical Sliders */}
-        <div className="space-y-3 max-h-[50vh] overflow-y-auto pr-1">
+        <div className="space-y-3">
           {isTierMode ? (
             <>
               {tiers.map((tier, idx) => (
                 <div
                   key={tier.id || idx}
-                  className="p-3 rounded-lg border border-border bg-surface flex items-center gap-2.5 sm:gap-3"
+                  className="p-3 rounded-lg border border-border bg-surface flex flex-wrap sm:flex-nowrap items-center gap-2.5 sm:gap-3"
                 >
                   {/* Color Swatch Picker */}
                   <div className="relative shrink-0">
@@ -212,7 +213,7 @@ export function CollectionRubricDialog({
                       style={{ backgroundColor: tier.color }}
                     />
                     {activeColorPickerIdx === idx && (
-                      <div className="absolute left-0 top-10 z-30 p-2 bg-card border border-border rounded-lg shadow-xl grid grid-cols-3 gap-1.5 w-32 backdrop-blur-md">
+                      <div className="absolute left-0 top-10 z-30 p-2 bg-card border border-border rounded-lg shadow-xl grid grid-cols-3 gap-1.5 w-44 sm:w-32 backdrop-blur-md">
                         {COLOR_SWATCHES.map((color) => (
                           <button
                             key={color}
@@ -253,7 +254,7 @@ export function CollectionRubricDialog({
                   </div>
 
                   {/* Reorder and Delete Controls */}
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center justify-end w-full sm:w-auto gap-1 shrink-0">
                     <button
                       type="button"
                       disabled={idx === 0}
@@ -322,7 +323,7 @@ export function CollectionRubricDialog({
               type="checkbox"
               checked={customizeForCollectionOnly}
               onChange={(e) => onCustomizeScopeChange(e.target.checked)}
-              className="rounded border-border text-primary focus:ring-0 accent-primary"
+              className="rounded border-border text-primary focus-visible:outline-2 focus-visible:outline-primary focus-visible:outline-offset-2 accent-primary"
             />
             <span className="text-xs font-semibold text-foreground">
               Customize for this ranking only
@@ -335,7 +336,9 @@ export function CollectionRubricDialog({
           </p>
         </div>
 
-        <div className="flex items-center justify-between pt-3 border-t border-border">
+        </div>
+
+        <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-border">
           <button
             type="button"
             onClick={onClose}
