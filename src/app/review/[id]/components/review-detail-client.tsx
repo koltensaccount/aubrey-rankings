@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   Share2,
@@ -83,6 +83,7 @@ export function ReviewDetailClient({
   currentUserId,
 }: ReviewDetailClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [review, setReview] = useState(initialReview);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [isReportOpen, setIsReportOpen] = useState(false);
@@ -91,6 +92,13 @@ export function ReviewDetailClient({
 
   const isAuthor = currentUserId === review.userId;
   const isDraftOrUnpublished = review.status !== "published";
+
+  useEffect(() => {
+    if (isAuthor && searchParams.get("edit") === "1") {
+      setIsEditorOpen(true);
+      router.replace(`/review/${review.id}`, { scroll: false });
+    }
+  }, [isAuthor, review.id, router, searchParams]);
 
   const handleShare = async () => {
     try {
