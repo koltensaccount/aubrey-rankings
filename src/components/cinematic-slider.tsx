@@ -41,6 +41,7 @@ export function CinematicSlider({
   const pointerStart = useRef<{x:number,value:number|null} | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  const [isKeyboardFocused, setIsKeyboardFocused] = useState(false);
   const [hoverValue, setHoverValue] = useState<number | null>(null);
 
   const isRated = typeof value === "number" && Number.isFinite(value);
@@ -76,6 +77,7 @@ export function CinematicSlider({
     if (disabled || e.button !== 0) return;
     e.preventDefault();
     trackRef.current?.focus();
+    setIsKeyboardFocused(false);
     trackRef.current?.setPointerCapture(e.pointerId);
     pointerStart.current = {x:e.clientX,value};
     setHoverValue(null);
@@ -89,7 +91,7 @@ export function CinematicSlider({
     if (isDragging) {
       const newVal = getValueFromPointer(e.clientX);
       onChange(newVal);
-    } else {
+    } else if (e.pointerType !== "touch") {
       const val = getValueFromPointer(e.clientX);
       setHoverValue(val);
     }
@@ -126,6 +128,7 @@ export function CinematicSlider({
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (disabled) return;
     setHoverValue(null);
+    setIsKeyboardFocused(true);
 
     if (e.key === "ArrowRight" || e.key === "ArrowUp") {
       e.preventDefault();
@@ -170,7 +173,7 @@ export function CinematicSlider({
   const previewPercent = previewValue === null ? 0 : Math.max(0, Math.min(100, ((previewValue - min) / range) * 100));
   const formatValue = (number: number) =>
     `${valuePrecision === undefined ? number : number.toFixed(valuePrecision)}${valueSuffix}`;
-  const showTooltip = !disabled && (isDragging || isFocused || hoverValue !== null);
+  const showTooltip = !disabled && (isDragging || isKeyboardFocused || hoverValue !== null);
 
   return (
     <div className={`relative flex items-center min-h-11 select-none pt-10 pb-4 ${className}`}>
@@ -192,9 +195,13 @@ export function CinematicSlider({
         onPointerCancel={handlePointerCancel}
         onPointerLeave={() => setHoverValue(null)}
         onKeyDown={handleKeyDown}
-        onFocus={() => setIsFocused(true)}
+        onFocus={(event) => {
+          setIsFocused(true);
+          setIsKeyboardFocused(event.currentTarget.matches(":focus-visible"));
+        }}
         onBlur={() => {
           setIsFocused(false);
+          setIsKeyboardFocused(false);
           setHoverValue(null);
         }}
         className={`group/track relative w-full before:absolute before:inset-x-0 before:-inset-y-4 before:content-[''] ${trackHeight} rounded-full cursor-pointer touch-none transition-all ${
