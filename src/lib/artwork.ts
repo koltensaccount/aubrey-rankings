@@ -71,3 +71,13 @@ export function resolveStillUrl(
 ): string {
   return resolveArtworkUrl(path, size, fallback);
 }
+
+/** Explicit media type takes precedence over fallback artwork availability. */
+export function getMediaArtworkAspect(media: {
+  mediaType?: string | null;
+  stillPath?: string | null;
+}): "poster" | "video" {
+  if (media.mediaType === "movie") return "poster";
+  if (media.mediaType === "episode") return "video";
+  return media.stillPath?.trim() ? "video" : "poster";
+}

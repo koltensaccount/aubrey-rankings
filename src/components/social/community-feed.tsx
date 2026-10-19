@@ -15,8 +15,8 @@ import {
   Bookmark,
   Heart,
 } from "lucide-react";
-import { getTmdbImageUrl } from "@/lib/tmdb";
-import { resolvePosterUrl } from "@/lib/artwork";
+import { CinematicMediaCard } from "@/components/cinematic-media-card";
+import { getMediaArtworkAspect } from "@/lib/artwork";
 import { LikeButton } from "@/components/social/like-button";
 import { SaveRankingButton } from "@/components/social/save-ranking-button";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
@@ -389,23 +389,13 @@ export function CommunityFeed({
                     {rk.topEntries.length > 0 && (
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
                         {rk.topEntries.map((entry, idx) => {
-                          const imgUrl = entry.posterPath
-                            ? resolvePosterUrl(entry.posterPath, "w342")
-                            : entry.stillPath
-                              ? getTmdbImageUrl(entry.stillPath, "w300")
-                              : "/placeholders/poster-placeholder.svg";
-
                           return (
                             <div
                               key={entry.id || idx}
                               className="rounded-lg overflow-hidden border border-border bg-surface flex flex-col justify-between"
                             >
-                              <div className="aspect-[16/10] sm:aspect-[2/3] w-full bg-black/60 relative overflow-hidden">
-                                <img
-                                  src={imgUrl}
-                                  alt={entry.title || "Entry"}
-                                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                                />
+                              <div className="w-full bg-surface relative overflow-hidden">
+                                <CinematicMediaCard posterPath={entry.posterPath} stillPath={entry.stillPath} title={entry.title || "Entry"} aspect={rk.collectionType === "tv_show" ? "video" : entry.posterPath ? "poster" : "auto"} />
                                 <span className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full bg-black/80 border border-white/20 text-[10px] font-bold text-white flex items-center justify-center">
                                   {idx + 1}
                                 </span>
@@ -470,9 +460,6 @@ export function CommunityFeed({
               const reviewHref = isIndependent ? `/review/${item.contentId}` : `/collection/${col.id}`;
 
               const isTvEp = md.mediaType === "episode" || Boolean(md.seasonNumber);
-              const stillUrl = md.stillPath ? getTmdbImageUrl(md.stillPath, "w300") : null;
-              const posterUrl = md.posterPath ? resolvePosterUrl(md.posterPath, "w342") : null;
-              const artUrl = stillUrl || posterUrl;
 
               return (
                 <article
@@ -542,18 +529,12 @@ export function CommunityFeed({
 
                   {/* Media Item & Review Presentation */}
                   <div className="flex flex-col sm:flex-row items-start gap-4">
-                    {artUrl && (
-                      <Link
+                    <Link
                         href={reviewHref}
-                        className="w-full sm:w-36 h-24 sm:h-24 rounded-lg overflow-hidden border border-border bg-black shrink-0 relative group"
+                        className={`${getMediaArtworkAspect(md) === "video" ? "w-full sm:w-36" : "w-20 sm:w-24"} rounded-lg overflow-hidden border border-border bg-surface shrink-0 relative group`}
                       >
-                        <img
-                          src={artUrl}
-                          alt={md.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      </Link>
-                    )}
+                        <CinematicMediaCard posterPath={md.posterPath} stillPath={md.stillPath} title={md.title} aspect={getMediaArtworkAspect(md)} />
+                    </Link>
 
                     <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex items-center justify-between gap-2">

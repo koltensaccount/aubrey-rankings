@@ -10,8 +10,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Loader2, Globe, Link2, Lock, EyeOff, Trash2 } from "lucide-react";
-import { getTmdbImageUrl } from "@/lib/tmdb";
-import { resolvePosterUrl } from "@/lib/artwork";
+import { CinematicMediaCard } from "@/components/cinematic-media-card";
 
 export interface ReviewEditorData {
   id?: string;
@@ -169,31 +168,29 @@ export function ReviewEditorDialog({
     }
   };
 
-  const posterUrl = posterPath ? resolvePosterUrl(posterPath, "w185") : null;
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => !open && !saving && onClose()}>
-      <DialogContent className="max-w-2xl bg-card border border-border text-foreground p-6 rounded-2xl shadow-2xl">
-        <DialogHeader className="space-y-1">
+      <DialogContent className="max-w-2xl flex flex-col overflow-hidden bg-card border border-border-dialog text-foreground p-4 sm:p-6 rounded-dialog shadow-dialog [&_button]:min-h-11 sm:[&_button]:min-h-0">
+        <DialogHeader className="space-y-1 shrink-0 pr-10 text-left">
           <div className="flex items-center gap-3">
-            {posterUrl && (
-              <div className="w-10 h-14 rounded overflow-hidden bg-surface border border-border flex-shrink-0">
-                <img src={posterUrl} alt="" className="w-full h-full object-cover" />
-              </div>
-            )}
-            <div>
+            <div className="w-10 flex-shrink-0">
+              <CinematicMediaCard posterPath={posterPath} title={mediaTitle} aspect="poster" />
+            </div>
+            <div className="min-w-0">
               <DialogTitle className="font-display text-xl uppercase font-bold tracking-tight text-foreground">
                 {isEditing ? "Edit Review" : "Write a Review"}
               </DialogTitle>
-              <DialogDescription className="text-xs text-muted-foreground">
+              <DialogDescription className="text-xs text-muted-foreground break-words line-clamp-2">
                 {mediaTitle}
               </DialogDescription>
             </div>
           </div>
         </DialogHeader>
 
+        <div className="min-h-0 overflow-y-auto overscroll-contain space-y-4">
         {error && (
-          <div className="p-3 rounded-lg bg-destructive/15 border border-destructive/30 text-destructive text-xs font-semibold">
+          <div role="alert" className="p-3 rounded-card bg-destructive/15 border border-destructive/30 text-destructive text-xs font-semibold">
             {error}
           </div>
         )}
@@ -209,7 +206,7 @@ export function ReviewEditorDialog({
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="e.g. A bleak, razor-sharp masterpiece of technological dread"
-              className="w-full px-3.5 py-2 rounded-lg bg-surface border border-border text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
+              className="w-full px-3.5 py-2 rounded-input bg-surface border border-border-input text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors"
               disabled={saving || deleting}
             />
           </div>
@@ -227,7 +224,7 @@ export function ReviewEditorDialog({
               value={content}
               onChange={(e) => setContent(e.target.value)}
               placeholder="Write your thoughts, critical analysis, or reaction..."
-              className="w-full px-3.5 py-2.5 rounded-lg bg-surface border border-border text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors resize-y leading-relaxed font-sans"
+              className="w-full px-3.5 py-2.5 rounded-input bg-surface border border-border-input text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary transition-colors resize-y leading-relaxed font-sans"
               disabled={saving || deleting}
             />
           </div>
@@ -284,7 +281,7 @@ export function ReviewEditorDialog({
                 <button
                   type="button"
                   onClick={() => setVisibility("public")}
-                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 border transition-colors cursor-pointer ${
+                  className={`px-2.5 py-1.5 rounded-button text-xs font-semibold flex items-center justify-center gap-1.5 border transition-colors cursor-pointer ${
                     visibility === "public"
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-surface border-border text-muted-foreground hover:text-foreground"
@@ -297,7 +294,7 @@ export function ReviewEditorDialog({
                 <button
                   type="button"
                   onClick={() => setVisibility("unlisted")}
-                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 border transition-colors cursor-pointer ${
+                  className={`px-2.5 py-1.5 rounded-button text-xs font-semibold flex items-center justify-center gap-1.5 border transition-colors cursor-pointer ${
                     visibility === "unlisted"
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-surface border-border text-muted-foreground hover:text-foreground"
@@ -310,7 +307,7 @@ export function ReviewEditorDialog({
                 <button
                   type="button"
                   onClick={() => setVisibility("private")}
-                  className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 border transition-colors cursor-pointer ${
+                  className={`px-2.5 py-1.5 rounded-button text-xs font-semibold flex items-center justify-center gap-1.5 border transition-colors cursor-pointer ${
                     visibility === "private"
                       ? "bg-primary text-primary-foreground border-primary"
                       : "bg-surface border-border text-muted-foreground hover:text-foreground"
@@ -366,7 +363,7 @@ export function ReviewEditorDialog({
                 type="button"
                 onClick={handleDelete}
                 disabled={deleting}
-                className="px-3 py-1.5 rounded-lg bg-destructive text-destructive-foreground text-xs font-bold hover:bg-destructive/90 transition-colors cursor-pointer inline-flex items-center gap-1.5"
+                className="px-3 py-1.5 rounded-button bg-destructive text-destructive-foreground text-xs font-bold hover:bg-destructive/90 transition-colors cursor-pointer inline-flex items-center gap-1.5"
               >
                 {deleting && <Loader2 size={13} className="animate-spin" />}
                 <span>Permanently Delete</span>
@@ -375,7 +372,7 @@ export function ReviewEditorDialog({
                 type="button"
                 onClick={() => setShowDeleteConfirm(false)}
                 disabled={deleting}
-                className="px-3 py-1.5 rounded-lg bg-surface border border-border text-xs font-medium text-foreground hover:bg-surface-raised transition-colors cursor-pointer"
+                className="px-3 py-1.5 rounded-button bg-surface border border-border text-xs font-medium text-foreground hover:bg-surface-elevated transition-colors cursor-pointer"
               >
                 Cancel
               </button>
@@ -383,14 +380,16 @@ export function ReviewEditorDialog({
           </div>
         )}
 
-        <DialogFooter className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 border-t border-border mt-2">
+        </div>
+
+        <DialogFooter className="shrink-0 flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-3 pt-4 border-t border-border mt-2">
           <div>
             {isEditing && !showDeleteConfirm && (
               <button
                 type="button"
                 onClick={() => setShowDeleteConfirm(true)}
                 disabled={saving || deleting}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-destructive hover:underline cursor-pointer transition-colors"
+                className="inline-flex items-center gap-1.5 rounded-button px-2 text-xs font-semibold text-destructive hover:underline cursor-pointer transition-colors"
               >
                 <Trash2 size={13} />
                 <span>Delete Review</span>
@@ -398,12 +397,12 @@ export function ReviewEditorDialog({
             )}
           </div>
 
-          <div className="flex items-center gap-2 justify-end">
+          <div className="flex flex-wrap items-center gap-2 justify-end">
             <button
               type="button"
               onClick={onClose}
               disabled={saving || deleting}
-              className="px-3.5 py-2 rounded-lg bg-surface border border-border text-xs font-semibold text-foreground hover:bg-surface-raised transition-colors cursor-pointer"
+              className="px-3.5 py-2 rounded-button bg-surface border border-border text-xs font-semibold text-foreground hover:bg-surface-elevated transition-colors cursor-pointer"
             >
               Cancel
             </button>
@@ -414,7 +413,7 @@ export function ReviewEditorDialog({
                 type="button"
                 onClick={() => handleSave("unpublished")}
                 disabled={saving || deleting}
-                className="px-3.5 py-2 rounded-lg bg-surface border border-border text-xs font-semibold text-foreground hover:bg-surface-raised transition-colors cursor-pointer"
+                className="px-3.5 py-2 rounded-button bg-surface border border-border text-xs font-semibold text-foreground hover:bg-surface-elevated transition-colors cursor-pointer"
               >
                 {saving ? <Loader2 size={13} className="animate-spin" /> : "Unpublish"}
               </button>
@@ -423,7 +422,7 @@ export function ReviewEditorDialog({
                 type="button"
                 onClick={() => handleSave("draft")}
                 disabled={saving || deleting}
-                className="px-3.5 py-2 rounded-lg bg-surface border border-border text-xs font-semibold text-foreground hover:bg-surface-raised transition-colors cursor-pointer"
+                className="px-3.5 py-2 rounded-button bg-surface border border-border text-xs font-semibold text-foreground hover:bg-surface-elevated transition-colors cursor-pointer"
               >
                 {saving ? <Loader2 size={13} className="animate-spin" /> : "Save Draft"}
               </button>
@@ -433,7 +432,7 @@ export function ReviewEditorDialog({
               type="button"
               onClick={() => handleSave("published")}
               disabled={saving || deleting || !content.trim()}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:bg-primary-hover transition-colors cursor-pointer disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-primary text-primary-foreground text-xs font-bold hover:bg-primary-hover transition-colors cursor-pointer disabled:opacity-50"
             >
               {saving ? <Loader2 size={13} className="animate-spin" /> : null}
               <span>{isCurrentlyPublished ? "Save & Update" : "Publish Review"}</span>

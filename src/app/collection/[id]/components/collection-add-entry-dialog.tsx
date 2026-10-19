@@ -1,5 +1,7 @@
 "use client";
 
+import { CinematicMediaCard } from "@/components/cinematic-media-card";
+
 import React from "react";
 import {
   ArrowLeft,
@@ -10,7 +12,6 @@ import {
   Search,
   X,
 } from "lucide-react";
-import { getTmdbImageUrl } from "@/lib/tmdb";
 
 interface CollectionAddEntryDialogProps {
   isOpen: boolean;
@@ -125,18 +126,8 @@ export function CollectionAddEntryDialog({
                       className="p-3 rounded-lg border border-border bg-surface flex items-center justify-between gap-3 hover:border-primary/40 transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-16 h-10 bg-black/30 rounded overflow-hidden shrink-0 border border-border">
-                          {ep.still_path ? (
-                            <img
-                              src={getTmdbImageUrl(ep.still_path, "w300")}
-                              alt={ep.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
-                              Ep {ep.episode_number}
-                            </div>
-                          )}
+                        <div className="w-16 shrink-0">
+                          <CinematicMediaCard stillPath={ep.still_path} title={ep.name} aspect="video" />
                         </div>
                         <div className="min-w-0">
                           <h4 className="font-semibold text-xs text-foreground truncate">
@@ -212,18 +203,8 @@ export function CollectionAddEntryDialog({
                       className="p-3 rounded-lg border border-border bg-surface flex items-center justify-between gap-3 hover:border-primary/40 transition-colors"
                     >
                       <div className="flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-14 bg-black/30 rounded overflow-hidden shrink-0 border border-border">
-                          {season.poster_path ? (
-                            <img
-                              src={getTmdbImageUrl(season.poster_path, "w185")}
-                              alt={season.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
-                              S{season.season_number}
-                            </div>
-                          )}
+                        <div className="w-10 shrink-0">
+                          <CinematicMediaCard posterPath={season.poster_path} title={season.name} aspect="poster" />
                         </div>
                         <div className="min-w-0">
                           <h4 className="font-semibold text-xs text-foreground truncate">
@@ -294,19 +275,9 @@ export function CollectionAddEntryDialog({
                     className="p-3 rounded-lg border border-border bg-surface flex items-center justify-between gap-3 hover:border-primary/40 transition-colors"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-10 h-14 bg-black/30 rounded overflow-hidden shrink-0 border border-border">
-                        {item.poster_path ? (
-                          <img
-                            src={getTmdbImageUrl(item.poster_path, "w185")}
-                            alt={title}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
-                            —
-                          </div>
-                        )}
-                      </div>
+                      <div className="w-10 shrink-0">
+                          <CinematicMediaCard posterPath={item.poster_path} title={title} aspect="poster" />
+                        </div>
                       <div className="min-w-0">
                         <h4 className="font-semibold text-xs text-foreground truncate">
                           {title}

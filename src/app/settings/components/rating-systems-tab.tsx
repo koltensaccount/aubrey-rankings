@@ -16,7 +16,7 @@ import {
   ArrowDown,
   Info,
 } from "lucide-react";
-import { CinematicSlider } from "@/components/cinematic-slider";
+import { RubricCategoryFields } from "@/components/rating/rubric-category-fields";
 import { STANDARD_TIERS_PRESET } from "@/lib/tier-system";
 
 const COLOR_SWATCHES = [
@@ -800,7 +800,7 @@ export function RatingSystemsTab({ initialSystemId }: { initialSystemId?: string
               /* NUMERICAL RUBRIC EDITOR */
               <>
                 <div className="space-y-3">
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                     <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
                       Scoring Categories & Multiplier Weights
                     </span>
@@ -815,32 +815,12 @@ export function RatingSystemsTab({ initialSystemId }: { initialSystemId?: string
                         key={cat.id}
                         className="p-3.5 rounded-card border border-border bg-surface flex items-center justify-between gap-4"
                       >
-                        <div className="flex-1 min-w-0 space-y-1.5">
-                          <input
-                            type="text"
-                            value={cat.name}
-                            onChange={(e) =>
-                              handleUpdateCategoryName(cat.id, e.target.value)
-                            }
-                            className="w-full text-xs font-semibold text-foreground bg-transparent border-b border-transparent hover:border-border focus:border-primary focus:outline-none py-0.5"
-                          />
-                          <div className="w-full">
-                            <CinematicSlider
-                              min={0}
-                              max={10}
-                              step={0.5}
-                              value={cat.weight}
-                              onChange={(val) =>
-                                handleUpdateWeight(cat.id, val ?? 1)
-                              }
-                              allowUnset={false}
-                              showValue={true}
-                              valueSuffix="x"
-                              size="sm"
-                              ariaLabel={`Weight for ${cat.name}`}
-                            />
-                          </div>
-                        </div>
+                        <RubricCategoryFields
+                          name={cat.name}
+                          weight={cat.weight}
+                          onNameChange={(name) => handleUpdateCategoryName(cat.id, name)}
+                          onWeightChange={(weight) => handleUpdateWeight(cat.id, weight)}
+                        />
 
                         <button
                           type="button"
@@ -856,18 +836,20 @@ export function RatingSystemsTab({ initialSystemId }: { initialSystemId?: string
                 </div>
 
                 {/* Add New Category Form */}
-                <div className="pt-3 border-t border-border flex items-center gap-3">
+                <div className="pt-3 border-t border-border flex flex-wrap items-end gap-3">
                   <input
                     placeholder="New category (e.g. Atmosphere, Pacing, Direction)..."
                     value={newCategoryName}
                     onChange={(e) => setNewCategoryName(e.target.value)}
-                    className="flex-1 h-9 px-3 text-xs rounded-input bg-surface border border-border-input text-foreground focus:outline-none focus:border-primary"
+                    aria-label="New category name"
+                    className="flex-1 min-w-0 basis-full sm:basis-40 h-9 px-3 text-xs rounded-input bg-surface border border-border-input text-foreground focus:outline-none focus:border-primary"
                   />
                   <input
                     type="number"
                     min="1"
                     max="10"
                     placeholder="Weight"
+                    aria-label="New category weight"
                     value={newCategoryWeight}
                     onChange={(e) => setNewCategoryWeight(e.target.value)}
                     className="w-20 h-9 text-center text-xs rounded-input bg-surface border border-border-input text-foreground focus:outline-none focus:border-primary"

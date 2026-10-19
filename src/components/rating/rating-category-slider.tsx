@@ -48,7 +48,7 @@ export function RatingCategorySlider({
 
         <div className="flex items-center gap-1.5 shrink-0">
           <span className="text-[10px] text-primary font-semibold bg-primary/10 px-1.5 py-0.5 rounded-badge border border-primary/20">
-            {category.weight}× weight
+            {category.weight.toFixed(1)}× weight
           </span>
 
           {/* Quick Reset / Unrate button */}
@@ -67,7 +67,7 @@ export function RatingCategorySlider({
 
       {/* Slider and Synchronized Numeric Input */}
       <div className="flex items-center gap-3">
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <CinematicSlider
             value={score ?? null}
             onChange={(val) => onScoreChange(category.id, val)}

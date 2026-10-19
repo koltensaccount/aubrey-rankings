@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { Search, Film, Tv, Users, Compass, ArrowRight, Loader2, UserPlus, UserCheck } from "lucide-react";
-import { resolvePosterUrl } from "@/lib/artwork";
+import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { useSession } from "@/lib/auth-client";
 
 export default function ExplorePage() {
@@ -281,7 +281,6 @@ export default function ExplorePage() {
                 {tmdbResults.map((m) => {
                   const title = m.title || m.name;
                   const year = (m.release_date || m.first_air_date || "").split("-")[0];
-                  const poster = m.poster_path ? resolvePosterUrl(m.poster_path, "w342") : null;
                   const isTv = m.media_type === "tv" || !m.title;
 
                   return (
@@ -290,17 +289,7 @@ export default function ExplorePage() {
                       className="rounded-xl border border-border bg-card overflow-hidden flex flex-col justify-between group hover:border-primary/40 transition-colors shadow-sm"
                     >
                       <div className="aspect-[2/3] w-full bg-black relative overflow-hidden">
-                        {poster ? (
-                          <img
-                            src={poster}
-                            alt={title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground p-2 text-center">
-                            {title}
-                          </div>
-                        )}
+                        <CinematicMediaCard posterPath={m.poster_path} title={title} aspect="poster" />
                         <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-black/80 text-primary border border-primary/30">
                           {isTv ? "TV" : "Movie"}
                         </span>

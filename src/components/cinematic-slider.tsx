@@ -17,6 +17,7 @@ export interface CinematicSliderProps {
   size?: "sm" | "default" | "lg";
   showValue?: boolean;
   valueSuffix?: string;
+  valuePrecision?: number;
 }
 
 export function CinematicSlider({
@@ -34,11 +35,13 @@ export function CinematicSlider({
   size = "default",
   showValue = false,
   valueSuffix = "",
+  valuePrecision,
 }: CinematicSliderProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const pointerStart = useRef<{x:number,value:number|null} | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  const [isKeyboardFocused, setIsKeyboardFocused] = useState(false);
   const [hoverValue, setHoverValue] = useState<number | null>(null);
 
   const isRated = typeof value === "number" && Number.isFinite(value);
@@ -74,8 +77,10 @@ export function CinematicSlider({
     if (disabled || e.button !== 0) return;
     e.preventDefault();
     trackRef.current?.focus();
+    setIsKeyboardFocused(false);
     trackRef.current?.setPointerCapture(e.pointerId);
     pointerStart.current = {x:e.clientX,value};
+    setHoverValue(null);
     setIsDragging(true);
     const newVal = getValueFromPointer(e.clientX);
     onChange(newVal);
@@ -86,7 +91,7 @@ export function CinematicSlider({
     if (isDragging) {
       const newVal = getValueFromPointer(e.clientX);
       onChange(newVal);
-    } else {
+    } else if (e.pointerType !== "touch") {
       const val = getValueFromPointer(e.clientX);
       setHoverValue(val);
     }
@@ -95,6 +100,7 @@ export function CinematicSlider({
   const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
     const start = pointerStart.current;
     pointerStart.current = null;
+    setHoverValue(null);
     if (allowUnset && start?.value != null && Math.abs(start.x-e.clientX)<3 && getValueFromPointer(e.clientX)===start.value) onChange(null);
     if (isDragging) {
       try {
@@ -107,6 +113,8 @@ export function CinematicSlider({
   };
 
   const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
+    pointerStart.current = null;
+    setHoverValue(null);
     if (isDragging) {
       try {
         trackRef.current?.releasePointerCapture(e.pointerId);
@@ -119,6 +127,8 @@ export function CinematicSlider({
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (disabled) return;
+    setHoverValue(null);
+    setIsKeyboardFocused(true);
 
     if (e.key === "ArrowRight" || e.key === "ArrowUp") {
       e.preventDefault();
@@ -159,8 +169,14 @@ export function CinematicSlider({
       ? "w-5 h-5"
       : "w-4 h-4 sm:w-4.5 sm:h-4.5";
 
+  const previewValue = !isDragging && hoverValue !== null ? hoverValue : isRated ? value : null;
+  const previewPercent = previewValue === null ? 0 : Math.max(0, Math.min(100, ((previewValue - min) / range) * 100));
+  const formatValue = (number: number) =>
+    `${valuePrecision === undefined ? number : number.toFixed(valuePrecision)}${valueSuffix}`;
+  const showTooltip = !disabled && (isDragging || isKeyboardFocused || hoverValue !== null);
+
   return (
-    <div className={`relative flex items-center min-h-11 select-none py-1.5 ${className}`}>
+    <div className={`relative flex items-center min-h-11 select-none pt-10 pb-4 ${className}`}>
       {/* Interactive slider track container */}
       <div
         ref={trackRef}
@@ -179,9 +195,13 @@ export function CinematicSlider({
         onPointerCancel={handlePointerCancel}
         onPointerLeave={() => setHoverValue(null)}
         onKeyDown={handleKeyDown}
-        onFocus={() => setIsFocused(true)}
+        onFocus={(event) => {
+          setIsFocused(true);
+          setIsKeyboardFocused(event.currentTarget.matches(":focus-visible"));
+        }}
         onBlur={() => {
           setIsFocused(false);
+          setIsKeyboardFocused(false);
           setHoverValue(null);
         }}
         className={`group/track relative w-full before:absolute before:inset-x-0 before:-inset-y-4 before:content-[''] ${trackHeight} rounded-full cursor-pointer touch-none transition-all ${
@@ -190,6 +210,16 @@ export function CinematicSlider({
             : "bg-muted/70 border border-border hover:border-primary/50"
         } ${isFocused ? "ring-2 ring-primary/50 border-primary" : ""}`}
       >
+        {showTooltip && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute bottom-full mb-3 z-10 -translate-x-1/2 rounded-button border border-border bg-surface-elevated px-2 py-1 text-xs font-semibold text-foreground shadow-sm tabular-nums whitespace-nowrap"
+            style={{ left: `clamp(2rem, ${previewPercent}%, calc(100% - 2rem))` }}
+          >
+            {previewValue === null ? "Not set" : formatValue(previewValue)}
+          </span>
+        )}
+
         {/* Fill bar (visible only when rated or numerical) */}
         {isRated && (
           <div
@@ -227,7 +257,7 @@ export function CinematicSlider({
 
       {showValue && (
         <span className="font-display font-bold text-xs sm:text-sm text-primary tabular-nums shrink-0 ml-3">
-          {isRated ? `${value}${valueSuffix}` : "—"}
+          {isRated ? formatValue(value) : "—"}
         </span>
       )}
     </div>

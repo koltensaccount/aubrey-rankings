@@ -377,7 +377,7 @@ export function RatingDialog({
       }}
       className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-black/85 backdrop-blur-md overflow-y-auto"
     >
-      <div className="relative w-full max-w-2xl my-6 rounded-dialog bg-card border border-border-dialog text-foreground shadow-dialog overflow-hidden flex flex-col max-h-[92vh]">
+      <div className="relative w-full max-w-2xl rounded-dialog bg-card border border-border-dialog text-foreground shadow-dialog overflow-hidden flex flex-col max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-primary [&_button]:focus-visible:outline-offset-2 [&_button:disabled]:opacity-50 [&_button:disabled]:cursor-not-allowed [&_button]:min-h-11 sm:[&_button]:min-h-0">
         {/* Header with Visual Still */}
         <RatingDialogHeader
           title={mediaItem.title}
@@ -389,9 +389,9 @@ export function RatingDialog({
         />
 
         {/* Scrollable Content Body */}
-        <div className="p-4 sm:p-6 space-y-6 overflow-y-auto flex-1">
+        <div className="p-4 sm:p-6 space-y-6 overflow-y-auto overscroll-contain min-h-0 flex-1">
           {error && (
-            <div className="p-3.5 rounded-card bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2">
+            <div role="alert" className="p-3.5 rounded-card bg-destructive/10 border border-destructive/30 text-destructive text-xs flex items-center gap-2">
               <AlertTriangle size={15} className="shrink-0" />
               <span>{error}</span>
             </div>
@@ -639,7 +639,7 @@ export function RatingDialog({
         )}
 
         {/* Action Footer */}
-        <div className="flex items-center justify-between p-4 sm:p-5 border-t border-border bg-card/60 shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 p-4 sm:p-5 border-t border-border bg-card/60 shrink-0">
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -654,7 +654,7 @@ export function RatingDialog({
                 type="button"
                 onClick={() => setShowClearConfirm(true)}
                 disabled={deleting || saving}
-                className="px-3 py-1.5 rounded-button text-xs font-semibold text-red-400 hover:text-red-300 hover:bg-red-500/10 border border-transparent hover:border-red-500/20 flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="px-3 py-1.5 rounded-button text-xs font-semibold text-destructive hover:bg-destructive/10 border border-transparent hover:border-destructive/20 flex items-center gap-1.5 transition-colors cursor-pointer"
                 title="Options to clear scores or remove entire rating"
               >
                 <Trash2 size={13} />

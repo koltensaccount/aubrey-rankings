@@ -46,10 +46,10 @@ export function CollectionToolbar({
   onOpenTierEditor,
 }: CollectionToolbarProps) {
   return (
-    <div className="sticky top-20 z-20 bg-background/95 backdrop-blur-md border-b border-border">
+    <div className="sticky top-20 z-20 [&_button]:min-h-11 sm:[&_button]:min-h-0 [&_button]:focus-visible:outline-2 [&_button]:focus-visible:outline-primary [&_button]:focus-visible:outline-offset-2 bg-background/95 backdrop-blur-md border-b border-border">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 text-xs">
         {/* Left: Action, Status Filters, & Season Filters */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 md:pb-0">
+        <div className="flex items-center gap-2 min-w-0 overflow-x-auto p-1">
           {isOwner && (
             <button
               type="button"
@@ -155,13 +155,14 @@ export function CollectionToolbar({
         </div>
 
         {/* Right Controls: Sort & View Mode */}
-        <div className="flex items-center justify-between sm:justify-end gap-3 ml-auto">
+        <div className="flex flex-wrap min-w-0 w-full md:w-auto items-center justify-between sm:justify-end gap-2 sm:gap-3 md:ml-auto">
           {/* Sort dropdown is hidden in Tier Board view since tier rows establish the ordering */}
           {viewMode !== "tier_board" && (
             <select
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as SortOption)}
-              className="bg-surface text-xs text-foreground border border-border-input rounded px-3 py-1.5 focus:outline-none focus:border-primary"
+              aria-label="Sort entries"
+              className="min-h-11 sm:min-h-0 min-w-0 flex-1 md:flex-none bg-surface text-xs text-foreground border border-border-input rounded-input px-3 py-1.5 focus:outline-none focus:border-primary focus-visible:ring-2 focus-visible:ring-primary"
             >
               <option value="score_desc">
                 {isTierCollection ? "Sort: Highest Tier" : "Sort: Highest Score"}
@@ -175,12 +176,12 @@ export function CollectionToolbar({
           )}
 
           {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 bg-card p-1 rounded border border-border">
+          <div className="flex items-center gap-1 bg-card p-1 rounded-button border shrink-0 border-border">
             {isTierCollection && (
               <button
                 onClick={() => setViewMode("tier_board")}
                 title="Tier Board view"
-                className={`p-1.5 rounded text-xs transition-colors cursor-pointer ${
+                className={`p-1.5 min-w-11 sm:min-w-0 rounded-button text-xs transition-colors cursor-pointer ${
                   viewMode === "tier_board"
                     ? "bg-surface text-primary-text font-bold"
                     : "text-muted-foreground hover:text-foreground"
@@ -192,7 +193,7 @@ export function CollectionToolbar({
             <button
               onClick={() => setViewMode("list")}
               title="List view"
-              className={`p-1.5 rounded text-xs transition-colors cursor-pointer ${
+              className={`p-1.5 min-w-11 sm:min-w-0 rounded-button text-xs transition-colors cursor-pointer ${
                 viewMode === "list"
                   ? "bg-surface text-primary-text font-bold"
                   : "text-muted-foreground hover:text-foreground"
@@ -203,7 +204,7 @@ export function CollectionToolbar({
             <button
               onClick={() => setViewMode("editorial")}
               title="Grid view"
-              className={`p-1.5 rounded text-xs transition-colors cursor-pointer ${
+              className={`p-1.5 min-w-11 sm:min-w-0 rounded-button text-xs transition-colors cursor-pointer ${
                 viewMode === "editorial"
                   ? "bg-surface text-primary-text font-bold"
                   : "text-muted-foreground hover:text-foreground"

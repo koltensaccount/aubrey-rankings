@@ -14,7 +14,7 @@ import {
   Layers,
   Sliders,
 } from "lucide-react";
-import { getTmdbImageUrl } from "@/lib/tmdb";
+import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { Suspense } from "react";
 
 type RankingType = "tv_show" | "movie_franchise" | "custom";
@@ -305,7 +305,6 @@ function CreateRankingContent() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-h-96 overflow-y-auto pr-1">
                 {searchResults.map((item) => {
                   const isSelected = selectedItem?.id === item.id;
-                  const poster = getTmdbImageUrl(item.poster_path, "w342");
                   return (
                     <div
                       key={item.id}
@@ -316,17 +315,9 @@ function CreateRankingContent() {
                           : "border-border bg-surface hover:border-primary/40"
                       }`}
                     >
-                      {poster ? (
-                        <img
-                          src={poster}
-                          alt={item.name || item.title || "Poster"}
-                          className="w-14 h-20 object-cover rounded shrink-0 bg-black/20"
-                        />
-                      ) : (
-                        <div className="w-14 h-20 bg-secondary rounded flex items-center justify-center shrink-0">
-                          <Film className="h-5 w-5 text-muted-foreground" />
-                        </div>
-                      )}
+                      <div className="w-14 shrink-0">
+                        <CinematicMediaCard posterPath={item.poster_path} title={item.name || item.title || "Poster"} aspect="poster" />
+                      </div>
                       <div className="flex-1 min-w-0 space-y-1">
                         <div className="flex items-start justify-between gap-1">
                           <h4 className="font-display text-base font-bold text-foreground uppercase tracking-tight truncate">

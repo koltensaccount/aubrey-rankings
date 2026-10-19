@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { getMediaArtworkAspect } from "@/lib/artwork";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { Sliders, MoveRight, Check, Loader2, Layers } from "lucide-react";
 
@@ -92,7 +93,7 @@ export function TierBoardView({
               ) : (
                 entriesInTier.map((entry) => {
                   const media = entry.mediaItem;
-                  const isStill = media.mediaType === "episode" || Boolean(media.stillPath);
+                  const isStill = getMediaArtworkAspect(media) === "video";
                   const isEpisode =
                     (media.mediaType === "episode" || media.seasonNumber != null || media.episodeNumber != null) &&
                     media.seasonNumber != null &&
@@ -206,7 +207,7 @@ export function TierBoardView({
           <div className="flex-1 p-3 flex flex-wrap items-center gap-3 min-h-[110px] bg-surface/20">
             {unassignedEntries.map((entry) => {
               const media = entry.mediaItem;
-              const isStill = media.mediaType === "episode" || Boolean(media.stillPath);
+              const isStill = getMediaArtworkAspect(media) === "video";
               const isEpisode =
                 (media.mediaType === "episode" || media.seasonNumber != null || media.episodeNumber != null) &&
                 media.seasonNumber != null &&
