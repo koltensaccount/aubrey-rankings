@@ -12,6 +12,7 @@ import {
 import { Loader2, Globe, Link2, Lock, EyeOff, Trash2, Bold, Italic, List, ListOrdered, Quote, Heading2, Link as LinkIcon, Eye } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { MarkdownRenderer, ReviewContentFormat } from "@/components/reviews/markdown-renderer";
+import { prefixMarkdownLines } from "@/components/reviews/markdown-formatting";
 
 export interface ReviewEditorData {
   id?: string;
@@ -94,16 +95,16 @@ export function ReviewEditorDialog({
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
     const selected = content.slice(start, end) || "text";
-    const formatted = linePrefix
-      ? selected.split("\n").map((line, index) => `${linePrefix}${line || (index === 0 ? "text" : "")}`).join("\n")
-      : `${before}${selected}${after}`;
-    const next = `${content.slice(0, start)}${formatted}${content.slice(end)}`;
+    const lineFormat = linePrefix ? prefixMarkdownLines(content, start, end, linePrefix) : null;
+    const formatted = lineFormat ? "" : `${before}${selected}${after}`;
+    const next = lineFormat?.content || `${content.slice(0, start)}${formatted}${content.slice(end)}`;
     setContent(next);
     setContentFormat("markdown");
     requestAnimationFrame(() => {
       textarea.focus();
-      const cursor = start + formatted.length;
-      textarea.setSelectionRange(cursor, cursor);
+      const selectionStart = lineFormat?.selectionStart ?? start + formatted.length;
+      const selectionEnd = lineFormat?.selectionEnd ?? selectionStart;
+      textarea.setSelectionRange(selectionStart, selectionEnd);
     });
   };
 

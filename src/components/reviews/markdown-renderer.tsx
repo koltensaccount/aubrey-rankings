@@ -20,7 +20,7 @@ export function MarkdownRenderer({
   if (!content) return null;
 
   if (format !== "markdown") {
-    return <p className={`whitespace-pre-line ${className}`}>{content}</p>;
+    return <p className={`whitespace-pre-wrap ${className}`}>{content}</p>;
   }
 
   return (

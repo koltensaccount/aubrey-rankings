@@ -6,6 +6,7 @@ import { randomUUID } from "crypto";
 import { db } from "../db";
 import { mediaItems, reviews, user } from "../db/schema";
 import { MarkdownRenderer } from "../components/reviews/markdown-renderer";
+import { prefixMarkdownLines } from "../components/reviews/markdown-formatting";
 import { getPublicReviews } from "../lib/public-reviews";
 
 describe("Phase 12: Markdown review compatibility", () => {
@@ -60,5 +61,19 @@ describe("Phase 12: Markdown review compatibility", () => {
     assert.doesNotMatch(html, /href="javascript:/i);
     assert.doesNotMatch(html, /<img/i);
     assert.match(html, /&lt;img/);
+  });
+
+  it("preserves legacy plain-text whitespace", () => {
+    const html = renderToStaticMarkup(<MarkdownRenderer content={"Two  spaces\nand a new line"} />);
+    assert.match(html, /whitespace-pre-wrap/);
+    assert.match(html, /Two  spaces\nand a new line/);
+  });
+
+  it("prefixes complete Markdown lines when selection starts in the middle of a line", () => {
+    const cursor = prefixMarkdownLines("First line\nSecond line", 8, 8, "> ");
+    assert.deepEqual(cursor, { content: "> First line\nSecond line", selectionStart: 10, selectionEnd: 10 });
+
+    const selection = prefixMarkdownLines("First line\nSecond line\nThird line", 8, 18, "- ");
+    assert.deepEqual(selection, { content: "- First line\n- Second line\nThird line", selectionStart: 0, selectionEnd: 26 });
   });
 });
