@@ -1,12 +1,12 @@
 import Link from "next/link";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { collections, ratings, follows, savedRankings } from "@/db/schema";
-import { desc, eq, sql, and, ne, or } from "drizzle-orm";
-import { Plus, ArrowRight, Tv, Film, ListPlus, ArrowUpRight, Globe, Users, Bookmark } from "lucide-react";
+import { collections, ratings, savedRankings, reviews } from "@/db/schema";
+import { desc, eq } from "drizzle-orm";
+import { Plus, ArrowRight, Tv, Film, ListPlus, Bookmark, FileText, PenLine } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { getTopRankedEntries, getRatingSummary } from "@/lib/scoring";
-import { CommunityFeed } from "@/components/social/community-feed";
+import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
 
 export default async function HomePage() {
   const session = await getServerSession();
@@ -128,32 +128,6 @@ export default async function HomePage() {
   const pinnedCollection = userCollections.find((c) => c.isPinned) || userCollections[0];
   const otherCollections = userCollections.filter((c) => c.id !== pinnedCollection?.id);
 
-  // Community discovery canons
-  const communityCanons = await db.query.collections.findMany({
-    where: (c, { and, ne, or, eq }) =>
-      and(
-        ne(c.userId, session.user.id),
-        eq(c.visibility, "public")
-      ),
-    orderBy: [desc(collections.updatedAt)],
-    limit: 6,
-    with: {
-      user: {
-        columns: {
-          id: true,
-          name: true,
-          username: true,
-          image: true,
-        },
-      },
-      entries: {
-        limit: 4,
-        with: { mediaItem: true },
-      },
-      ratings: {with:{ratingSystem:{columns:{scale:true}}}},
-    },
-  });
-
   // User's saved rankings (bookmarks)
   const userSavedRankings = await db.query.savedRankings.findMany({
     where: (s, { eq }) => eq(s.userId, session.user.id),
@@ -190,15 +164,26 @@ export default async function HomePage() {
     })
     .map((sr) => sr.collection);
 
+  const userReviews = await db.query.reviews.findMany({
+    where: (r, { eq }) => eq(r.userId, session.user.id),
+    orderBy: [desc(reviews.updatedAt)],
+    limit: 12,
+    with: {
+      mediaItem: true,
+      rating: { columns: { calculatedOverallScore: true, sourceRating: true } },
+    },
+  });
+  const hasLibraryContent = userCollections.length > 0 || userReviews.length > 0 || accessibleSavedCollections.length > 0;
+
   return (
     <div className="ar-homeContent ar-communityHome">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6 pb-20 space-y-10" id="library">
         {/* Community / Feed Header */}
         <header className="ar-communityHeading">
           <div>
-            <span className="text-[11px] text-muted-foreground uppercase tracking-wider block">Community Activity</span>
+            <span className="text-[11px] text-muted-foreground uppercase tracking-wider block">Personal workspace</span>
             <h1 className="font-display text-4xl sm:text-5xl uppercase text-foreground tracking-tight mt-1">
-              Your Feed
+              My Library
             </h1>
           </div>
           <Link href="/create" className="ar-neutralButton">
@@ -229,7 +214,7 @@ export default async function HomePage() {
         {/* =========================================================================
             EMPTY STATE (Honest & Clean)
             ========================================================================= */}
-        {userCollections.length === 0 ? (
+        {!hasLibraryContent ? (
           <div className="text-center py-20 px-4 rounded-xl border border-border bg-card space-y-5 shadow-sm">
             <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
               <Film className="h-6 w-6" />
@@ -237,7 +222,7 @@ export default async function HomePage() {
             <div className="max-w-md mx-auto space-y-1.5">
               <h3 className="font-display text-3xl uppercase text-foreground">Your library is waiting</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Create your first TV show, franchise, or custom collection to start rating with numerical rubrics or visual tier lists.
+            Start with a TV show, franchise, or custom collection. Your private rankings, reviews, and drafts will live here.
               </p>
             </div>
             <div className="flex flex-wrap justify-center gap-3 pt-2">
@@ -439,16 +424,42 @@ export default async function HomePage() {
           </div>
         )}
 
-        {/* COMMUNITY FEED & DISCOVERY */}
-        <section className="space-y-4 pt-6">
-          <div className="pb-2">
-            <span className="text-[11px] text-muted-foreground uppercase tracking-wider block">Community Activity</span>
-            <h2 className="font-display text-3xl uppercase font-bold text-foreground tracking-tight mt-0.5">
-              Live Stream
-            </h2>
-          </div>
-          <CommunityFeed isAuthenticated={true} />
-        </section>
+        {userReviews.length > 0 && (
+          <section className="space-y-4 pt-6">
+            <div className="flex items-center justify-between pb-2 border-b border-border">
+              <div className="flex items-center gap-2">
+                <FileText size={16} className="text-primary" />
+                <h2 className="font-display text-2xl uppercase text-foreground">Your Reviews</h2>
+              </div>
+              <span className="text-xs text-muted-foreground">{userReviews.length} recent</span>
+            </div>
+            <div className="space-y-3">
+              {userReviews.map((review) => {
+                const isDraft = review.status === "draft" || review.status === "unpublished";
+                const statusLabel = isDraft ? (review.status === "draft" ? "Draft" : "Unpublished") : review.visibility;
+                return (
+                  <article key={review.id} className="rounded-card border border-border bg-card p-4 sm:p-5">
+                    <div className="flex items-start gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wider">
+                          <span className={isDraft ? "text-amber-600 dark:text-amber-400" : "text-primary"}>{statusLabel}</span>
+                          {review.isSpoiler && <span className="text-muted-foreground">Spoiler</span>}
+                        </div>
+                        <h3 className="font-display text-xl uppercase text-foreground mt-1">{review.title || review.mediaItem?.title || "Untitled review"}</h3>
+                        {review.title && review.mediaItem?.title && <p className="text-xs text-muted-foreground">on {review.mediaItem.title}</p>}
+                        <SpoilerConcealedText content={isDraft ? (review.draftContent || review.content) : review.content} format={(isDraft ? review.draftContentFormat || review.contentFormat : review.contentFormat) as "plain" | "markdown"} isSpoiler={review.isSpoiler} />
+                      </div>
+                      <Link href={isDraft ? `/review/${review.id}?edit=1` : `/review/${review.id}`} className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-hover">
+                        {isDraft ? <PenLine size={14} /> : null}
+                        {isDraft ? "Resume" : "Open"}
+                      </Link>
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         {/* SAVED RANKINGS (BOOKMARKS) */}
             {accessibleSavedCollections.length > 0 && (
