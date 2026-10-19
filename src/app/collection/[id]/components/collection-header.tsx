@@ -54,6 +54,7 @@ export function CollectionHeader({
   onOpenBannerModal,
   onOpenDeleteModal,
 }: CollectionHeaderProps) {
+  const isTier = collection.defaultRatingSystem?.type === "tier";
   return (
     <CinematicArtworkBanner
       backdropPath={collection.backdropImage || collection.backdropPath}
@@ -273,22 +274,28 @@ export function CollectionHeader({
             <div className="p-3.5 sm:p-4 rounded-card bg-card/75 backdrop-blur-md border border-border/70 space-y-2.5 max-w-xl">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs">
                 <span className="font-display text-base sm:text-lg font-bold text-foreground uppercase tracking-tight">
-                  {completedCount} of {totalEntries} Rated{" "}
+                  {completedCount} of {totalEntries} {isTier ? "Ranked" : "Rated"}{" "}
                   <span className="text-primary-text font-mono text-xs font-semibold ml-1">
                     ({completionPercentage}%)
                   </span>
                 </span>
                 <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
                   <span>
-                    <strong className="text-foreground font-semibold">{completedCount}</strong> rated
+                    <strong className="text-foreground font-semibold">{completedCount}</strong>{" "}
+                    {isTier ? "ranked" : "rated"}
                   </span>
+                  {!isTier && (
+                    <>
+                      <span>·</span>
+                      <span>
+                        <strong className="text-foreground font-semibold">{inProgressCount}</strong> partial
+                      </span>
+                    </>
+                  )}
                   <span>·</span>
                   <span>
-                    <strong className="text-foreground font-semibold">{inProgressCount}</strong> partial
-                  </span>
-                  <span>·</span>
-                  <span>
-                    <strong className="text-foreground font-semibold">{unratedCount}</strong> unrated
+                    <strong className="text-foreground font-semibold">{unratedCount}</strong>{" "}
+                    {isTier ? "unranked" : "unrated"}
                   </span>
                 </div>
               </div>
@@ -298,13 +305,15 @@ export function CollectionHeader({
                 <div
                   style={{ width: `${(completedCount / Math.max(1, totalEntries)) * 100}%` }}
                   className="h-full bg-primary transition-all duration-300"
-                  title={`${completedCount} rated`}
+                  title={`${completedCount} ${isTier ? "ranked" : "rated"}`}
                 />
-                <div
-                  style={{ width: `${(inProgressCount / Math.max(1, totalEntries)) * 100}%` }}
-                  className="h-full bg-primary/50 transition-all duration-300"
-                  title={`${inProgressCount} in progress`}
-                />
+                {!isTier && (
+                  <div
+                    style={{ width: `${(inProgressCount / Math.max(1, totalEntries)) * 100}%` }}
+                    className="h-full bg-primary/50 transition-all duration-300"
+                    title={`${inProgressCount} in progress`}
+                  />
+                )}
               </div>
             </div>
           </div>
@@ -343,25 +352,15 @@ export function CollectionHeader({
 
                 {isOwner && (
                   <div className="pt-2 border-t border-border flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => onOpenRubricModal("tier")}
-                        className="text-[11px] text-primary-text hover:underline flex items-center gap-1 font-semibold cursor-pointer"
-                      >
-                        <Layers size={12} />
-                        <span>Customize Tiers</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onOpenRubricModal("numerical")}
-                        className="text-[11px] text-muted-foreground hover:text-foreground hover:underline flex items-center gap-1 cursor-pointer transition-colors"
-                        title="Switch collection to Numerical Rubric"
-                      >
-                        <Sliders size={12} />
-                        <span>Switch to Numerical</span>
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onOpenRubricModal("tier")}
+                      className="text-[11px] text-primary-text hover:underline flex items-center gap-1.5 font-semibold cursor-pointer"
+                      title="Configure rubric, customize tiers, or switch evaluation method"
+                    >
+                      <Sliders size={12} />
+                      <span>Rating Setup</span>
+                    </button>
                     <Link
                       href={`/settings?tab=rating_systems${collection.defaultRatingSystem?.id ? `&systemId=${collection.defaultRatingSystem.id}` : ""}`}
                       className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"
@@ -401,25 +400,15 @@ export function CollectionHeader({
 
                 {isOwner && collection.defaultRatingSystem && (
                   <div className="pt-2 border-t border-border flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2.5">
-                      <button
-                        type="button"
-                        onClick={() => onOpenRubricModal("numerical")}
-                        className="text-[11px] text-primary-text hover:underline flex items-center gap-1 font-semibold cursor-pointer"
-                      >
-                        <Sliders size={12} />
-                        <span>Adjust Weights</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => onOpenRubricModal("tier")}
-                        className="text-[11px] text-muted-foreground hover:text-foreground hover:underline flex items-center gap-1 cursor-pointer transition-colors"
-                        title="Switch collection to Tier List"
-                      >
-                        <Layers size={12} />
-                        <span>Switch to Tier List</span>
-                      </button>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => onOpenRubricModal("numerical")}
+                      className="text-[11px] text-primary-text hover:underline flex items-center gap-1.5 font-semibold cursor-pointer"
+                      title="Configure rubric, customize tiers, or switch evaluation method"
+                    >
+                      <Sliders size={12} />
+                      <span>Rating Setup</span>
+                    </button>
                     <Link
                       href={`/settings?tab=rating_systems&systemId=${collection.defaultRatingSystem.id}`}
                       className="text-[11px] text-muted-foreground hover:text-foreground transition-colors"

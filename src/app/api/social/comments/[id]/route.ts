@@ -95,6 +95,9 @@ export async function PATCH(
       collection: {
         columns: { userId: true },
       },
+      review: {
+        columns: { userId: true },
+      },
     },
   });
 
@@ -112,7 +115,7 @@ export async function PATCH(
       isSpoiler: updated.isSpoiler,
       isEdited: updated.isEdited,
       isAuthor: true,
-      isCollectionOwner: session.user.id === updated.collection?.userId,
+      isCollectionOwner: session.user.id === (updated.collection?.userId || updated.review?.userId),
       author: {
         id: updated.user.id,
         name: updated.user.name,
@@ -140,6 +143,9 @@ export async function DELETE(
       collection: {
         columns: { userId: true },
       },
+      review: {
+        columns: { userId: true },
+      },
     },
   });
 
@@ -147,11 +153,13 @@ export async function DELETE(
     return NextResponse.json({ error: "Comment not found" }, { status: 404 });
   }
 
-  // Authorization check: User must be comment author OR the owner of the collection
+  // Authorization check: User must be comment author OR the owner of the collection/review
   const isAuthor = commentRecord.userId === session.user.id;
-  const isCollectionOwner = commentRecord.collection?.userId === session.user.id;
+  const isContentOwner =
+    commentRecord.collection?.userId === session.user.id ||
+    commentRecord.review?.userId === session.user.id;
 
-  if (!isAuthor && !isCollectionOwner) {
+  if (!isAuthor && !isContentOwner) {
     return NextResponse.json(
       { error: "Forbidden: You cannot delete this comment" },
       { status: 403 }

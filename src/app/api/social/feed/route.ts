@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { collections, follows, likes, savedRankings, comments, ratings, user } from "@/db/schema";
+import { collections, follows, likes, savedRankings, comments, ratings, user, reviews } from "@/db/schema";
 import { desc, eq, inArray, and, or, sql, isNotNull, ne } from "drizzle-orm";
 
 export async function GET(request: NextRequest) {
@@ -209,20 +209,16 @@ export async function GET(request: NextRequest) {
   // 2. Fetch Published Reviews (if filter allows)
   let reviewItems: any[] = [];
   if (filter === "all" || filter === "reviews") {
-    // A review is published when it has non-empty reviewText and belongs to a public collection
-    const rawRatings = await db.query.ratings.findMany({
-      where: (r, { and, inArray, isNotNull, ne }) =>
+    // 2a. First-class published reviews
+    const rawFirstClassReviews = await db.query.reviews.findMany({
+      where: (rv, { and, inArray, eq }) =>
         and(
-          followingIds ? inArray(r.userId, followingIds) : undefined,
-          isNotNull(r.reviewText),
-          ne(r.reviewText, ""),
-          isNotNull(r.collectionId)
+          followingIds ? inArray(rv.userId, followingIds) : undefined,
+          eq(rv.status, "published"),
+          eq(rv.visibility, "public")
         ),
-      orderBy: [desc(ratings.updatedAt)],
+      orderBy: [desc(reviews.publishedAt), desc(reviews.createdAt)],
       limit: limit * 2,
-      columns: {
-        personalNotes: false, // Strict privacy: Never leak private notes
-      },
       with: {
         user: {
           columns: {
@@ -233,46 +229,111 @@ export async function GET(request: NextRequest) {
           },
         },
         mediaItem: true,
-        collection: {
+        rating: {
           columns: {
             id: true,
-            title: true,
-            visibility: true,
+            calculatedOverallScore: true,
+            sourceRating: true,
+            tierId: true,
           },
-        },
-        ratingSystem: {
-          columns: {
-            scale: true,
+          with: {
+            tier: {
+              columns: {
+                id: true,
+                name: true,
+                color: true,
+              },
+            },
           },
         },
       },
     });
 
-    // Ensure associated collection is public and author is not blocked
-    const publicRatings = rawRatings.filter(
-      (r) =>
-        r.collection &&
-        r.collection.visibility === "public" &&
-        !blockedUserIds.has(r.userId)
-    );
+    const filteredFirstClass = rawFirstClassReviews
+      .filter((r) => !blockedUserIds.has(r.userId))
+      .slice(0, limit);
 
-    reviewItems = publicRatings.slice(0, limit).map((r) => ({
+    const firstClassIds = filteredFirstClass.map((r) => r.id);
+    const reviewLikeCountMap = new Map<string, number>();
+    const reviewCommentCountMap = new Map<string, number>();
+    const viewerReviewLikedSet = new Set<string>();
+
+    if (firstClassIds.length > 0) {
+      const reviewLikeRows = await db
+        .select({
+          reviewId: likes.reviewId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(likes)
+        .where(inArray(likes.reviewId, firstClassIds))
+        .groupBy(likes.reviewId);
+      for (const row of reviewLikeRows) {
+        if (row.reviewId) reviewLikeCountMap.set(row.reviewId, row.count);
+      }
+
+      const reviewCommentRows = await db
+        .select({
+          reviewId: comments.reviewId,
+          count: sql<number>`count(*)::int`,
+        })
+        .from(comments)
+        .where(inArray(comments.reviewId, firstClassIds))
+        .groupBy(comments.reviewId);
+      for (const row of reviewCommentRows) {
+        if (row.reviewId) reviewCommentCountMap.set(row.reviewId, row.count);
+      }
+
+      if (session?.user?.id) {
+        const viewerReviewLikes = await db
+          .select({ reviewId: likes.reviewId })
+          .from(likes)
+          .where(
+            and(
+              eq(likes.userId, session.user.id),
+              inArray(likes.reviewId, firstClassIds)
+            )
+          );
+        for (const r of viewerReviewLikes) {
+          if (r.reviewId) viewerReviewLikedSet.add(r.reviewId);
+        }
+      }
+    }
+
+    const publicFirstClassReviews = filteredFirstClass.map((r) => ({
       type: "review",
       id: `review_${r.id}`,
       contentId: r.id,
-      timestamp: r.updatedAt || r.createdAt,
+      reviewType: "independent" as const,
+      reviewUrl: `/review/${r.id}`,
+      timestamp: r.publishedAt || r.updatedAt || r.createdAt,
       author: {
         id: r.user.id,
         name: r.user.name,
         username: r.user.username,
         image: r.user.image,
       },
+      stats: {
+        likeCount: reviewLikeCountMap.get(r.id) || 0,
+        saveCount: 0,
+        commentCount: reviewCommentCountMap.get(r.id) || 0,
+        isLiked: viewerReviewLikedSet.has(r.id),
+        isSaved: false,
+      },
       review: {
         id: r.id,
-        reviewText: r.reviewText,
-        score: r.calculatedOverallScore ?? r.sourceRating ?? null,
-        scale: r.ratingSystem?.scale ?? 10,
-        watchDate: r.watchDate,
+        title: r.title,
+        reviewText: r.content,
+        isSpoiler: r.isSpoiler,
+        score: r.rating ? (r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null) : null,
+        scale: 10,
+        tier: r.rating?.tier
+          ? {
+              id: r.rating.tier.id,
+              name: r.rating.tier.name,
+              color: r.rating.tier.color,
+            }
+          : null,
+        watchDate: null,
       },
       mediaItem: {
         id: r.mediaItem.id,
@@ -283,11 +344,10 @@ export async function GET(request: NextRequest) {
         seasonNumber: r.mediaItem.seasonNumber,
         episodeNumber: r.mediaItem.episodeNumber,
       },
-      collection: {
-        id: r.collection!.id,
-        title: r.collection!.title,
-      },
+      collection: null,
     }));
+
+    reviewItems = publicFirstClassReviews;
   }
 
   // 3. Merge, sort by timestamp descending, and enforce limit

@@ -268,6 +268,7 @@ export const ratings = pgTable(
     watchDate: timestamp("watch_date"),
     reviewText: text("review_text"),
     personalNotes: text("personal_notes"),
+    shareCommentary: boolean("share_commentary").notNull().default(false),
     isWatched: boolean("is_watched").notNull().default(false),
     isFavorite: boolean("is_favorite").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
@@ -286,6 +287,7 @@ export const ratings = pgTable(
     index("idx_ratings_collection").on(table.collectionId),
     index("idx_ratings_media").on(table.mediaItemId),
     index("idx_ratings_tier").on(table.tierId),
+    index("idx_ratings_share_commentary").on(table.shareCommentary),
   ]
 );
 
@@ -337,6 +339,42 @@ export const artworkOverrides = pgTable(
 );
 
 // ==========================================
+// FIRST-CLASS REVIEWS (PHASE 10)
+// ==========================================
+
+export const reviews = pgTable(
+  "reviews",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    mediaItemId: text("media_item_id")
+      .notNull()
+      .references(() => mediaItems.id, { onDelete: "cascade" }),
+    ratingId: text("rating_id").references(() => ratings.id, {
+      onDelete: "set null",
+    }),
+    title: text("title"),
+    content: text("content").notNull(),
+    draftContent: text("draft_content"),
+    status: text("status").notNull().default("draft"), // 'draft' | 'published' | 'unpublished'
+    visibility: text("visibility").notNull().default("public"), // 'public' | 'unlisted' | 'private'
+    isSpoiler: boolean("is_spoiler").notNull().default(false),
+    publishedAt: timestamp("published_at"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_reviews_user").on(table.userId, table.status, table.visibility),
+    index("idx_reviews_media").on(table.mediaItemId, table.status, table.visibility),
+    index("idx_reviews_published").on(table.status, table.visibility, table.publishedAt),
+    index("idx_reviews_user_media").on(table.userId, table.mediaItemId),
+    index("idx_reviews_rating").on(table.ratingId),
+  ]
+);
+
+// ==========================================
 // SOCIAL TABLES (STAGE 5)
 // ==========================================
 
@@ -370,8 +408,9 @@ export const likes = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     collectionId: text("collection_id")
-      .notNull()
       .references(() => collections.id, { onDelete: "cascade" }),
+    reviewId: text("review_id")
+      .references(() => reviews.id, { onDelete: "cascade" }),
     createdAt: timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -379,7 +418,11 @@ export const likes = pgTable(
       table.userId,
       table.collectionId
     ),
+    uniqueIndex("uniq_user_review_like")
+      .on(table.userId, table.reviewId)
+      .where(sql`"review_id" IS NOT NULL`),
     index("idx_likes_collection").on(table.collectionId),
+    index("idx_likes_review").on(table.reviewId),
     index("idx_likes_user").on(table.userId),
   ]
 );
@@ -414,8 +457,9 @@ export const comments = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     collectionId: text("collection_id")
-      .notNull()
       .references(() => collections.id, { onDelete: "cascade" }),
+    reviewId: text("review_id")
+      .references(() => reviews.id, { onDelete: "cascade" }),
     parentId: text("parent_id").references((): any => comments.id, {
       onDelete: "cascade",
     }),
@@ -427,6 +471,7 @@ export const comments = pgTable(
   },
   (table) => [
     index("idx_comments_collection").on(table.collectionId, table.createdAt),
+    index("idx_comments_review").on(table.reviewId, table.createdAt),
     index("idx_comments_user").on(table.userId),
     index("idx_comments_parent").on(table.parentId),
   ]
@@ -509,6 +554,7 @@ export const userRelations = relations(user, ({ many }) => ({
   accounts: many(account),
   collections: many(collections),
   ratings: many(ratings),
+  reviews: many(reviews),
   ratingSystems: many(ratingSystems),
   artworkOverrides: many(artworkOverrides),
   followsGiven: many(follows, { relationName: "follower" }),
@@ -531,6 +577,7 @@ export const mediaItemsRelations = relations(mediaItems, ({ many, one }) => ({
   }),
   collectionEntries: many(collectionEntries),
   ratings: many(ratings),
+  reviews: many(reviews),
   artworkOverrides: many(artworkOverrides),
 }));
 
@@ -624,6 +671,7 @@ export const ratingsRelations = relations(ratings, ({ one, many }) => ({
     references: [ratingTiers.id],
   }),
   categoryScores: many(categoryScores),
+  reviews: many(reviews),
 }));
 
 export const categoryScoresRelations = relations(categoryScores, ({ one }) => ({
@@ -684,6 +732,10 @@ export const likesRelations = relations(likes, ({ one }) => ({
     fields: [likes.collectionId],
     references: [collections.id],
   }),
+  review: one(reviews, {
+    fields: [likes.reviewId],
+    references: [reviews.id],
+  }),
 }));
 
 export const savedRankingsRelations = relations(savedRankings, ({ one }) => ({
@@ -705,6 +757,10 @@ export const commentsRelations = relations(comments, ({ one, many }) => ({
   collection: one(collections, {
     fields: [comments.collectionId],
     references: [collections.id],
+  }),
+  review: one(reviews, {
+    fields: [comments.reviewId],
+    references: [reviews.id],
   }),
   parent: one(comments, {
     fields: [comments.parentId],
@@ -765,6 +821,9 @@ export const notifications = pgTable(
     collectionId: text("collection_id").references(() => collections.id, {
       onDelete: "cascade",
     }),
+    reviewId: text("review_id").references(() => reviews.id, {
+      onDelete: "cascade",
+    }),
     mediaItemId: text("media_item_id").references(() => mediaItems.id, {
       onDelete: "set null",
     }),
@@ -782,6 +841,7 @@ export const notifications = pgTable(
       table.recipientUserId,
       table.readAt
     ),
+    index("idx_notifications_review").on(table.reviewId),
     uniqueIndex("uniq_notifications_dedup")
       .on(table.deduplicationKey)
       .where(sql`"deduplication_key" IS NOT NULL`),
@@ -856,6 +916,10 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
     fields: [notifications.collectionId],
     references: [collections.id],
   }),
+  review: one(reviews, {
+    fields: [notifications.reviewId],
+    references: [reviews.id],
+  }),
   mediaItem: one(mediaItems, {
     fields: [notifications.mediaItemId],
     references: [mediaItems.id],
@@ -911,6 +975,27 @@ export const contentReportsRelations = relations(contentReports, ({ one }) => ({
     relationName: "resolvedBy",
   }),
 }));
+
+export const reviewsRelations = relations(reviews, ({ one, many }) => ({
+  user: one(user, {
+    fields: [reviews.userId],
+    references: [user.id],
+  }),
+  mediaItem: one(mediaItems, {
+    fields: [reviews.mediaItemId],
+    references: [mediaItems.id],
+  }),
+  rating: one(ratings, {
+    fields: [reviews.ratingId],
+    references: [ratings.id],
+  }),
+  comments: many(comments),
+  likes: many(likes),
+  notifications: many(notifications),
+}));
+
+export type Review = typeof reviews.$inferSelect;
+export type NewReview = typeof reviews.$inferInsert;
 
 
 

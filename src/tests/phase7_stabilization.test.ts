@@ -13,6 +13,7 @@ import {
   contentReports,
   userBlocks,
   notifications,
+  reviews,
 } from "../db/schema";
 import { eq, and, or, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -206,6 +207,7 @@ describe("Phase 7: Post-Phase-6 Stabilization and Acceptance Repair", () => {
       collectionId: publicColId,
       reviewText: "Phenomenal cinematic storytelling.",
       personalNotes: "Top secret curator notes: watched with pop-corn.",
+      shareCommentary: true,
       sourceRating: 9.5,
     });
 
@@ -241,6 +243,19 @@ describe("Phase 7: Post-Phase-6 Stabilization and Acceptance Repair", () => {
       personalNotes: "Personal unassigned notes.",
       sourceRating: 8.5,
     });
+
+    // e. First-class published review for curator on movieCollisionId
+    await db.insert(reviews).values({
+      id: publicRatingId,
+      userId: curator.id,
+      mediaItemId: movieCollisionId,
+      ratingId: publicRatingId,
+      title: "Phenomenal Review",
+      content: "Phenomenal cinematic storytelling.",
+      status: "published",
+      visibility: "public",
+      publishedAt: new Date(),
+    });
   });
 
   after(async () => {
@@ -250,6 +265,7 @@ describe("Phase 7: Post-Phase-6 Stabilization and Acceptance Repair", () => {
     await db.delete(follows).where(or(eq(follows.followerId, curator.id), eq(follows.followerId, visitor.id)));
     await db.delete(notifications).where(or(eq(notifications.recipientUserId, curator.id), eq(notifications.recipientUserId, visitor.id)));
     await db.delete(comments).where(or(eq(comments.id, publicCommentId), eq(comments.id, privateCommentId)));
+    await db.delete(reviews).where(eq(reviews.id, publicRatingId));
     await db.delete(ratings).where(inArray(ratings.id, [publicRatingId, privateRatingId, bareRatingId, collectionlessRatingId]));
     await db.delete(collectionEntries).where(inArray(collectionEntries.collectionId, [publicColId, privateColId]));
     await db.delete(collections).where(inArray(collections.id, [publicColId, privateColId]));
@@ -595,7 +611,7 @@ describe("Phase 7: Post-Phase-6 Stabilization and Acceptance Repair", () => {
   // REVIEW PRIVACY INVARIANT
   // ==========================================
   it("5. Review Privacy: private reviews and personal notes are strictly excluded from public reviews", async () => {
-    const publicReviews = await getPublicReviews(curator.id);
+    const publicReviews = await getPublicReviews(curator.id, { includeLegacyRatings: true });
     const ids = publicReviews.map((r) => r.id);
 
     assert(ids.includes(publicRatingId), "Public collection review must be included");

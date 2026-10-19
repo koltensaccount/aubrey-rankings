@@ -12,6 +12,7 @@ import { FollowButton } from "@/components/social/follow-button";
 import { ProfileSocialStats } from "@/components/social/profile-social-stats";
 import { ProfileActions } from "@/components/social/profile-actions";
 import { getAccentTokens } from "@/lib/theme";
+import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
 import {
   ArrowRight,
   Calendar,
@@ -424,15 +425,33 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {publicReviews.map((rev) => (
-                <div
+                <article
                   key={rev.id}
-                  className="p-5 rounded-xl border border-border bg-card space-y-2.5 shadow-sm"
+                  className="p-5 rounded-xl border border-border bg-card space-y-2.5 shadow-sm hover:border-border transition-colors block group"
                 >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h3 className="font-display text-base uppercase font-bold text-foreground">
-                        {rev.mediaItem?.title || "Movie"}
-                      </h3>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Link
+                          href={rev.reviewUrl}
+                          className="font-display text-base uppercase font-bold text-foreground group-hover:text-primary-text transition-colors truncate"
+                        >
+                          {rev.mediaItem?.title || "Movie"}
+                        </Link>
+                        {rev.tier && (
+                          <span
+                            className="px-1.5 py-0.5 rounded text-[10px] font-bold font-mono text-white"
+                            style={{ backgroundColor: rev.tier.color }}
+                          >
+                            {rev.tier.name}
+                          </span>
+                        )}
+                      </div>
+                      {rev.title && (
+                        <p className="text-xs font-semibold text-foreground/90 mt-0.5 truncate">
+                          {rev.title}
+                        </p>
+                      )}
                       <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
                         {rev.sourceRating && (
                           <span
@@ -450,18 +469,33 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                             Weighted: {rev.calculatedOverallScore.toFixed(1)}
                           </span>
                         )}
-                        {rev.watchDate && (
+                        {(rev.watchDate || rev.publishedAt) && (
                           <span>
-                            · {new Date(rev.watchDate).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                            · {new Date(rev.watchDate || rev.publishedAt!).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                           </span>
                         )}
                       </div>
                     </div>
                   </div>
-                  <p className="text-xs text-foreground/80 leading-relaxed line-clamp-4">
-                    &ldquo;{rev.reviewText}&rdquo;
-                  </p>
-                </div>
+                  <SpoilerConcealedText
+                    content={rev.reviewText}
+                    isSpoiler={rev.isSpoiler}
+                    quoteStyle={true}
+                    className="text-xs text-foreground/80 leading-relaxed line-clamp-4 italic border-l-2 border-primary/30 pl-2.5"
+                  />
+                  <div className="pt-1 border-t border-border/60 flex items-center justify-between text-xs">
+                    <span className="text-[11px] text-muted-foreground font-medium">
+                      Published Review
+                    </span>
+                    <Link
+                      href={rev.reviewUrl}
+                      className="text-xs font-semibold text-primary-text hover:underline inline-flex items-center gap-1"
+                    >
+                      <span>Read Review</span>
+                      <ArrowRight size={12} />
+                    </Link>
+                  </div>
+                </article>
               ))}
             </div>
           </section>

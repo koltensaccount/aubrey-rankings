@@ -4,13 +4,15 @@ import { useState, useEffect } from "react";
 import { Heart, Loader2 } from "lucide-react";
 
 interface LikeButtonProps {
-  collectionId: string;
+  collectionId?: string;
+  reviewId?: string;
   initialLikeCount?: number;
   initialIsLiked?: boolean;
 }
 
 export function LikeButton({
   collectionId,
+  reviewId,
   initialLikeCount = 0,
   initialIsLiked = false,
 }: LikeButtonProps) {
@@ -23,7 +25,8 @@ export function LikeButton({
     let active = true;
     async function checkStatus() {
       try {
-        const res = await fetch(`/api/social/like?collectionId=${collectionId}`);
+        const query = reviewId ? `reviewId=${reviewId}` : `collectionId=${collectionId}`;
+        const res = await fetch(`/api/social/like?${query}`);
         if (res.ok) {
           const data = await res.json();
           if (active) {
@@ -35,11 +38,13 @@ export function LikeButton({
         // Silently ignore
       }
     }
-    checkStatus();
+    if (collectionId || reviewId) {
+      checkStatus();
+    }
     return () => {
       active = false;
     };
-  }, [collectionId]);
+  }, [collectionId, reviewId]);
 
   const handleToggleLike = async () => {
     if (loading) return;
@@ -53,10 +58,19 @@ export function LikeButton({
     setLikeCount(nextCount);
 
     try {
+      const payload: { collectionId?: string; reviewId?: string; action: string } = {
+        action: nextState ? "like" : "unlike",
+      };
+      if (reviewId) {
+        payload.reviewId = reviewId;
+      } else if (collectionId) {
+        payload.collectionId = collectionId;
+      }
+
       const res = await fetch("/api/social/like", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ collectionId, action: nextState ? "like" : "unlike" }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -84,8 +98,8 @@ export function LikeButton({
           ? "bg-rose-500/15 text-rose-500 dark:text-rose-400 border border-rose-500/30"
           : "bg-surface hover:bg-surface-elevated text-foreground border border-border"
       }`}
-      title={isLiked ? "Unlike ranking" : "Like ranking"}
-      aria-label="Like ranking"
+      title={isLiked ? (reviewId ? "Unlike review" : "Unlike ranking") : (reviewId ? "Like review" : "Like ranking")}
+      aria-label={reviewId ? "Like review" : "Like ranking"}
     >
       <Heart
         size={14}

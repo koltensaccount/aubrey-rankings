@@ -56,7 +56,8 @@ export interface CommentItem {
 }
 
 interface CommentsSectionProps {
-  collectionId: string;
+  collectionId?: string;
+  reviewId?: string;
   isOwner?: boolean;
 }
 
@@ -68,6 +69,7 @@ interface PendingDeleteInfo {
 
 export function CommentsSection({
   collectionId,
+  reviewId,
   isOwner = false,
 }: CommentsSectionProps) {
   const [comments, setComments] = useState<CommentItem[]>([]);
@@ -114,7 +116,8 @@ export function CommentsSection({
   const loadComments = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await fetch(`/api/social/comments?collectionId=${collectionId}`);
+      const query = reviewId ? `reviewId=${reviewId}` : `collectionId=${collectionId}`;
+      const res = await fetch(`/api/social/comments?${query}`);
       if (res.ok) {
         const data = await res.json();
         setComments(data.comments || []);
@@ -126,11 +129,13 @@ export function CommentsSection({
     } finally {
       setLoading(false);
     }
-  }, [collectionId]);
+  }, [collectionId, reviewId]);
 
   useEffect(() => {
-    loadComments();
-  }, [loadComments]);
+    if (collectionId || reviewId) {
+      loadComments();
+    }
+  }, [loadComments, collectionId, reviewId]);
 
   const toggleSpoilerReveal = (commentId: string) => {
     setRevealedSpoilers((prev) => {
@@ -154,14 +159,25 @@ export function CommentsSection({
     setError(null);
 
     try {
+      const payload: {
+        collectionId?: string;
+        reviewId?: string;
+        content: string;
+        isSpoiler: boolean;
+      } = {
+        content,
+        isSpoiler: newIsSpoiler,
+      };
+      if (reviewId) {
+        payload.reviewId = reviewId;
+      } else if (collectionId) {
+        payload.collectionId = collectionId;
+      }
+
       const res = await fetch("/api/social/comments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          collectionId,
-          content,
-          isSpoiler: newIsSpoiler,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -198,15 +214,27 @@ export function CommentsSection({
     setReplyError(null);
 
     try {
+      const payload: {
+        collectionId?: string;
+        reviewId?: string;
+        content: string;
+        parentId: string;
+        isSpoiler: boolean;
+      } = {
+        content,
+        parentId: parentCommentId,
+        isSpoiler: replyIsSpoiler,
+      };
+      if (reviewId) {
+        payload.reviewId = reviewId;
+      } else if (collectionId) {
+        payload.collectionId = collectionId;
+      }
+
       const res = await fetch("/api/social/comments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          collectionId,
-          content,
-          parentId: parentCommentId,
-          isSpoiler: replyIsSpoiler,
-        }),
+        body: JSON.stringify(payload),
       });
 
       if (!res.ok) {
@@ -406,7 +434,7 @@ export function CommentsSection({
       {!allowComments && !isOwner ? (
         <div className="p-4 rounded-xl border border-border bg-surface/50 text-xs text-muted-foreground flex items-center gap-2.5">
           <MessageSquare size={15} className="text-muted-foreground shrink-0" />
-          <span>Comments have been disabled for this ranking by the curator.</span>
+          <span>Comments have been disabled for this {reviewId ? "review" : "ranking"} by the curator.</span>
         </div>
       ) : (
         <form onSubmit={handleSubmitTopLevel} className="space-y-3">
@@ -416,7 +444,7 @@ export function CommentsSection({
               onChange={(e) => setNewContent(e.target.value)}
               maxLength={2000}
               rows={3}
-              placeholder="Add a note, debate category scores, or comment on this ranking..."
+              placeholder={reviewId ? "Add a note or comment on this review..." : "Add a note, debate category scores, or comment on this ranking..."}
               className="w-full bg-transparent p-4 text-sm text-foreground placeholder:text-muted-foreground resize-none focus:outline-none"
             />
             <div className="flex flex-wrap items-center justify-between gap-3 px-4 pb-3 pt-2 border-t border-border/60 text-xs text-muted-foreground">
@@ -463,7 +491,7 @@ export function CommentsSection({
         </div>
       ) : comments.length === 0 ? (
         <div className="py-8 text-center text-xs text-muted-foreground border border-dashed border-border rounded-comment">
-          No critical notes yet. Be the first to comment on this canon.
+          No critical notes yet. Be the first to comment on this {reviewId ? "review" : "canon"}.
         </div>
       ) : (
         <div className="space-y-4">

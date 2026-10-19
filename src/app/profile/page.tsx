@@ -2,12 +2,13 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { collections, ratings, user, follows } from "@/db/schema";
+import { collections, ratings, user, follows, reviews } from "@/db/schema";
 import { desc, eq, sql } from "drizzle-orm";
 import { ArrowRight, Settings } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { getTopRankedEntries, getRatingSummary } from "@/lib/scoring";
 import { ProfileSocialStats } from "@/components/social/profile-social-stats";
+import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
 
 export default async function ProfilePage() {
   const session = await getServerSession();
@@ -71,7 +72,18 @@ export default async function ProfilePage() {
 
   const publishedCollections = userCollections.filter((c) => c.visibility === "public");
   const pinned = userCollections.find((c) => c.isPinned) || userCollections[0];
-  const reviews = allRatings.filter((r) => r.reviewText);
+  const publishedReviews = await db.query.reviews.findMany({
+    where: (r, { and, eq }) =>
+      and(eq(r.userId, session.user.id), eq(r.status, "published")),
+    orderBy: [desc(reviews.publishedAt), desc(reviews.createdAt)],
+    limit: 10,
+    with: {
+      mediaItem: true,
+      rating: {
+        columns: { calculatedOverallScore: true, sourceRating: true },
+      },
+    },
+  });
 
   const displayName = dbUser?.name || session.user.name || "Critic";
   const displayUsername = dbUser?.username || session.user.email?.split("@")[0] || "critic";
@@ -327,15 +339,15 @@ export default async function ProfilePage() {
         {/* =========================================================================
             RECENT REVIEWS (When available)
             ========================================================================= */}
-        {reviews.length > 0 && (
+        {publishedReviews.length > 0 && (
           <section className="ar-profileSection">
             <div className="ar-profileSectionHeading">
               <h2>Recent reviews</h2>
-              <span>From your critique journal</span>
+              <span>From your published critique journal</span>
             </div>
 
             <div className="ar-feedStream">
-              {reviews.map((rev) => (
+              {publishedReviews.map((rev) => (
                 <article key={rev.id} className="ar-ordinaryPost">
                   <header className="ar-postAuthor">
                     <span className="ar-personAvatar">{initial}</span>
@@ -347,11 +359,31 @@ export default async function ProfilePage() {
                   <div className="ar-reviewBody">
                     <div>
                       <h3>{rev.mediaItem?.title}</h3>
-                      <p>{rev.reviewText}</p>
+                      {rev.title && (
+                        <p className="text-xs font-semibold text-foreground/90 mt-0.5 truncate">
+                          {rev.title}
+                        </p>
+                      )}
+                      <SpoilerConcealedText
+                        content={rev.content}
+                        isSpoiler={rev.isSpoiler}
+                      />
                       <div className="ar-postScore">
-                        <span>★ {rev.calculatedOverallScore ? rev.calculatedOverallScore.toFixed(1) : "—"}</span>
+                        <span>
+                          ★{" "}
+                          {rev.rating?.calculatedOverallScore
+                            ? rev.rating.calculatedOverallScore.toFixed(1)
+                            : rev.rating?.sourceRating
+                              ? rev.rating.sourceRating.toFixed(1)
+                              : "—"}
+                        </span>
                         <i />
-                        <small>Weighted score</small>
+                        <Link
+                          href={`/review/${rev.id}`}
+                          className="text-xs font-semibold text-primary-text hover:underline inline-flex items-center gap-1 ml-2"
+                        >
+                          View Review &rarr;
+                        </Link>
                       </div>
                     </div>
                     {rev.mediaItem?.stillPath && (

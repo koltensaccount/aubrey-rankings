@@ -17,6 +17,7 @@ export interface CreateNotificationParams {
   actorUserId?: string | null;
   notificationType: NotificationType;
   collectionId?: string | null;
+  reviewId?: string | null;
   mediaItemId?: string | null;
   deduplicationKey?: string | null;
   metadata?: Record<string, any> | null;
@@ -43,6 +44,7 @@ export async function createNotification({
   actorUserId,
   notificationType,
   collectionId,
+  reviewId,
   mediaItemId,
   deduplicationKey,
   metadata,
@@ -86,6 +88,7 @@ export async function createNotification({
       actorUserId: actorUserId || null,
       notificationType,
       collectionId: collectionId || null,
+      reviewId: reviewId || null,
       mediaItemId: mediaItemId || null,
       deduplicationKey: deduplicationKey || null,
       metadata: metadata || null,

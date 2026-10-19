@@ -640,12 +640,12 @@ export default function CollectionDetailPage({
     };
   }, [collection, ratingsMap]);
 
-  // Process and sort entries
-  const processedEntries = useMemo(() => {
+  // Process all entries with scores and rating status
+  const allEntriesWithStatus = useMemo(() => {
     if (!collection?.entries) return [];
     const categories = collection.defaultRatingSystem?.categories || [];
 
-    let list = collection.entries.map((entry: any) => {
+    return collection.entries.map((entry: any) => {
       const media = entry.mediaItem;
       const userRating = ratingsMap[media.id];
       const ratingStatus = getItemRatingStatus(
@@ -662,14 +662,21 @@ export default function CollectionDetailPage({
         userRating,
       };
     });
+  }, [collection, ratingsMap]);
 
-    // Filtering
-    if (filterRated === "rated") {
-      list = list.filter((e: any) => e.ratingStatus.state === "rated");
-    } else if (filterRated === "in_progress") {
-      list = list.filter((e: any) => e.ratingStatus.state === "in_progress");
-    } else if (filterRated === "unrated") {
-      list = list.filter((e: any) => e.ratingStatus.state === "unrated");
+  // Process and sort entries for current view
+  const processedEntries = useMemo(() => {
+    let list = [...allEntriesWithStatus];
+
+    // Status filtering: Tier Board always displays all collection entries grouped by tier
+    if (viewMode !== "tier_board") {
+      if (filterRated === "rated") {
+        list = list.filter((e: any) => e.ratingStatus.state === "rated");
+      } else if (filterRated === "in_progress") {
+        list = list.filter((e: any) => e.ratingStatus.state === "in_progress");
+      } else if (filterRated === "unrated") {
+        list = list.filter((e: any) => e.ratingStatus.state === "unrated");
+      }
     }
 
     if (selectedSeason !== "all") {
@@ -684,7 +691,18 @@ export default function CollectionDetailPage({
       );
     }
 
-    // Sorting
+    // Sorting: Tier Board always preserves saved item ordering within tiers,
+    // regardless of the previous List/Grid sort selection.
+    if (viewMode === "tier_board") {
+      list.sort((a: any, b: any) => {
+        const aOrder = typeof a.sortOrder === "number" ? a.sortOrder : 0;
+        const bOrder = typeof b.sortOrder === "number" ? b.sortOrder : 0;
+        if (aOrder !== bOrder) return aOrder - bOrder;
+        return (a.id || "").localeCompare(b.id || "");
+      });
+      return list;
+    }
+
     list.sort((a: any, b: any) => {
       if (sortBy === "score_desc") {
         if (isTierCollection) {
@@ -723,7 +741,7 @@ export default function CollectionDetailPage({
     });
 
     return list;
-  }, [collection, ratingsMap, filterRated, selectedSeason, searchFilter, sortBy, isTierCollection]);
+  }, [allEntriesWithStatus, viewMode, filterRated, selectedSeason, searchFilter, sortBy, isTierCollection]);
 
   const handleRatingSaved = (savedRating: any) => {
     if (!savedRating?.mediaItemId) return;
@@ -879,7 +897,7 @@ export default function CollectionDetailPage({
           isOpen={showTierEditor}
           onClose={() => setShowTierEditor(false)}
           collection={collection}
-          processedEntries={processedEntries}
+          processedEntries={allEntriesWithStatus}
           onOpenCustomizeTiers={() => handleOpenRubricModal("tier")}
           onQuickAssignTier={handleQuickAssignTier}
           onRefreshCollection={fetchCollection}

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/db";
-import { mediaItems, ratings, collections, user } from "@/db/schema";
+import { mediaItems, ratings, collections, user, reviews } from "@/db/schema";
 import { eq, and, isNotNull, ne, desc } from "drizzle-orm";
 
 export async function GET(
@@ -118,62 +118,70 @@ export async function GET(
 
   // Fetch all public ratings with reviews for this media item (if media exists in DB)
   const isEphemeral = typeof media.id === "string" && media.id.startsWith("tmdb-");
-  const rawReviews = isEphemeral
-    ? []
-    : await db.query.ratings.findMany({
-        where: (r, { and, eq, isNotNull, ne }) =>
-          and(
-            eq(r.mediaItemId, media.id),
-            isNotNull(r.reviewText),
-            ne(r.reviewText, ""),
-            isNotNull(r.collectionId)
-          ),
-    orderBy: [desc(ratings.updatedAt)],
-    columns: {
-      personalNotes: false, // Strict privacy: Never expose private notes
-    },
-    with: {
-      user: {
-        columns: {
-          id: true,
-          name: true,
-          username: true,
-          image: true,
-        },
-      },
-      collection: {
-        columns: {
-          id: true,
-          title: true,
-          visibility: true,
-        },
-      },
-      ratingSystem: {
-        columns: {
-          scale: true,
-        },
-      },
-    },
-  });
 
   const session = await (await import("@/lib/server-session")).getServerSession(request);
   const { getBlockedUserIds } = await import("@/lib/safety");
   const blockedUserIds = session ? await getBlockedUserIds(session.user.id) : new Set<string>();
 
-  // Filter to reviews in public collections only (excluding unlisted and private) and not blocked
-  const publicReviews = rawReviews
-    .filter(
-      (r) =>
-        r.collection &&
-        r.collection.visibility === "public" &&
-        !blockedUserIds.has(r.userId)
-    )
+  // 1. Fetch published, public first-class reviews
+  const rawFirstClassReviews = isEphemeral
+    ? []
+    : await db.query.reviews.findMany({
+        where: (rv, { and, eq }) =>
+          and(
+            eq(rv.mediaItemId, media.id),
+            eq(rv.status, "published"),
+            eq(rv.visibility, "public")
+          ),
+        orderBy: [desc(reviews.publishedAt), desc(reviews.createdAt)],
+        with: {
+          user: {
+            columns: {
+              id: true,
+              name: true,
+              username: true,
+              image: true,
+            },
+          },
+          rating: {
+            columns: {
+              id: true,
+              calculatedOverallScore: true,
+              sourceRating: true,
+              tierId: true,
+            },
+            with: {
+              tier: {
+                columns: {
+                  id: true,
+                  name: true,
+                  color: true,
+                },
+              },
+            },
+          },
+        },
+      });
+
+  const firstClassReviews = rawFirstClassReviews
+    .filter((r) => !blockedUserIds.has(r.userId))
     .map((r) => ({
       id: r.id,
-      reviewText: r.reviewText,
-      score: r.calculatedOverallScore ?? r.sourceRating ?? null,
-      scale: r.ratingSystem?.scale ?? 10,
-      watchDate: r.watchDate,
+      reviewType: "independent" as const,
+      title: r.title,
+      reviewText: r.content,
+      score: r.rating ? (r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null) : null,
+      scale: 10,
+      tier: r.rating?.tier
+        ? {
+            id: r.rating.tier.id,
+            name: r.rating.tier.name,
+            color: r.rating.tier.color,
+          }
+        : null,
+      isSpoiler: r.isSpoiler,
+      watchDate: null,
+      publishedAt: r.publishedAt,
       updatedAt: r.updatedAt,
       createdAt: r.createdAt,
       author: {
@@ -182,13 +190,11 @@ export async function GET(
         username: r.user.username,
         image: r.user.image,
       },
-      collection: {
-        id: r.collection!.id,
-        title: r.collection!.title,
-      },
+      collection: null,
     }));
 
-  const scores = publicReviews
+  const reviewsList = firstClassReviews;
+  const scores = reviewsList
     .map((r) => r.score)
     .filter((s): s is number => typeof s === "number" && Number.isFinite(s));
 
@@ -209,9 +215,9 @@ export async function GET(
       seasonNumber: media.seasonNumber,
       episodeNumber: media.episodeNumber,
     },
-    reviews: publicReviews,
+    reviews: reviewsList,
     stats: {
-      totalReviews: publicReviews.length,
+      totalReviews: reviewsList.length,
       averageScore,
     },
   });

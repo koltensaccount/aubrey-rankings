@@ -72,6 +72,7 @@ describe("Independent audit: privacy and data integrity", () => {
           collectionId,
           reviewText: `audit-review-${index}`,
           personalNotes: "private note",
+          shareCommentary: index === 0,
           calculatedOverallScore: 8,
         })),
       );
@@ -92,10 +93,9 @@ describe("Independent audit: privacy and data integrity", () => {
       );
   });
   it("public reviews omit private/unlisted collections and personal notes", async () => {
-    const reviews = await getPublicReviews(owner);
+    const reviews = await getPublicReviews(owner, { includeLegacyRatings: true });
     assert.deepEqual(reviews.map((r) => r.reviewText).sort(), [
       "audit-review-0",
-      "audit-review-3",
     ]);
     assert(reviews.every((r) => !("personalNotes" in r)));
   });

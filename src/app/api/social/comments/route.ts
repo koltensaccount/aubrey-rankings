@@ -2,21 +2,106 @@ import { requireRateLimit } from "@/lib/request-limits";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { comments, collections, user } from "@/db/schema";
+import { comments, collections, reviews, user } from "@/db/schema";
 import { eq, asc, and } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { createNotification } from "@/lib/notifications";
+import { canComment, isBlocked, getBlockedUserIds } from "@/lib/safety";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(request);
   const collectionId = request.nextUrl.searchParams.get("collectionId");
+  const reviewId = request.nextUrl.searchParams.get("reviewId");
 
-  if (!collectionId) {
-    return NextResponse.json({ error: "collectionId required" }, { status: 400 });
+  if (!collectionId && !reviewId) {
+    return NextResponse.json({ error: "collectionId or reviewId required" }, { status: 400 });
   }
 
+  const blockedIds = session ? await getBlockedUserIds(session.user.id) : new Set<string>();
+
+  if (reviewId) {
+    const rev = await db.query.reviews.findFirst({
+      where: eq(reviews.id, reviewId),
+      columns: { id: true, userId: true, status: true, visibility: true },
+    });
+
+    if (!rev) {
+      return NextResponse.json({ error: "Review not found" }, { status: 404 });
+    }
+
+    const isReviewAuthor = session?.user?.id === rev.userId;
+    if (!isReviewAuthor) {
+      if (session && (await isBlocked(rev.userId, session.user.id))) {
+        return NextResponse.json({ error: "Review not found" }, { status: 404 });
+      }
+      if (rev.status !== "published" || rev.visibility === "private") {
+        return NextResponse.json({ error: "Review not found" }, { status: 404 });
+      }
+    }
+
+    const rawList = await db.query.comments.findMany({
+      where: eq(comments.reviewId, reviewId),
+      orderBy: [asc(comments.createdAt)],
+      with: {
+        user: {
+          columns: {
+            id: true,
+            name: true,
+            username: true,
+            image: true,
+          },
+        },
+      },
+    });
+
+    const list = rawList.filter((item) => !blockedIds.has(item.userId));
+
+    const formatComment = (item: (typeof list)[0]) => ({
+      id: item.id,
+      content: item.content,
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      parentId: item.parentId,
+      isSpoiler: item.isSpoiler,
+      isEdited: item.isEdited,
+      isAuthor: session ? session.user.id === item.userId : false,
+      isCollectionOwner: isReviewAuthor,
+      author: {
+        id: item.user.id,
+        name: item.user.name,
+        username: item.user.username,
+        image: item.user.image,
+      },
+    });
+
+    const repliesByParentId = new Map<string, ReturnType<typeof formatComment>[]>();
+    const topLevelComments: (ReturnType<typeof formatComment> & { replies: ReturnType<typeof formatComment>[] })[] = [];
+
+    for (const item of list) {
+      if (item.parentId) {
+        const existing = repliesByParentId.get(item.parentId) || [];
+        existing.push(formatComment(item));
+        repliesByParentId.set(item.parentId, existing);
+      }
+    }
+
+    for (const item of list) {
+      if (!item.parentId) {
+        topLevelComments.push({
+          ...formatComment(item),
+          replies: repliesByParentId.get(item.id) || [],
+        });
+      }
+    }
+
+    return NextResponse.json({ comments: topLevelComments });
+  }
+
+  // Collection comments path
   const col = await db.query.collections.findFirst({
-    where: (c, { eq }) => eq(c.id, collectionId),
+    where: (c, { eq }) => eq(c.id, collectionId!),
     columns: { id: true, userId: true, visibility: true, isPublic: true, allowComments: true },
   });
 
@@ -31,11 +116,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "Collection not found" }, { status: 404 });
   }
 
-  const { getBlockedUserIds } = await import("@/lib/safety");
-  const blockedIds = session ? await getBlockedUserIds(session.user.id) : new Set<string>();
-
   const rawList = await db.query.comments.findMany({
-    where: (c, { eq }) => eq(c.collectionId, collectionId),
+    where: (c, { eq }) => eq(c.collectionId, collectionId!),
     orderBy: [asc(comments.createdAt)],
     with: {
       user: {
@@ -113,10 +195,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request" }, { status: 400 });
   }
 
-  const { collectionId, content, parentId, isSpoiler } = body;
+  const { collectionId, reviewId, content, parentId, isSpoiler } = body;
 
-  if (!collectionId) {
-    return NextResponse.json({ error: "collectionId required" }, { status: 400 });
+  if (!collectionId && !reviewId) {
+    return NextResponse.json({ error: "collectionId or reviewId required" }, { status: 400 });
   }
 
   const trimmedContent = typeof content === "string" ? content.trim() : "";
@@ -131,8 +213,172 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (reviewId) {
+    const rev = await db.query.reviews.findFirst({
+      where: eq(reviews.id, reviewId),
+      with: { mediaItem: true },
+    });
+
+    if (!rev) {
+      return NextResponse.json({ error: "Review not found" }, { status: 404 });
+    }
+
+    const isAuthor = session.user.id === rev.userId;
+    if (!isAuthor) {
+      if (await isBlocked(rev.userId, session.user.id)) {
+        return NextResponse.json({ error: "Review not found" }, { status: 404 });
+      }
+      if (rev.status !== "published" || rev.visibility === "private") {
+        return NextResponse.json({ error: "Cannot comment on this review" }, { status: 403 });
+      }
+    }
+
+    const commentCheck = await canComment({
+      authorId: rev.userId,
+      commenterId: session.user.id,
+      collectionAllowComments: true,
+    });
+
+    if (!commentCheck.allowed) {
+      return NextResponse.json({ error: commentCheck.reason || "Forbidden" }, { status: 403 });
+    }
+
+    let validParentId: string | null = null;
+    let parentComment: any = null;
+    if (parentId && typeof parentId === "string") {
+      parentComment = await db.query.comments.findFirst({
+        where: and(eq(comments.id, parentId), eq(comments.reviewId, reviewId)),
+      });
+
+      if (!parentComment) {
+        return NextResponse.json({ error: "Parent comment not found" }, { status: 404 });
+      }
+
+      if (parentComment.parentId) {
+        return NextResponse.json(
+          { error: "Nested replies beyond 1 level are not permitted" },
+          { status: 400 }
+        );
+      }
+      validParentId = parentComment.id;
+    }
+
+    const newId = randomUUID();
+    const spoilerFlag = Boolean(isSpoiler);
+
+    await db.insert(comments).values({
+      id: newId,
+      userId: session.user.id,
+      collectionId: null,
+      reviewId,
+      parentId: validParentId,
+      content: trimmedContent,
+      isSpoiler: spoilerFlag,
+      isEdited: false,
+    });
+
+    const created = await db.query.comments.findFirst({
+      where: eq(comments.id, newId),
+      with: {
+        user: {
+          columns: {
+            id: true,
+            name: true,
+            username: true,
+            image: true,
+          },
+        },
+      },
+    });
+
+    if (!created) {
+      return NextResponse.json({ error: "Failed to create comment" }, { status: 500 });
+    }
+
+    const actorName = created.user.name || session.user.name || "Someone";
+    const commentSnippet = trimmedContent.slice(0, 80) + (trimmedContent.length > 80 ? "…" : "");
+    const title = rev.title || rev.mediaItem.title;
+
+    if (validParentId && parentComment) {
+      if (parentComment.userId !== session.user.id) {
+        await createNotification({
+          recipientUserId: parentComment.userId,
+          actorUserId: session.user.id,
+          notificationType: "reply",
+          reviewId: rev.id,
+          mediaItemId: rev.mediaItemId,
+          metadata: {
+            actorName,
+            actorUsername: created.user.username || null,
+            actorImage: created.user.image || session.user.image || null,
+            commentPreview: trimmedContent.slice(0, 100),
+            message: `${actorName} replied to your comment on review of "${title}": "${commentSnippet}"`,
+            targetUrl: `/review/${rev.id}`,
+          },
+        });
+      }
+      if (rev.userId !== session.user.id && rev.userId !== parentComment.userId) {
+        await createNotification({
+          recipientUserId: rev.userId,
+          actorUserId: session.user.id,
+          notificationType: "comment",
+          reviewId: rev.id,
+          mediaItemId: rev.mediaItemId,
+          metadata: {
+            actorName,
+            actorUsername: created.user.username || null,
+            actorImage: created.user.image || session.user.image || null,
+            commentPreview: trimmedContent.slice(0, 100),
+            message: `${actorName} commented on your review of "${title}": "${commentSnippet}"`,
+            targetUrl: `/review/${rev.id}`,
+          },
+        });
+      }
+    } else {
+      if (rev.userId !== session.user.id) {
+        await createNotification({
+          recipientUserId: rev.userId,
+          actorUserId: session.user.id,
+          notificationType: "comment",
+          reviewId: rev.id,
+          mediaItemId: rev.mediaItemId,
+          metadata: {
+            actorName,
+            actorUsername: created.user.username || null,
+            actorImage: created.user.image || session.user.image || null,
+            commentPreview: trimmedContent.slice(0, 100),
+            message: `${actorName} commented on your review of "${title}": "${commentSnippet}"`,
+            targetUrl: `/review/${rev.id}`,
+          },
+        });
+      }
+    }
+
+    return NextResponse.json({
+      comment: {
+        id: created.id,
+        content: created.content,
+        createdAt: created.createdAt,
+        updatedAt: created.updatedAt,
+        parentId: created.parentId,
+        isSpoiler: created.isSpoiler,
+        isEdited: created.isEdited,
+        isAuthor: true,
+        isCollectionOwner: isAuthor,
+        author: {
+          id: created.user.id,
+          name: created.user.name,
+          username: created.user.username,
+          image: created.user.image,
+        },
+        replies: [],
+      },
+    });
+  }
+
+  // Collection comments path
   const col = await db.query.collections.findFirst({
-    where: (c, { eq }) => eq(c.id, collectionId),
+    where: (c, { eq }) => eq(c.id, collectionId!),
     columns: { id: true, userId: true, visibility: true, isPublic: true, title: true, allowComments: true },
   });
 
@@ -147,7 +393,6 @@ export async function POST(request: NextRequest) {
   }
 
   // Enforce authoritative comment eligibility (collection allowComments, block check, user permission)
-  const { canComment, isBlocked } = await import("@/lib/safety");
   const commentCheck = await canComment({
     authorId: col.userId,
     commenterId: session.user.id,
@@ -158,40 +403,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: commentCheck.reason || "Forbidden" }, { status: 403 });
   }
 
+  // Check parentId if this is a reply
   let validParentId: string | null = null;
   let parentComment: any = null;
-
-  if (parentId) {
-    if (typeof parentId !== "string") {
-      return NextResponse.json({ error: "Invalid parent comment ID" }, { status: 400 });
-    }
-
+  if (parentId && typeof parentId === "string") {
     parentComment = await db.query.comments.findFirst({
-      where: (c, { eq }) => eq(c.id, parentId),
-      with: {
-        user: {
-          columns: {
-            id: true,
-            name: true,
-            username: true,
-          },
-        },
-      },
+      where: (c, { and, eq }) =>
+        and(eq(c.id, parentId), eq(c.collectionId, collectionId!)),
     });
 
-    if (!parentComment || parentComment.collectionId !== collectionId) {
-      return NextResponse.json({ error: "Parent comment not found in this collection" }, { status: 400 });
+    if (!parentComment) {
+      return NextResponse.json({ error: "Parent comment not found" }, { status: 404 });
     }
 
-    // Blocking check: Cannot reply to a user you have blocked or who blocked you
-    if (await isBlocked(parentComment.userId, session.user.id)) {
-      return NextResponse.json({ error: "Cannot reply to this comment" }, { status: 403 });
-    }
-
-    // Enforce 1-level threading: cannot reply to a reply
+    // Limit reply nesting to 1 level (replies cannot be replied to)
     if (parentComment.parentId) {
       return NextResponse.json(
-        { error: "Nested replies are not supported; you can only reply directly to top-level comments" },
+        { error: "Nested replies beyond 1 level are not permitted" },
         { status: 400 }
       );
     }
@@ -205,7 +433,8 @@ export async function POST(request: NextRequest) {
   await db.insert(comments).values({
     id: newId,
     userId: session.user.id,
-    collectionId,
+    collectionId: collectionId!,
+    reviewId: null,
     parentId: validParentId,
     content: trimmedContent,
     isSpoiler: spoilerFlag,
