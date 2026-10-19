@@ -42,6 +42,7 @@ interface ReviewEditorDialogProps {
   onDeleted?: (deletedId: string) => void;
   journalMode?: boolean;
   initialQuickScore?: number | null;
+  initialDetailedRating?: { ratingSystemId: string; categoryScores: Array<{ categoryId: string; score: number }> } | null;
 }
 
 export function ReviewEditorDialog({
@@ -55,6 +56,7 @@ export function ReviewEditorDialog({
   onDeleted,
   journalMode = false,
   initialQuickScore = null,
+  initialDetailedRating = null,
 }: ReviewEditorDialogProps) {
   const isEditing = Boolean(existingReview?.id);
   const [title, setTitle] = useState(existingReview?.title || "");
@@ -97,11 +99,11 @@ export function ReviewEditorDialog({
       setShowDeleteConfirm(false);
       setQuickScore(initialQuickScore);
       setQuickScoreTouched(false);
-      setScoringMethod("quick");
-      setRatingSystemId("");
-      setCategoryValues({});
+      setScoringMethod(initialDetailedRating ? "detailed" : "quick");
+      setRatingSystemId(initialDetailedRating?.ratingSystemId || "");
+      setCategoryValues(Object.fromEntries(initialDetailedRating?.categoryScores.map((score) => [score.categoryId, score.score]) || []));
     }
-  }, [isOpen, existingReview, initialQuickScore, journalMode]);
+  }, [isOpen, existingReview, initialQuickScore, initialDetailedRating, journalMode]);
 
   useEffect(() => {
     if (!isOpen || !journalMode) return;
@@ -164,7 +166,7 @@ export function ReviewEditorDialog({
               id: existingReview?.id,
               title: title.trim() || null,
               content,
-              status: targetStatus === "published" ? "published" : "draft",
+              status: targetStatus,
               visibility,
               isSpoiler,
             } : undefined,

@@ -142,6 +142,7 @@ export default async function MediaDetailsPage({
   const ownerGlobalRating = session && !isEphemeral
     ? await db.query.ratings.findFirst({
         where: (r, { and, eq, isNull }) => and(eq(r.userId, session.user.id), eq(r.mediaItemId, media!.id), isNull(r.collectionId)),
+        with: { categoryScores: true },
       })
     : null;
   const ownerJournalReview = session && !isEphemeral
@@ -337,6 +338,7 @@ export default async function MediaDetailsPage({
               mediaTitle={media.title}
               posterPath={media.posterPath}
               initialQuickScore={ownerGlobalRating?.calculatedOverallScore ?? null}
+              initialDetailedRating={ownerGlobalRating?.ratingSystemId ? { ratingSystemId: ownerGlobalRating.ratingSystemId, categoryScores: ownerGlobalRating.categoryScores.map((score) => ({ categoryId: score.categoryId, score: score.score })) } : null}
               existingReview={ownerJournalReview ? {
                 id: ownerJournalReview.id,
                 title: ownerJournalReview.title,
@@ -364,6 +366,7 @@ export default async function MediaDetailsPage({
                   mediaTitle={media.title}
                   posterPath={media.posterPath}
                   initialQuickScore={ownerGlobalRating?.calculatedOverallScore ?? null}
+                  initialDetailedRating={ownerGlobalRating?.ratingSystemId ? { ratingSystemId: ownerGlobalRating.ratingSystemId, categoryScores: ownerGlobalRating.categoryScores.map((score) => ({ categoryId: score.categoryId, score: score.score })) } : null}
                   existingReview={ownerJournalReview ? {
                     id: ownerJournalReview.id,
                     title: ownerJournalReview.title,

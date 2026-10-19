@@ -14,6 +14,7 @@ interface WriteReviewButtonProps {
   className?: string;
   existingReview?: ReviewEditorData | null;
   initialQuickScore?: number | null;
+  initialDetailedRating?: { ratingSystemId: string; categoryScores: Array<{ categoryId: string; score: number }> } | null;
 }
 
 export function WriteReviewButton({
@@ -23,6 +24,7 @@ export function WriteReviewButton({
   className,
   existingReview,
   initialQuickScore,
+  initialDetailedRating,
 }: WriteReviewButtonProps) {
   const router = useRouter();
   const { data: session } = useSession();
@@ -43,7 +45,7 @@ export function WriteReviewButton({
         }
       >
         <Pencil size={13} />
-        <span>{existingReview || initialQuickScore !== null ? "Edit Journal Entry" : "Add to Journal"}</span>
+        <span>{existingReview || initialQuickScore !== null || initialDetailedRating ? "Edit Journal Entry" : "Add to Journal"}</span>
       </button>
 
       <ReviewEditorDialog
@@ -54,6 +56,7 @@ export function WriteReviewButton({
         posterPath={posterPath}
         existingReview={existingReview}
         initialQuickScore={initialQuickScore}
+        initialDetailedRating={initialDetailedRating}
         journalMode
         onSaved={(createdReview) => {
           if (createdReview?.id) {

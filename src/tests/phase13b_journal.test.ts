@@ -55,4 +55,17 @@ describe("Phase 13B journal persistence", () => {
     assert.equal(retained?.content, "A private thought.");
     assert.equal(retained?.ratingId, null);
   });
+
+  it("keeps unpublished journal writing out of public visibility and preserves imported global ratings", async () => {
+    const importedRatingId = `imported_${suffix}`;
+    const reviewId = `unpublished_${suffix}`;
+    await db.insert(ratings).values({ id: importedRatingId, userId, mediaItemId: mediaId, sourceRating: 4, sourceScale: 5, calculatedOverallScore: 8 });
+    await db.insert(reviews).values({ id: reviewId, userId, mediaItemId: mediaId, ratingId: importedRatingId, isJournal: true, content: "Previously public.", status: "published", visibility: "public", publishedAt: new Date() });
+    await db.update(reviews).set({ status: "unpublished", visibility: "private", updatedAt: new Date() }).where(eq(reviews.id, reviewId));
+    const publiclyVisible = await db.query.reviews.findFirst({ where: (r, { and, eq }) => and(eq(r.id, reviewId), eq(r.status, "published"), eq(r.visibility, "public")) });
+    const imported = await db.query.ratings.findFirst({ where: (r, { eq }) => eq(r.id, importedRatingId) });
+    assert.equal(publiclyVisible, undefined);
+    assert.equal(imported?.sourceRating, 4);
+    assert.equal(imported?.calculatedOverallScore, 8);
+  });
 });
