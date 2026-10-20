@@ -22,16 +22,109 @@ export async function resolveMediaItem(mediaId: string): Promise<string | null> 
   });
   if (existing) return existing.id;
 
-  // 2. TMDB ephemeral synthetic ID or numeric ID
+  // 2. Check for TV episode synthetic or target IDs (e.g. tv_1399_s1_e1 or tmdb-tv-1399-s1-e1 or tmdb-episode-1399-1-1)
+  const episodeMatch =
+    /^(?:tmdb[-_])?tv[-_](\d+)[-_]s(\d+)[-_]e(\d+)$/i.exec(mediaId) ||
+    /^(?:tmdb[-_])?episode[-_](\d+)[-_](\d+)[-_](\d+)$/i.exec(mediaId);
+
+  if (episodeMatch) {
+    const tvId = parseInt(episodeMatch[1], 10);
+    const seasonNumber = parseInt(episodeMatch[2], 10);
+    const episodeNumber = parseInt(episodeMatch[3], 10);
+    const targetEpisodeId = `tv_${tvId}_s${seasonNumber}_e${episodeNumber}`;
+
+    const existingEp = await db.query.mediaItems.findFirst({
+      where: eq(mediaItems.id, targetEpisodeId),
+      columns: { id: true },
+    });
+    if (existingEp) return existingEp.id;
+
+    try {
+      const seasonData = await tmdb.getTvSeason(tvId, seasonNumber);
+      const ep = seasonData.episodes?.find((e) => e.episode_number === episodeNumber);
+      if (ep) {
+        // 1. First look for an existing series by canonical ID or TMDB identity
+        let parentRecord = await db.query.mediaItems.findFirst({
+          where: (m, { and, eq, or }) =>
+            or(eq(m.id, `tv_${tvId}`), and(eq(m.tmdbId, tvId), eq(m.mediaType, "tv"))),
+          columns: { id: true },
+        });
+
+        // 2. If not found in DB, try to fetch and create parent show from TMDB
+        if (!parentRecord) {
+          try {
+            const tv = await tmdb.getTvDetails(tvId);
+            if (tv && (tv.name || tv.id)) {
+              const canonicalParentId = `tv_${tv.id}`;
+              await db
+                .insert(mediaItems)
+                .values({
+                  id: canonicalParentId,
+                  tmdbId: tv.id,
+                  mediaType: "tv",
+                  title: tv.name || "Untitled Series",
+                  overview: tv.overview || null,
+                  posterPath: tv.poster_path || null,
+                  backdropPath: tv.backdrop_path || null,
+                  releaseDate: tv.first_air_date || null,
+                  tmdbMetadata: { voteAverage: tv.vote_average, voteCount: tv.vote_count },
+                })
+                .onConflictDoNothing();
+
+              // Confirm parent record exists in DB
+              parentRecord = await db.query.mediaItems.findFirst({
+                where: eq(mediaItems.id, canonicalParentId),
+                columns: { id: true },
+              });
+            }
+          } catch {
+            // Parent fetch failed; continue safely without parentMediaId
+          }
+        }
+
+        // 3. Only set parentMediaId when the referenced parent actually exists in the DB
+        const verifiedParentId = parentRecord ? parentRecord.id : null;
+
+        await db
+          .insert(mediaItems)
+          .values({
+            id: targetEpisodeId,
+            tmdbId: ep.id,
+            mediaType: "episode",
+            title: ep.name || `Episode ${ep.episode_number}`,
+            overview: ep.overview || null,
+            stillPath: ep.still_path || null,
+            posterPath: ep.still_path || null,
+            releaseDate: ep.air_date || null,
+            seasonNumber: ep.season_number,
+            episodeNumber: ep.episode_number,
+            parentMediaId: verifiedParentId,
+            tmdbMetadata: {
+              voteAverage: ep.vote_average,
+            },
+          })
+          .onConflictDoNothing();
+
+        return targetEpisodeId;
+      }
+    } catch {}
+
+    return null;
+  }
+
+  // 3. TMDB ephemeral synthetic ID or numeric ID
   let tmdbNum: number | null = null;
   let mediaType: "movie" | "tv" = "movie";
 
-  if (mediaId.startsWith("tmdb-movie-")) {
-    tmdbNum = parseInt(mediaId.replace("tmdb-movie-", ""), 10);
-    mediaType = "movie";
-  } else if (mediaId.startsWith("tmdb-tv-")) {
-    tmdbNum = parseInt(mediaId.replace("tmdb-tv-", ""), 10);
+  const tvShowMatch = /^(?:tmdb[-_])?tv[-_]?(\d+)$/i.exec(mediaId);
+  const movieMatch = /^(?:tmdb[-_])?movie[-_]?(\d+)$/i.exec(mediaId);
+
+  if (tvShowMatch) {
+    tmdbNum = parseInt(tvShowMatch[1], 10);
     mediaType = "tv";
+  } else if (movieMatch) {
+    tmdbNum = parseInt(movieMatch[1], 10);
+    mediaType = "movie";
   } else if (/^\d+$/.test(mediaId)) {
     tmdbNum = parseInt(mediaId, 10);
     mediaType = "movie";

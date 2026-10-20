@@ -8,6 +8,7 @@ import { getTmdbImageUrl } from "@/lib/tmdb";
 import { getTopRankedEntries, getRatingSummary } from "@/lib/scoring";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
+import { reviewScoreOnTen } from "@/lib/review-rating";
 
 export default async function HomePage() {
   const session = await getServerSession();
@@ -171,14 +172,23 @@ export default async function HomePage() {
     limit: 12,
     with: {
       mediaItem: true,
-      rating: { columns: { calculatedOverallScore: true, sourceRating: true } },
+      rating: {
+        with: {
+          ratingSystem: { columns: { scale: true, type: true } },
+          categoryScores: true,
+        },
+      },
     },
   });
   const linkedRatingIds = new Set(userReviews.map((review) => review.ratingId).filter(Boolean));
   const ratingOnlyJournalEntries = (await db.query.ratings.findMany({
     where: (r, { and, eq, isNull }) => and(eq(r.userId, session.user.id), isNull(r.collectionId)),
     orderBy: [desc(ratings.updatedAt)],
-    with: { mediaItem: true },
+    with: {
+      mediaItem: true,
+      ratingSystem: { columns: { scale: true, type: true } },
+      categoryScores: true,
+    },
   })).filter((rating) => !linkedRatingIds.has(rating.id));
   const hasLibraryContent = userCollections.length > 0 || userReviews.length > 0 || ratingOnlyJournalEntries.length > 0 || accessibleSavedCollections.length > 0;
 
@@ -436,27 +446,95 @@ export default async function HomePage() {
             <div className="flex items-center justify-between pb-2 border-b border-border">
               <div className="flex items-center gap-2">
                 <FileText size={16} className="text-primary" />
-                <h2 className="font-display text-2xl uppercase text-foreground">Your Reviews</h2>
+                <h2 className="font-display text-2xl uppercase text-foreground">Your Journal & Reviews</h2>
               </div>
               <span className="text-xs text-muted-foreground">{userReviews.length} recent</span>
             </div>
             <div className="space-y-3">
               {userReviews.map((review) => {
                 const isDraft = review.status === "draft" || review.status === "unpublished";
-                const statusLabel = isDraft ? (review.status === "draft" ? "Draft" : "Unpublished") : review.visibility;
+                const statusLabel = isDraft ? (review.status === "draft" ? "Draft" : "Unpublished") : (review.visibility === "private" ? "Private" : review.visibility === "unlisted" ? "Unlisted" : "Public");
+                const normalizedScore = review.rating ? reviewScoreOnTen(review.rating) : null;
+                const hasScore = normalizedScore !== null;
+                const isEpisode = review.mediaItem?.mediaType === "episode" || Boolean(review.mediaItem?.seasonNumber && review.mediaItem?.episodeNumber);
+                const epLabel = isEpisode && review.mediaItem?.seasonNumber && review.mediaItem?.episodeNumber
+                  ? `S${String(review.mediaItem.seasonNumber).padStart(2, "0")}E${String(review.mediaItem.episodeNumber).padStart(2, "0")}`
+                  : null;
+                const entryType = hasScore ? (isDraft ? "Rating & Draft" : "Rating & Writing") : (isDraft ? "Draft" : "Writing Only");
+                const targetLink = isDraft && review.isJournal
+                  ? `/media/${review.mediaItemId}?journal=1`
+                  : isDraft
+                    ? `/review/${review.id}?edit=1`
+                    : review.isJournal
+                      ? `/media/${review.mediaItemId}?journal=1`
+                      : `/review/${review.id}`;
+
                 return (
-                  <article key={review.id} className="rounded-card border border-border bg-card p-4 sm:p-5">
+                  <article key={review.id} className="rounded-card border border-border bg-card p-4 sm:p-5 hover:border-primary/40 transition-colors">
                     <div className="flex items-start gap-4">
+                      {/* Artwork Thumbnail */}
+                      <Link href={targetLink} className="shrink-0">
+                        <CinematicMediaCard
+                          posterPath={review.mediaItem?.posterPath || review.mediaItem?.stillPath}
+                          title={review.mediaItem?.title || "Media"}
+                          aspect={isEpisode ? "video" : "poster"}
+                          className={isEpisode ? "w-24 sm:w-28" : "w-14 sm:w-16"}
+                        />
+                      </Link>
+
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wider">
-                          <span className={isDraft ? "text-amber-600 dark:text-amber-400" : "text-primary"}>{statusLabel}</span>
-                          {review.isSpoiler && <span className="text-muted-foreground">Spoiler</span>}
+                          <span className={isDraft ? "text-amber-600 dark:text-amber-400 font-bold" : "text-primary"}>
+                            {statusLabel}
+                          </span>
+                          <span className="text-muted-foreground/60">·</span>
+                          <span className="text-muted-foreground">{entryType}</span>
+                          {epLabel && (
+                            <>
+                              <span className="text-muted-foreground/60">·</span>
+                              <span className="px-1.5 py-0.2 rounded bg-surface border border-border font-mono text-[9px] text-foreground font-bold">
+                                {epLabel}
+                              </span>
+                            </>
+                          )}
+                          {review.isSpoiler && (
+                            <>
+                              <span className="text-muted-foreground/60">·</span>
+                              <span className="text-amber-600 dark:text-amber-400">Spoiler</span>
+                            </>
+                          )}
+                          {normalizedScore !== null && (
+                            <span className="ml-auto px-2 py-0.5 rounded bg-primary/10 border border-primary/20 text-primary font-bold text-xs">
+                              ★ {normalizedScore.toFixed(1)} / 10
+                            </span>
+                          )}
                         </div>
-                        <h3 className="font-display text-xl uppercase text-foreground mt-1">{review.title || review.mediaItem?.title || "Untitled review"}</h3>
-                        {review.title && review.mediaItem?.title && <p className="text-xs text-muted-foreground">on {review.mediaItem.title}</p>}
-                        <SpoilerConcealedText content={isDraft ? (review.draftContent || review.content) : review.content} format={(isDraft ? review.draftContentFormat || review.contentFormat : review.contentFormat) as "plain" | "markdown"} isSpoiler={review.isSpoiler} />
+
+                        <h3 className="font-display text-xl uppercase text-foreground mt-1">
+                          <Link href={targetLink} className="hover:text-primary transition-colors">
+                            {review.title || review.mediaItem?.title || "Untitled journal entry"}
+                          </Link>
+                        </h3>
+
+                        {review.title && review.mediaItem?.title && (
+                          <p className="text-xs text-muted-foreground">
+                            on {review.mediaItem.title}
+                          </p>
+                        )}
+
+                        <div className="mt-2 text-xs text-muted-foreground">
+                          <SpoilerConcealedText
+                            content={isDraft ? (review.draftContent || review.content) : review.content}
+                            format={(isDraft ? review.draftContentFormat || review.contentFormat : review.contentFormat) as "plain" | "markdown"}
+                            isSpoiler={review.isSpoiler}
+                          />
+                        </div>
                       </div>
-                      <Link href={isDraft ? `/review/${review.id}?edit=1` : `/review/${review.id}`} className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-hover">
+
+                      <Link
+                        href={targetLink}
+                        className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-hover self-center"
+                      >
                         {isDraft ? <PenLine size={14} /> : null}
                         {isDraft ? "Resume" : "Open"}
                       </Link>
@@ -478,15 +556,45 @@ export default async function HomePage() {
               <span className="text-xs text-muted-foreground">{ratingOnlyJournalEntries.length} entries</span>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {ratingOnlyJournalEntries.map((rating) => (
-                <Link key={rating.id} href={`/media/${rating.mediaItemId}`} className="rounded-card border border-border bg-card p-4 flex items-center gap-3 hover:border-primary/40 transition-colors">
-                  <CinematicMediaCard posterPath={rating.mediaItem?.posterPath} title={rating.mediaItem?.title || "Media"} aspect="poster" className="w-12 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <h3 className="font-semibold text-sm text-foreground truncate">{rating.mediaItem?.title}</h3>
-                    <p className="text-xs text-muted-foreground mt-1">Rating only · {rating.calculatedOverallScore !== null ? `★ ${rating.calculatedOverallScore.toFixed(1)} / 10` : "Unrated"}</p>
-                  </div>
-                </Link>
-              ))}
+              {ratingOnlyJournalEntries.map((rating) => {
+                const isEpisode = rating.mediaItem?.mediaType === "episode" || Boolean(rating.mediaItem?.seasonNumber && rating.mediaItem?.episodeNumber);
+                const epLabel = isEpisode && rating.mediaItem?.seasonNumber && rating.mediaItem?.episodeNumber
+                  ? `S${String(rating.mediaItem.seasonNumber).padStart(2, "0")}E${String(rating.mediaItem.episodeNumber).padStart(2, "0")}`
+                  : null;
+                const normalizedScore = reviewScoreOnTen(rating);
+
+                return (
+                  <Link
+                    key={rating.id}
+                    href={`/media/${rating.mediaItemId}?journal=1`}
+                    className="rounded-card border border-border bg-card p-4 flex items-center gap-3 hover:border-primary/40 transition-colors"
+                  >
+                    <CinematicMediaCard
+                      posterPath={rating.mediaItem?.posterPath || rating.mediaItem?.stillPath}
+                      title={rating.mediaItem?.title || "Media"}
+                      aspect={isEpisode ? "video" : "poster"}
+                      className={isEpisode ? "w-20 shrink-0" : "w-12 shrink-0"}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 text-[10px] uppercase font-semibold text-muted-foreground">
+                        <span>Private</span>
+                        <span>·</span>
+                        <span>Rating only</span>
+                        {epLabel && (
+                          <>
+                            <span>·</span>
+                            <span className="font-mono text-[9px] font-bold text-foreground">{epLabel}</span>
+                          </>
+                        )}
+                      </div>
+                      <h3 className="font-semibold text-sm text-foreground truncate mt-0.5">{rating.mediaItem?.title}</h3>
+                      <p className="text-xs text-primary font-bold mt-1">
+                        {normalizedScore !== null ? `★ ${normalizedScore.toFixed(1)} / 10` : "Unrated"}
+                      </p>
+                    </div>
+                  </Link>
+                );
+              })}
             </div>
           </section>
         )}
