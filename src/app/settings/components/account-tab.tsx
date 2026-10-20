@@ -422,7 +422,7 @@ export function AccountTab() {
         </div>
 
         {profileError && (
-          <div className="p-3 rounded-card bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
+          <div className="p-3 rounded-card bg-destructive/10 border border-destructive/20 text-destructive text-xs">
             {profileError}
           </div>
         )}
@@ -479,7 +479,7 @@ export function AccountTab() {
                     type="button"
                     onClick={handleRemoveAvatar}
                     disabled={avatarUploading}
-                    className="px-3 py-1.5 rounded-button text-muted-foreground hover:text-red-400 hover:bg-red-500/10 text-xs font-medium transition-colors cursor-pointer"
+                    className="px-3 py-1.5 rounded-button text-muted-foreground hover:text-destructive hover:bg-destructive/10 text-xs font-medium transition-colors cursor-pointer"
                   >
                     Remove
                   </button>
@@ -516,7 +516,7 @@ export function AccountTab() {
               ) : usernameAvailable === true ? (
                 <span className="text-[10px] text-primary font-semibold">Available</span>
               ) : usernameAvailable === false ? (
-                <span className="text-[10px] text-red-400 font-semibold">{usernameReason || "Taken"}</span>
+                <span className="text-[10px] text-destructive font-semibold">{usernameReason || "Taken"}</span>
               ) : null}
             </div>
           </div>
@@ -559,12 +559,12 @@ export function AccountTab() {
             </label>
             <div>
               {profileEmailVerified ? (
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary/10 text-primary-text border border-primary/25">
                   <ShieldCheck size={12} />
                   <span>Verified</span>
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-surface-elevated text-muted-foreground border border-border">
                   <AlertCircle size={12} />
                   <span>Unverified</span>
                 </span>
@@ -578,7 +578,7 @@ export function AccountTab() {
           />
 
           {!profileEmailVerified && (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-card bg-amber-500/5 border border-amber-500/20 text-xs text-amber-300">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-card bg-surface-elevated border border-border text-xs text-foreground">
               <div className="space-y-0.5">
                 <span className="font-semibold block">Email verification required for automatic linking</span>
                 <p className="text-[11px] text-muted-foreground">
@@ -589,7 +589,7 @@ export function AccountTab() {
                 type="button"
                 onClick={handleResendVerification}
                 disabled={verificationResending || resendCooldown > 0}
-                className="shrink-0 px-3 py-1.5 rounded-button bg-surface hover:bg-surface-raised border border-amber-500/30 text-amber-300 font-semibold text-xs transition-colors cursor-pointer disabled:opacity-50"
+                className="shrink-0 px-3 py-1.5 rounded-button bg-surface hover:bg-surface-elevated border border-border hover:border-primary/50 text-foreground hover:text-primary-text font-semibold text-xs transition-colors cursor-pointer disabled:opacity-50"
               >
                 {verificationResending ? (
                   <span className="inline-flex items-center gap-1.5">
@@ -606,14 +606,14 @@ export function AccountTab() {
           )}
 
           {verificationResendSuccess && (
-            <div className="p-3 rounded-card bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
+            <div className="p-3 rounded-card bg-primary/10 border border-primary/25 text-primary-text text-xs flex items-center gap-2">
               <Check size={14} className="shrink-0" />
               <span>{verificationResendSuccess}</span>
             </div>
           )}
 
           {verificationResendError && (
-            <div className="p-3 rounded-card bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+            <div className="p-3 rounded-card bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-center gap-2">
               <AlertCircle size={14} className="shrink-0" />
               <span>{verificationResendError}</span>
             </div>
@@ -648,14 +648,14 @@ export function AccountTab() {
         </div>
 
         {connectSuccess && (
-          <div className="p-3 rounded-card bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
+          <div className="p-3 rounded-card bg-primary/10 border border-primary/25 text-primary-text text-xs flex items-center gap-2">
             <Check size={14} className="shrink-0" />
             <span>{connectSuccess}</span>
           </div>
         )}
 
         {connectError && (
-          <div className="p-3 rounded-card bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+          <div className="p-3 rounded-card bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-center gap-2">
             <AlertCircle size={14} className="shrink-0" />
             <span>{connectError}</span>
           </div>
@@ -689,12 +689,12 @@ export function AccountTab() {
                 <div className="flex items-center gap-2">
                   <span className="font-semibold text-foreground text-sm">Google</span>
                   {accounts.some((a) => a.providerId === "google") ? (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary/10 text-primary-text border border-primary/25">
                       <Check size={11} />
                       Connected
                     </span>
                   ) : (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-muted/30 text-muted-foreground border border-border">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-surface-elevated text-muted-foreground border border-border">
                       Not Connected
                     </span>
                   )}
@@ -715,7 +715,7 @@ export function AccountTab() {
                 </div>
               ) : accounts.some((a) => a.providerId === "google") ? (
                 <div className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 px-3 py-1.5 rounded-button bg-surface border border-border">
-                  <ShieldCheck size={14} className="text-emerald-400" />
+                  <ShieldCheck size={14} className="text-primary" />
                   <span>Connected</span>
                 </div>
               ) : (
@@ -759,7 +759,7 @@ export function AccountTab() {
         </div>
 
         {passwordError && (
-          <div className="p-3 rounded-card bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2">
+          <div className="p-3 rounded-card bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-start gap-2">
             <AlertTriangle size={15} className="shrink-0 mt-0.5" />
             <span>{passwordError}</span>
           </div>

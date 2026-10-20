@@ -38,15 +38,20 @@ className="rounded-button bg-primary text-primary-foreground px-4 py-2"
 - Lightness is clamped and guaranteed $\ge 4.5:1$ contrast against base dark background (`#111514`).
 - Radioactive or fluorescent neons are clamped to prevent garish visual artifacts.
 
-## 4. Strict Interface Accent Token Rules
+## 4. Strict Interface Accent & Status Token Rules
 
-- **Zero Hardcoded Interface Accent Classes**: Never hardcode colors like `amber-*`, `yellow-*`, or `gold-*` for interactive elements such as buttons, active view toggles, badges, progress bars, or modal headers.
-- **Required Semantic Tokens**: Always use Aubrey's theme tokens (`bg-primary`, `hover:bg-primary-hover`, `text-primary`, `text-primary-foreground`, `text-primary-text`, `bg-surface`, `bg-surface-elevated`, `border-border`, `bg-card`).
+- **Zero Hardcoded Palette Colors in UI Chrome**: Never hardcode colors like `amber-*`, `yellow-*`, `emerald-*`, `red-*`, `rose-*`, or arbitrary hexes (`bg-[#...]`) for interactive elements, status badges, verification chips, alert banners, progress bars, or modal headers.
+- **Required Semantic Tokens**:
+  - Success / Verified: `bg-primary/10 text-primary-text border border-primary/25`
+  - Neutral / Unverified: `bg-surface-elevated text-muted-foreground border border-border`
+  - Danger / Error: `bg-destructive/10 text-destructive border border-destructive/20`
+  - Interactive Chrome: `bg-primary`, `hover:bg-primary-hover`, `text-primary`, `text-primary-foreground`, `text-primary-text`, `bg-surface`, `bg-surface-elevated`, `border-border`, `bg-card`
 - **User Data vs. Interface Chrome**:
   - *User Data Colors*: User-customizable tier row colors (e.g. S tier `#EF4444`, A tier `#F97316`) are domain data stored in the database and applied dynamically via inline styles (`style={{ backgroundColor: tier.color }}`). These must remain untouched.
+  - *Brand Logos*: Authorized third-party SVGs (e.g. Google logo paths) use official branding.
   - *Interface Chrome*: Any surrounding buttons, badges, banners, icons, modals, and toolbar controls MUST use semantic design tokens and adapt dynamically to the user's selected accent theme.
 
-## 5. Verification Command
+## 5. Verification Command & CI Gate
 
 Run the automated design system audit script:
 
@@ -58,4 +63,5 @@ This verifies that:
 - `globals.css` and `src/lib/theme.ts` palettes match exactly.
 - All extensible tokens are properly defined.
 - No legacy crypto/dark hex colors (`#141a17`, `#303b34`, `#102523`, etc.) exist in `src/app` or `src/components`.
-- No forbidden hardcoded interface accent colors (`amber-*`, `yellow-*`, `gold-*`) exist in ranking or collection interface components.
+- No new unbaselined hardcoded color violations exist anywhere in `src/app` or `src/components`. Historical violations are strictly baselined in `scripts/design-system-baseline.json` and blocked from spreading.
+- Enforced automatically in CI before any container build.

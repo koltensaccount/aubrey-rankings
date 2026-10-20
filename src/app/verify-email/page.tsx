@@ -83,7 +83,7 @@ function VerifyEmailContent() {
 
         {status === "success" && (
           <div className="space-y-4 py-4">
-            <div className="h-12 w-12 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto text-emerald-400">
+            <div className="h-12 w-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center mx-auto text-primary">
               <Check size={24} />
             </div>
             <div>
@@ -108,7 +108,7 @@ function VerifyEmailContent() {
 
         {status === "error" && (
           <div className="space-y-4 py-4">
-            <div className="h-12 w-12 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center mx-auto text-red-400">
+            <div className="h-12 w-12 rounded-full bg-destructive/10 border border-destructive/20 flex items-center justify-center mx-auto text-destructive">
               <AlertCircle size={24} />
             </div>
             <div>

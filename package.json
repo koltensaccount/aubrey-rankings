@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "check:design-system": "tsx scripts/check-design-system.ts",
     "test": "tsx --test src/tests/**/*.test.ts src/tests/**/*.test.tsx",
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
