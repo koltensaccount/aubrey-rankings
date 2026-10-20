@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useSession, authClient } from "@/lib/auth-client";
 import {
   Camera,
@@ -9,10 +10,15 @@ import {
   Loader2,
   Check,
   AlertTriangle,
+  Link2,
+  ShieldCheck,
+  Mail,
+  AlertCircle,
 } from "lucide-react";
 
 export function AccountTab() {
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
 
   // Profile editing state
   const [profileName, setProfileName] = useState("");
@@ -20,6 +26,7 @@ export function AccountTab() {
   const [initialUsername, setInitialUsername] = useState("");
   const [profileBio, setProfileBio] = useState("");
   const [profileImage, setProfileImage] = useState("");
+  const [profileEmailVerified, setProfileEmailVerified] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [profileSaving, setProfileSaving] = useState(false);
@@ -28,6 +35,20 @@ export function AccountTab() {
   const [usernameChecking, setUsernameChecking] = useState(false);
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null);
   const [usernameReason, setUsernameReason] = useState<string | null>(null);
+
+  // Email verification state
+  const [verificationResending, setVerificationResending] = useState(false);
+  const [verificationResendSuccess, setVerificationResendSuccess] = useState<string | null>(null);
+  const [verificationResendError, setVerificationResendError] = useState<string | null>(null);
+  const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Connected accounts state
+  const [accounts, setAccounts] = useState<any[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
+  const [connectLoading, setConnectLoading] = useState(false);
+  const [connectSuccess, setConnectSuccess] = useState<string | null>(null);
+  const [connectError, setConnectError] = useState<string | null>(null);
+  const [googleAvailable, setGoogleAvailable] = useState<boolean | null>(null);
 
   // Password change state
   const [currentPassword, setCurrentPassword] = useState("");
@@ -39,6 +60,12 @@ export function AccountTab() {
 
   useEffect(() => {
     fetchProfile();
+    fetchAccounts();
+
+    fetch("/api/auth/providers")
+      .then((res) => res.json())
+      .then((data) => setGoogleAvailable(Boolean(data?.google)))
+      .catch(() => setGoogleAvailable(false));
   }, []);
 
   const fetchProfile = async () => {
@@ -52,10 +79,133 @@ export function AccountTab() {
           setInitialUsername(data.user.username || "");
           setProfileBio(data.user.bio || "");
           setProfileImage(data.user.image || "");
+          setProfileEmailVerified(Boolean(data.user.emailVerified));
         }
       }
     } catch (err) {
       console.error("[Fetch Profile Error]", err);
+    }
+  };
+
+  const fetchAccounts = async () => {
+    setLoadingAccounts(true);
+    try {
+      const res = await authClient.listAccounts();
+      if (res?.data && Array.isArray(res.data)) {
+        setAccounts(res.data);
+      }
+    } catch (err) {
+      console.error("[List Accounts Error]", err);
+    } finally {
+      setLoadingAccounts(false);
+    }
+  };
+
+  // Cooldown countdown timer for resend verification
+  useEffect(() => {
+    if (resendCooldown <= 0) return;
+    const interval = setInterval(() => {
+      setResendCooldown((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [resendCooldown]);
+
+  // Handle URL callback parameters for linking and verification
+  useEffect(() => {
+    const linked = searchParams.get("linked");
+    const errorParam = searchParams.get("error");
+    const verifiedParam = searchParams.get("verified");
+
+    if (linked === "google") {
+      fetchAccounts();
+      setConnectSuccess(
+        "Google account successfully connected! You can now sign in using either Google or your email/password."
+      );
+      cleanUrlParam("linked");
+    } else if (errorParam) {
+      if (errorParam === "account_already_linked" || errorParam === "account_already_linked_to_different_user") {
+        setConnectError("This Google account is already linked to another Aubrey Rankings user.");
+      } else if (errorParam === "email_does_not_match") {
+        setConnectError(
+          "The Google account email does not match your Aubrey account email. Third-party accounts must share the same email address."
+        );
+      } else if (errorParam === "access_denied") {
+        setConnectError("Google account connection was canceled.");
+      } else {
+        setConnectError("Google account connection could not be completed. Please try again.");
+      }
+      cleanUrlParam("error");
+    }
+
+    if (verifiedParam === "1") {
+      setProfileEmailVerified(true);
+      setVerificationResendSuccess("Your email address was successfully verified!");
+      cleanUrlParam("verified");
+    }
+  }, [searchParams]);
+
+  const cleanUrlParam = (paramName: string) => {
+    if (typeof window === "undefined") return;
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has(paramName)) {
+        url.searchParams.delete(paramName);
+        window.history.replaceState({}, "", url.pathname + (url.searchParams.toString() ? `?${url.searchParams.toString()}` : "") + url.hash);
+      }
+    } catch {}
+  };
+
+  const handleResendVerification = async () => {
+    const emailToVerify = session?.user?.email;
+    if (!emailToVerify || verificationResending || resendCooldown > 0) return;
+
+    setVerificationResending(true);
+    setVerificationResendError(null);
+    setVerificationResendSuccess(null);
+
+    try {
+      const res = await authClient.sendVerificationEmail({
+        email: emailToVerify,
+        callbackURL: window.location.origin + "/settings?tab=account&verified=1",
+      });
+
+      if (res?.error) {
+        setVerificationResendError(res.error.message || "Failed to send verification email. Please try again later.");
+      } else {
+        setVerificationResendSuccess("Verification email sent! Please check your inbox and spam folder.");
+        setResendCooldown(60);
+      }
+    } catch (err: any) {
+      setVerificationResendError(err?.message || "Failed to send verification email.");
+    } finally {
+      setVerificationResending(false);
+    }
+  };
+
+  const handleConnectGoogle = async () => {
+    setConnectError(null);
+    setConnectSuccess(null);
+
+    if (googleAvailable === false) {
+      setConnectError("Google authentication is not configured on this instance.");
+      return;
+    }
+
+    setConnectLoading(true);
+    try {
+      const res = await authClient.linkSocial({
+        provider: "google",
+        callbackURL: window.location.origin + "/settings?tab=account&linked=google",
+        errorCallbackURL: window.location.origin + "/settings?tab=account",
+      });
+
+      if (res?.error) {
+        setConnectError(res.error.message || "Failed to initiate Google connection.");
+        setConnectLoading(false);
+      }
+    } catch (err: any) {
+      setConnectError(err?.message || "An unexpected error occurred while connecting Google.");
+      setConnectLoading(false);
     }
   };
 
@@ -369,16 +519,73 @@ export function AccountTab() {
           />
         </div>
 
-        {/* Email (Read Only) */}
-        <div className="space-y-1.5">
-          <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
-            Account Email
-          </label>
+        {/* Email Field with Verification Status */}
+        <div className="space-y-2">
+          <div className="flex items-center justify-between">
+            <label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider block">
+              Account Email
+            </label>
+            <div>
+              {profileEmailVerified ? (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <ShieldCheck size={12} />
+                  <span>Verified</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                  <AlertCircle size={12} />
+                  <span>Unverified</span>
+                </span>
+              )}
+            </div>
+          </div>
           <input
             defaultValue={session?.user.email || ""}
             disabled
             className="w-full text-xs rounded-input px-3.5 py-2.5 bg-surface border border-border-input text-muted-foreground cursor-not-allowed"
           />
+
+          {!profileEmailVerified && (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 rounded-card bg-amber-500/5 border border-amber-500/20 text-xs text-amber-300">
+              <div className="space-y-0.5">
+                <span className="font-semibold block">Email verification required for automatic linking</span>
+                <p className="text-[11px] text-muted-foreground">
+                  Verify your email to protect your Aubrey account and enable one-click Google Sign-In.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleResendVerification}
+                disabled={verificationResending || resendCooldown > 0}
+                className="shrink-0 px-3 py-1.5 rounded-button bg-surface hover:bg-surface-raised border border-amber-500/30 text-amber-300 font-semibold text-xs transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {verificationResending ? (
+                  <span className="inline-flex items-center gap-1.5">
+                    <Loader2 size={13} className="animate-spin" />
+                    Sending...
+                  </span>
+                ) : resendCooldown > 0 ? (
+                  `Resend in ${resendCooldown}s`
+                ) : (
+                  "Resend Verification Email"
+                )}
+              </button>
+            </div>
+          )}
+
+          {verificationResendSuccess && (
+            <div className="p-3 rounded-card bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
+              <Check size={14} className="shrink-0" />
+              <span>{verificationResendSuccess}</span>
+            </div>
+          )}
+
+          {verificationResendError && (
+            <div className="p-3 rounded-card bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+              <AlertCircle size={14} className="shrink-0" />
+              <span>{verificationResendError}</span>
+            </div>
+          )}
         </div>
 
         <div className="flex justify-end pt-2">
@@ -391,6 +598,117 @@ export function AccountTab() {
           </button>
         </div>
       </form>
+
+      {/* Connected Accounts Section */}
+      <div className="p-6 rounded-card border border-border-card bg-card space-y-5 shadow-card">
+        <div className="flex items-center gap-3">
+          <div className="h-9 w-9 rounded-button bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+            <Link2 size={18} />
+          </div>
+          <div>
+            <h3 className="font-display text-xl uppercase font-bold text-foreground">
+              Connected Accounts
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Manage third-party authentication providers linked to your Aubrey Rankings account.
+            </p>
+          </div>
+        </div>
+
+        {connectSuccess && (
+          <div className="p-3 rounded-card bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2">
+            <Check size={14} className="shrink-0" />
+            <span>{connectSuccess}</span>
+          </div>
+        )}
+
+        {connectError && (
+          <div className="p-3 rounded-card bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-center gap-2">
+            <AlertCircle size={14} className="shrink-0" />
+            <span>{connectError}</span>
+          </div>
+        )}
+
+        <div className="divide-y divide-border border border-border rounded-card bg-surface/40 overflow-hidden">
+          {/* Google Row */}
+          <div className="p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-3.5">
+              <div className="h-10 w-10 rounded-full bg-surface border border-border flex items-center justify-center shrink-0">
+                <svg className="h-5 w-5" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                  />
+                </svg>
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <span className="font-semibold text-foreground text-sm">Google</span>
+                  {accounts.some((a) => a.providerId === "google") ? (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                      <Check size={11} />
+                      Connected
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-muted/30 text-muted-foreground border border-border">
+                      Not Connected
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {accounts.some((a) => a.providerId === "google")
+                    ? `Linked to your Google identity (${session?.user?.email || "Google account"}). You can sign in with either method.`
+                    : `Connect your Google account (${session?.user?.email}) for secure, one-click sign in.`}
+                </p>
+              </div>
+            </div>
+
+            <div className="shrink-0 flex items-center">
+              {loadingAccounts ? (
+                <div className="text-muted-foreground text-xs flex items-center gap-1.5">
+                  <Loader2 size={13} className="animate-spin" />
+                  <span>Loading...</span>
+                </div>
+              ) : accounts.some((a) => a.providerId === "google") ? (
+                <div className="text-xs text-muted-foreground font-medium flex items-center gap-1.5 px-3 py-1.5 rounded-button bg-surface border border-border">
+                  <ShieldCheck size={14} className="text-emerald-400" />
+                  <span>Connected</span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleConnectGoogle}
+                  disabled={connectLoading || googleAvailable === false}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground font-semibold text-xs transition-colors cursor-pointer disabled:opacity-50 shadow-sm"
+                >
+                  {connectLoading ? (
+                    <>
+                      <Loader2 size={13} className="animate-spin" />
+                      <span>Connecting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Connect Google</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Change Password Form */}
       <div className="p-6 rounded-card border border-border-card bg-card space-y-5 shadow-card">
