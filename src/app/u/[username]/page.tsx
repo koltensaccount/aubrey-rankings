@@ -166,9 +166,9 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                 </span>
                 <span className="ar-profileBadge">Curator</span>
               </div>
-              <p className="ar-profileBio">
-                {targetUser.bio || "Evaluating media by narrative rigor, visual texture, and weighted rubrics."}
-              </p>
+              {targetUser.bio?.trim() ? (
+                <p className="ar-profileBio">{targetUser.bio}</p>
+              ) : null}
               <ProfileSocialStats
                 userId={targetUser.id}
                 username={targetUser.username}
