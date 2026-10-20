@@ -1,7 +1,7 @@
 import { db } from "@/db";
 import { collections, ratings, reviews } from "@/db/schema";
 import { eq, and, desc, isNotNull, isNull, inArray, or, ne } from "drizzle-orm";
-import { canShowReviewRating } from "@/lib/review-rating";
+import { canShowReviewRating, reviewScoreOnTen } from "@/lib/review-rating";
 
 export interface UnifiedPublicReview {
   id: string;
@@ -10,8 +10,7 @@ export interface UnifiedPublicReview {
   reviewText: string;
   contentFormat?: "plain" | "markdown";
   isSpoiler?: boolean;
-  sourceRating?: number | null;
-  calculatedOverallScore?: number | null;
+  score?: number | null;
   tier?: { name: string; color: string } | null;
   watchDate?: Date | null;
   publishedAt?: Date | null;
@@ -40,8 +39,14 @@ export async function getPublicReviews(
           id: true,
           calculatedOverallScore: true,
           sourceRating: true,
+          sourceScale: true,
+          sourceService: true,
+          ratingSystemId: true,
+          tierId: true,
         },
         with: {
+          ratingSystem: { columns: { scale: true, type: true } },
+          categoryScores: { columns: { id: true } },
           tier: {
             columns: {
               name: true,
@@ -60,8 +65,7 @@ export async function getPublicReviews(
     reviewText: r.content,
     contentFormat: r.contentFormat as "plain" | "markdown",
     isSpoiler: r.isSpoiler,
-    sourceRating: canShowReviewRating(r) ? r.rating?.sourceRating ?? null : null,
-    calculatedOverallScore: canShowReviewRating(r) ? r.rating?.calculatedOverallScore ?? null : null,
+    score: r.rating && canShowReviewRating(r) ? reviewScoreOnTen(r.rating) : null,
     tier: canShowReviewRating(r) && r.rating?.tier ? { name: r.rating.tier.name, color: r.rating.tier.color } : null,
     watchDate: null,
     publishedAt: r.publishedAt,
@@ -97,7 +101,7 @@ export async function getPublicReviews(
           columns: { personalNotes: false },
           orderBy: [desc(ratings.updatedAt)],
           limit: 8,
-          with: { mediaItem: true },
+          with: { mediaItem: true, ratingSystem: { columns: { scale: true, type: true } }, categoryScores: { columns: { id: true } } },
         });
 
   const formattedRatings: UnifiedPublicReview[] = rawRatings.map((r) => ({
@@ -107,8 +111,7 @@ export async function getPublicReviews(
     reviewText: r.reviewText || "",
     contentFormat: "plain",
     isSpoiler: false,
-    sourceRating: r.sourceRating,
-    calculatedOverallScore: r.calculatedOverallScore,
+    score: reviewScoreOnTen(r),
     tier: null,
     watchDate: r.watchDate,
     publishedAt: r.updatedAt,

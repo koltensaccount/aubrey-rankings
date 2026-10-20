@@ -10,7 +10,7 @@ import { getBlockedUserIds } from "@/lib/safety";
 import { ArrowLeft, Star, Film, Tv, MessageSquare, ExternalLink, EyeOff } from "lucide-react";
 import { WriteReviewButton } from "@/components/reviews/write-review-button";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
-import { canShowReviewRating, tmdbAudienceRating } from "@/lib/review-rating";
+import { canShowReviewRating, reviewScoreOnTen, tmdbAudienceRating } from "@/lib/review-rating";
 import { getCommunityAverage } from "@/lib/community-rating";
 
 export default async function MediaDetailsPage({
@@ -191,9 +191,14 @@ export default async function MediaDetailsPage({
               id: true,
               calculatedOverallScore: true,
               sourceRating: true,
+              sourceScale: true,
+              sourceService: true,
+              ratingSystemId: true,
               tierId: true,
             },
             with: {
+              ratingSystem: { columns: { scale: true, type: true } },
+              categoryScores: { columns: { id: true } },
               tier: {
                 columns: {
                   id: true,
@@ -215,7 +220,7 @@ export default async function MediaDetailsPage({
       title: r.title,
       reviewText: r.content,
       contentFormat: r.contentFormat,
-      score: r.rating && canShowReviewRating(r) ? (r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null) : null,
+      score: r.rating && canShowReviewRating(r) ? reviewScoreOnTen(r.rating) : null,
       scale: 10,
       tier: canShowReviewRating(r) && r.rating?.tier
         ? {
@@ -488,7 +493,7 @@ export default async function MediaDetailsPage({
                         )}
                         {rev.score !== null && (
                           <div className="px-2.5 py-1 rounded-md bg-surface border border-border text-xs font-bold text-primary-text">
-                            ★ {rev.score.toFixed(1)}
+                            ★ {rev.score.toFixed(1)} / 10
                           </div>
                         )}
                       </div>

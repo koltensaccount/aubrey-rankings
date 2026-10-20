@@ -7,7 +7,7 @@ import { randomUUID } from "crypto";
 import { requireRateLimit } from "@/lib/request-limits";
 import { getBlockedUserIds } from "@/lib/safety";
 import { tmdb } from "@/lib/tmdb";
-import { canShowReviewRating } from "@/lib/review-rating";
+import { canShowReviewRating, reviewScoreOnTen } from "@/lib/review-rating";
 
 export const dynamic = "force-dynamic";
 
@@ -152,9 +152,14 @@ export async function GET(request: NextRequest) {
           id: true,
           calculatedOverallScore: true,
           sourceRating: true,
+          sourceScale: true,
+          sourceService: true,
+          ratingSystemId: true,
           tierId: true,
         },
         with: {
+          ratingSystem: { columns: { scale: true, type: true } },
+          categoryScores: { columns: { id: true } },
           tier: {
             columns: {
               id: true,
@@ -205,7 +210,7 @@ export async function GET(request: NextRequest) {
       rating: r.rating && canShowReviewRating(r, session?.user.id)
         ? {
             id: r.rating.id,
-            score: r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null,
+            score: reviewScoreOnTen(r.rating),
             tier: r.rating.tier
               ? {
                   id: r.rating.tier.id,
@@ -334,9 +339,14 @@ export async function POST(request: NextRequest) {
           id: true,
           calculatedOverallScore: true,
           sourceRating: true,
+          sourceScale: true,
+          sourceService: true,
+          ratingSystemId: true,
           tierId: true,
         },
         with: {
+          ratingSystem: { columns: { scale: true, type: true } },
+          categoryScores: { columns: { id: true } },
           tier: {
             columns: {
               id: true,

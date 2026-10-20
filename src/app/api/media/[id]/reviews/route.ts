@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canShowReviewRating } from "@/lib/review-rating";
+import { canShowReviewRating, reviewScoreOnTen } from "@/lib/review-rating";
 import { getCommunityAverage } from "@/lib/community-rating";
 import { db } from "@/db";
 import { mediaItems, ratings, collections, user, reviews } from "@/db/schema";
@@ -150,9 +150,14 @@ export async function GET(
               id: true,
               calculatedOverallScore: true,
               sourceRating: true,
+              sourceScale: true,
+              sourceService: true,
+              ratingSystemId: true,
               tierId: true,
             },
             with: {
+              ratingSystem: { columns: { scale: true, type: true } },
+              categoryScores: { columns: { id: true } },
               tier: {
                 columns: {
                   id: true,
@@ -173,7 +178,7 @@ export async function GET(
       title: r.title,
       reviewText: r.content,
       contentFormat: r.contentFormat,
-      score: r.rating && canShowReviewRating(r) ? (r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null) : null,
+      score: r.rating && canShowReviewRating(r) ? reviewScoreOnTen(r.rating) : null,
       scale: 10,
       tier: canShowReviewRating(r) && r.rating?.tier
         ? {

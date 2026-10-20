@@ -453,20 +453,9 @@ export default async function PublicProfilePage({ params }: PublicProfileProps) 
                         </p>
                       )}
                       <div className="text-[11px] text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                        {rev.sourceRating && (
-                          <span
-                            className="font-semibold"
-                            style={{ color: "var(--profile-accent-text)" }}
-                          >
-                            ★ {rev.sourceRating.toFixed(1)}/5
-                          </span>
-                        )}
-                        {rev.calculatedOverallScore && (
-                          <span
-                            className="font-semibold"
-                            style={{ color: "var(--profile-accent-text)" }}
-                          >
-                            Weighted: {rev.calculatedOverallScore.toFixed(1)}
+                        {rev.score != null && (
+                          <span className="font-semibold" style={{ color: "var(--profile-accent-text)" }}>
+                            ★ {rev.score.toFixed(1)} / 10
                           </span>
                         )}
                         {(rev.watchDate || rev.publishedAt) && (

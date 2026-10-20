@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { reviews, likes, comments, user, mediaItems, ratings } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { isBlocked } from "@/lib/safety";
-import { canShowReviewRating } from "@/lib/review-rating";
+import { canShowReviewRating, reviewScoreOnTen } from "@/lib/review-rating";
 
 export const dynamic = "force-dynamic";
 
@@ -39,9 +39,14 @@ export async function GET(
           id: true,
           calculatedOverallScore: true,
           sourceRating: true,
+          sourceScale: true,
+          sourceService: true,
+          ratingSystemId: true,
           tierId: true,
         },
         with: {
+          ratingSystem: { columns: { scale: true, type: true } },
+          categoryScores: { columns: { id: true } },
           tier: {
             columns: {
               id: true,
@@ -133,7 +138,7 @@ export async function GET(
       rating: review.rating && canShowReviewRating(review, session?.user.id)
         ? {
             id: review.rating.id,
-            score: review.rating.calculatedOverallScore ?? review.rating.sourceRating ?? null,
+            score: reviewScoreOnTen(review.rating),
             tier: review.rating.tier
               ? {
                   id: review.rating.tier.id,
@@ -284,9 +289,14 @@ export async function PATCH(
           id: true,
           calculatedOverallScore: true,
           sourceRating: true,
+          sourceScale: true,
+          sourceService: true,
+          ratingSystemId: true,
           tierId: true,
         },
         with: {
+          ratingSystem: { columns: { scale: true, type: true } },
+          categoryScores: { columns: { id: true } },
           tier: {
             columns: {
               id: true,

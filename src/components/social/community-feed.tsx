@@ -548,7 +548,7 @@ export function CommunityFeed({
 
                         {rv.score !== null && (
                           <span className="px-2.5 py-0.5 rounded-md bg-surface border border-border text-xs font-bold text-primary-text shrink-0">
-                            ★ {rv.score.toFixed(1)}
+                            ★ {rv.score.toFixed(1)} / 10
                           </span>
                         )}
                       </div>

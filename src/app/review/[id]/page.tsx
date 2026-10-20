@@ -5,7 +5,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { getServerSession } from "@/lib/server-session";
 import { isBlocked } from "@/lib/safety";
 import { ReviewDetailClient } from "./components/review-detail-client";
-import { canShowReviewRating } from "@/lib/review-rating";
+import { canShowReviewRating, reviewScoreOnTen } from "@/lib/review-rating";
 
 interface ReviewPageProps {
   params: Promise<{ id: string }>;
@@ -36,9 +36,14 @@ export default async function ReviewPage({ params }: ReviewPageProps) {
           id: true,
           calculatedOverallScore: true,
           sourceRating: true,
+          sourceScale: true,
+          sourceService: true,
+          ratingSystemId: true,
           tierId: true,
         },
         with: {
+          ratingSystem: { columns: { scale: true, type: true } },
+          categoryScores: { columns: { id: true } },
           tier: {
             columns: {
               id: true,
@@ -131,7 +136,7 @@ export default async function ReviewPage({ params }: ReviewPageProps) {
     rating: review.rating && canShowReviewRating(review, session?.user.id)
       ? {
           id: review.rating.id,
-          score: review.rating.calculatedOverallScore ?? review.rating.sourceRating ?? null,
+          score: reviewScoreOnTen(review.rating),
           tier: review.rating.tier
             ? {
                 id: review.rating.tier.id,
