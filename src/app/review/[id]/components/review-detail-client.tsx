@@ -39,6 +39,8 @@ interface ReviewDetailClientProps {
     status: "draft" | "published" | "unpublished";
     visibility: "public" | "unlisted" | "private";
     isSpoiler: boolean;
+    isJournal: boolean;
+    shareRating: boolean;
     publishedAt: string | null;
     createdAt: string;
     updatedAt: string;
@@ -371,6 +373,8 @@ export function ReviewDetailClient({
           status: review.status,
           visibility: review.visibility,
           isSpoiler: review.isSpoiler,
+          isJournal: review.isJournal,
+          shareRating: review.shareRating,
           ratingId: review.rating?.id || null,
         }}
         onSaved={(updated) => {
@@ -384,6 +388,7 @@ export function ReviewDetailClient({
             status: updated.status,
             visibility: updated.visibility,
             isSpoiler: updated.isSpoiler,
+            shareRating: updated.shareRating,
             publishedAt: updated.publishedAt,
             updatedAt: updated.updatedAt,
           }));

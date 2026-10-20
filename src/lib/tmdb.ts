@@ -121,6 +121,7 @@ export interface TmdbTvShowDetails {
   number_of_episodes: number;
   seasons: TmdbSeason[];
   vote_average: number;
+  vote_count?: number;
 }
 
 export interface TmdbMovieCollectionPart {
@@ -230,6 +231,7 @@ export const tmdb = {
       release_date: string;
       runtime: number;
       vote_average: number;
+      vote_count?: number;
     }>(`/movie/${movieId}`);
   },
 

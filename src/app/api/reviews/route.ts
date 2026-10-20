@@ -7,6 +7,7 @@ import { randomUUID } from "crypto";
 import { requireRateLimit } from "@/lib/request-limits";
 import { getBlockedUserIds } from "@/lib/safety";
 import { tmdb } from "@/lib/tmdb";
+import { canShowReviewRating, reviewScoreOnTen } from "@/lib/review-rating";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,7 @@ export async function resolveMediaItem(mediaId: string): Promise<string | null> 
             posterPath: tv.poster_path || null,
             backdropPath: tv.backdrop_path || null,
             releaseDate: tv.first_air_date || null,
+            tmdbMetadata: { voteAverage: tv.vote_average, voteCount: tv.vote_count },
           })
           .onConflictDoNothing();
         return id;
@@ -83,6 +85,7 @@ export async function resolveMediaItem(mediaId: string): Promise<string | null> 
             releaseDate: movie.release_date || null,
             tmdbMetadata: {
               voteAverage: movie.vote_average,
+            voteCount: movie.vote_count,
               runtime: movie.runtime,
             },
           })
@@ -149,9 +152,14 @@ export async function GET(request: NextRequest) {
           id: true,
           calculatedOverallScore: true,
           sourceRating: true,
+          sourceScale: true,
+          sourceService: true,
+          ratingSystemId: true,
           tierId: true,
         },
         with: {
+          ratingSystem: { columns: { scale: true, type: true } },
+          categoryScores: { columns: { id: true } },
           tier: {
             columns: {
               id: true,
@@ -199,10 +207,10 @@ export async function GET(request: NextRequest) {
         seasonNumber: r.mediaItem.seasonNumber,
         episodeNumber: r.mediaItem.episodeNumber,
       },
-      rating: r.rating
+      rating: r.rating && canShowReviewRating(r, session?.user.id)
         ? {
             id: r.rating.id,
-            score: r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null,
+            score: reviewScoreOnTen(r.rating),
             tier: r.rating.tier
               ? {
                   id: r.rating.tier.id,
@@ -331,9 +339,14 @@ export async function POST(request: NextRequest) {
           id: true,
           calculatedOverallScore: true,
           sourceRating: true,
+          sourceScale: true,
+          sourceService: true,
+          ratingSystemId: true,
           tierId: true,
         },
         with: {
+          ratingSystem: { columns: { scale: true, type: true } },
+          categoryScores: { columns: { id: true } },
           tier: {
             columns: {
               id: true,

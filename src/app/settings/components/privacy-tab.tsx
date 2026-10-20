@@ -221,19 +221,19 @@ export function PrivacyTab() {
           </h2>
         </div>
         <p className="text-xs text-muted-foreground leading-relaxed">
-          Configure default privacy safeguards for newly created reviews. New reviews default to Private to ensure drafts remain unlisted until you explicitly choose to publish them.
+          Choose defaults for new independent reviews. Journal entries start private; the spoiler default applies to new writing only. Drafts remain visible only to you.
         </p>
 
         <div className="space-y-4 pt-2">
           <div className="space-y-2">
             <label className="text-xs font-semibold text-foreground uppercase tracking-wider block">
-              Default Review State
+              Default Review Visibility
             </label>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
               {[
                 {
                   id: "private",
-                  label: "Private / Draft",
+                  label: "Private",
                   desc: "Visible only to you.",
                   icon: Lock,
                 },

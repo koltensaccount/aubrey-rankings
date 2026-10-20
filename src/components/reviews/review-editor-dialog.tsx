@@ -29,6 +29,8 @@ export interface ReviewEditorData {
   score?: number | null;
   tierName?: string | null;
   tierColor?: string | null;
+  shareRating?: boolean;
+  isJournal?: boolean;
 }
 
 interface ReviewEditorDialogProps {
@@ -68,12 +70,15 @@ export function ReviewEditorDialog({
   );
   const [mode, setMode] = useState<"write" | "preview">("write");
   const [visibility, setVisibility] = useState<"public" | "unlisted" | "private">(
-    existingReview?.visibility || "public"
+    existingReview?.visibility || "private"
   );
   const [isSpoiler, setIsSpoiler] = useState(existingReview?.isSpoiler || false);
+  const privacyEdited = useRef(false);
+  const spoilerEdited = useRef(false);
   const [attachRating, setAttachRating] = useState(
     Boolean(existingReview?.id && existingReview?.ratingId)
   );
+  const [shareRating, setShareRating] = useState(Boolean(existingReview?.shareRating));
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -92,9 +97,12 @@ export function ReviewEditorDialog({
       setContent(existingReview?.draftContent || existingReview?.content || "");
       setContentFormat(existingReview?.draftContent ? existingReview.draftContentFormat || existingReview.contentFormat || "plain" : existingReview?.contentFormat || "markdown");
       setMode("write");
-      setVisibility(existingReview?.visibility || (journalMode ? "private" : "public"));
+      setVisibility(existingReview?.visibility || "private");
       setIsSpoiler(existingReview?.isSpoiler || false);
+      privacyEdited.current = false;
+      spoilerEdited.current = false;
       setAttachRating(Boolean(existingReview?.id && existingReview?.ratingId));
+      setShareRating(Boolean(existingReview?.shareRating));
       setError(null);
       setShowDeleteConfirm(false);
       setQuickScore(initialQuickScore);
@@ -109,6 +117,16 @@ export function ReviewEditorDialog({
     if (!isOpen || !journalMode) return;
     fetch("/api/rating-systems").then((response) => response.ok ? response.json() : []).then((systems) => setRatingSystems(Array.isArray(systems) ? systems.filter((system) => system.type === "numerical") : [])).catch(() => setRatingSystems([]));
   }, [isOpen, journalMode]);
+  useEffect(() => {
+    if (!isOpen || existingReview?.id) return;
+    let active = true;
+    fetch("/api/user/privacy").then((response) => response.ok ? response.json() : null).then((data) => {
+      if (!active || !data?.privacy) return;
+      if (!privacyEdited.current && !journalMode && ["private", "unlisted", "public"].includes(data.privacy.defaultReviewVisibility)) setVisibility(data.privacy.defaultReviewVisibility);
+      if (!spoilerEdited.current) setIsSpoiler(Boolean(data.privacy.defaultReviewSpoiler));
+    }).catch(() => {});
+    return () => { active = false; };
+  }, [isOpen, existingReview?.id, journalMode]);
   const selectedSystem = useMemo(() => ratingSystems.find((system) => system.id === ratingSystemId), [ratingSystems, ratingSystemId]);
 
   const isCurrentlyPublished = existingReview?.status === "published";
@@ -169,6 +187,7 @@ export function ReviewEditorDialog({
               status: targetStatus,
               visibility,
               isSpoiler,
+              shareRating,
             } : undefined,
           }),
         });
@@ -195,6 +214,7 @@ export function ReviewEditorDialog({
             status: targetStatus,
             visibility,
             isSpoiler,
+            shareRating: existingReview?.isJournal ? shareRating : undefined,
             ratingId: attachRating ? (existingReview?.ratingId || null) : null,
           }),
         });
@@ -343,8 +363,9 @@ export function ReviewEditorDialog({
             </> : <div className="min-h-56 rounded-card border border-border bg-surface p-4"><MarkdownRenderer content={content} format={contentFormat} className="text-sm leading-relaxed" /></div>}
           </div>
 
+          {(journalMode || existingReview?.isJournal) && <label className="flex items-start gap-2 text-xs text-foreground"><input type="checkbox" checked={shareRating} onChange={(event) => setShareRating(event.target.checked)} className="accent-primary mt-0.5" disabled={saving || deleting} /><span>Include my rating with this review <span className="text-muted-foreground">(visible wherever the review is shared)</span></span></label>}
           {/* Explicit Rating Attachment Disclosure */}
-          {Boolean(existingReview?.ratingId && (existingReview.score !== null || existingReview.tierName)) && (
+          {!journalMode && !existingReview?.isJournal && Boolean(existingReview?.ratingId && (existingReview.score !== null || existingReview.tierName)) && (
             <div className="p-3 rounded-lg bg-surface border border-border space-y-2">
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 cursor-pointer select-none">
@@ -394,7 +415,7 @@ export function ReviewEditorDialog({
               <div className="grid grid-cols-3 gap-1.5">
                 <button
                   type="button"
-                  onClick={() => setVisibility("public")}
+                  onClick={() => { privacyEdited.current = true; setVisibility("public"); }}
                   className={`px-2.5 py-1.5 rounded-button text-xs font-semibold flex items-center justify-center gap-1.5 border transition-colors cursor-pointer ${
                     visibility === "public"
                       ? "bg-primary text-primary-foreground border-primary"
@@ -407,7 +428,7 @@ export function ReviewEditorDialog({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setVisibility("unlisted")}
+                  onClick={() => { privacyEdited.current = true; setVisibility("unlisted"); }}
                   className={`px-2.5 py-1.5 rounded-button text-xs font-semibold flex items-center justify-center gap-1.5 border transition-colors cursor-pointer ${
                     visibility === "unlisted"
                       ? "bg-primary text-primary-foreground border-primary"
@@ -420,7 +441,7 @@ export function ReviewEditorDialog({
                 </button>
                 <button
                   type="button"
-                  onClick={() => setVisibility("private")}
+                  onClick={() => { privacyEdited.current = true; setVisibility("private"); }}
                   className={`px-2.5 py-1.5 rounded-button text-xs font-semibold flex items-center justify-center gap-1.5 border transition-colors cursor-pointer ${
                     visibility === "private"
                       ? "bg-primary text-primary-foreground border-primary"
@@ -450,7 +471,7 @@ export function ReviewEditorDialog({
                 <input
                   type="checkbox"
                   checked={isSpoiler}
-                  onChange={(e) => setIsSpoiler(e.target.checked)}
+                  onChange={(e) => { spoilerEdited.current = true; setIsSpoiler(e.target.checked); }}
                   className="rounded border-border text-primary focus:ring-primary w-4 h-4 cursor-pointer"
                   disabled={saving || deleting}
                 />
