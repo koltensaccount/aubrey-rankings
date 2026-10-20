@@ -138,6 +138,11 @@ All range inputs and slider controls across Aubrey Rankings MUST use `CinematicS
 
 ## 5. Architectural Quality Standards
 
-1. **No Hardcoded Hex Colors**: Never use `#141a17`, `#303b34`, or `#181f1b` in JSX. Use semantic classes (`bg-background`, `bg-card`, `bg-surface`, `bg-surface-elevated`, `text-foreground`, `text-muted-foreground`, `border-border`).
-2. **Automated Verification**: Run `npx tsx scripts/check-design-system.ts` to detect any hardcoded color violations or token drift.
-3. **Preserve Functional Formulas**: Never alter weighted average calculations, Better Auth flows, database migrations, or real user accounts.
+1. **No Hardcoded Hex Colors or Raw Palette Utilities in UI Chrome**: Never use `#141a17`, `#303b34`, `#181f1b`, or arbitrary hex utilities in JSX. Never use raw Tailwind color families (`amber-*`, `yellow-*`, `emerald-*`, `red-*`, `rose-*`) for UI controls, status badges, verification chips, alert banners, or dialogs.
+2. **Semantic Status Tokens**:
+   - Success / Verified: `bg-primary/10 text-primary-text border border-primary/25`
+   - Neutral / Unverified: `bg-surface-elevated text-muted-foreground border border-border`
+   - Destructive / Error: `bg-destructive/10 text-destructive border border-destructive/20`
+   - General Chrome: `bg-primary`, `hover:bg-primary-hover`, `text-primary`, `text-primary-foreground`, `text-primary-text`, `bg-surface`, `bg-surface-elevated`, `border-border`, `bg-card`
+3. **Automated Verification & Baseline Enforcement**: Run `npx tsx scripts/check-design-system.ts` (or `npm run check:design-system`). The script scans all UI code in `src/app` and `src/components`, checking against `scripts/design-system-baseline.json`. Any newly introduced hardcoded color or arbitrary hex fails the build immediately. Enforced in CI before container deployment.
+4. **Preserve Functional Formulas**: Never alter weighted average calculations, Better Auth flows, database migrations, or real user accounts.

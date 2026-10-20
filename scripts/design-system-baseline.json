@@ -1,0 +1,193 @@
+{
+  "src/app/admin/reports/page.tsx": [
+    "bg-amber-500",
+    "bg-amber-500/20",
+    "bg-emerald-500/20",
+    "bg-emerald-600",
+    "bg-red-500",
+    "bg-red-500/20",
+    "bg-red-500/5",
+    "border-amber-500/30",
+    "border-emerald-500/30",
+    "border-red-500/20",
+    "border-red-500/30",
+    "text-amber-400",
+    "text-emerald-400",
+    "text-red-400",
+    "text-red-400"
+  ],
+  "src/app/collection/[id]/components/tier-board-editor-modal.tsx": [
+    "text-emerald-400"
+  ],
+  "src/app/compare/page.tsx": [
+    "bg-amber-500/10",
+    "bg-emerald-500/10",
+    "bg-red-500/10",
+    "bg-red-500/10",
+    "bg-rose-500/10",
+    "border-amber-500/30",
+    "border-emerald-500/30",
+    "border-red-500/30",
+    "border-red-500/30",
+    "border-rose-500/30",
+    "text-amber-400",
+    "text-emerald-400",
+    "text-emerald-400",
+    "text-red-400",
+    "text-red-400",
+    "text-red-400",
+    "text-red-400",
+    "text-rose-400"
+  ],
+  "src/app/create/page.tsx": [
+    "bg-red-500/10",
+    "border-red-500/20",
+    "text-red-400"
+  ],
+  "src/app/explore/page.tsx": [
+    "bg-red-500/10",
+    "border-red-500/30",
+    "hover:bg-red-500/20",
+    "text-red-400"
+  ],
+  "src/app/login/page.tsx": [
+    "bg-red-500/10",
+    "border-red-500/20",
+    "text-red-400"
+  ],
+  "src/app/media/[id]/page.tsx": [
+    "fill-amber-400",
+    "text-amber-400"
+  ],
+  "src/app/notifications/page.tsx": [
+    "fill-amber-400/20",
+    "fill-rose-400/20",
+    "text-amber-400",
+    "text-emerald-400",
+    "text-purple-400",
+    "text-rose-400"
+  ],
+  "src/app/page.tsx": [
+    "dark:text-amber-400",
+    "dark:text-amber-400",
+    "text-amber-600",
+    "text-amber-600"
+  ],
+  "src/app/settings/components/appearance-tab.tsx": [
+    "text-amber-500",
+    "text-emerald-500",
+    "text-emerald-500",
+    "text-red-500"
+  ],
+  "src/app/settings/components/data-tab.tsx": [
+    "bg-red-500/10",
+    "border-red-500/20",
+    "text-red-400"
+  ],
+  "src/app/settings/components/privacy-tab.tsx": [
+    "bg-emerald-500/10",
+    "border-emerald-500/20",
+    "text-emerald-400"
+  ],
+  "src/app/settings/components/rating-systems-tab.tsx": [
+    "bg-red-500/10",
+    "bg-red-500/10",
+    "bg-red-500/10",
+    "bg-red-600",
+    "border-red-500/20",
+    "border-red-500/30",
+    "border-red-500/30",
+    "border-red-500/30",
+    "hover:bg-red-500/20",
+    "hover:bg-red-700",
+    "hover:text-red-400",
+    "hover:text-red-400",
+    "hover:text-red-400",
+    "text-red-400",
+    "text-red-400",
+    "text-red-400",
+    "text-red-400"
+  ],
+  "src/app/signup/page.tsx": [
+    "bg-red-500/10",
+    "border-red-500/20",
+    "text-red-400"
+  ],
+  "src/components/bug-report-button.tsx": [
+    "bg-red-500/10",
+    "border-red-500/20",
+    "hover:text-red-300",
+    "text-red-400",
+    "text-red-400",
+    "text-red-400"
+  ],
+  "src/components/navbar.tsx": [
+    "hover:text-red-400"
+  ],
+  "src/components/notification-bell.tsx": [
+    "fill-amber-400/20",
+    "fill-rose-400/20",
+    "text-amber-400",
+    "text-emerald-400",
+    "text-purple-400",
+    "text-rose-400"
+  ],
+  "src/components/rating/rating-clear-dialog.tsx": [
+    "bg-red-500/20",
+    "bg-red-950/20",
+    "border-red-500/30",
+    "border-red-500/40",
+    "hover:bg-red-500/30",
+    "text-red-300",
+    "text-red-400"
+  ],
+  "src/components/rating-dialog.tsx": [
+    "bg-red-500/10",
+    "border-red-500/30",
+    "fill-red-500",
+    "text-red-500"
+  ],
+  "src/components/social/comments-section.tsx": [
+    "bg-amber-500/10",
+    "bg-amber-500/10",
+    "border-amber-500/30",
+    "border-amber-500/30",
+    "text-amber-500",
+    "text-amber-500",
+    "text-amber-500",
+    "text-amber-500",
+    "text-amber-500",
+    "text-amber-500"
+  ],
+  "src/components/social/follow-button.tsx": [
+    "bg-red-500/10",
+    "border-red-500/30",
+    "hover:bg-red-500/20",
+    "text-red-400"
+  ],
+  "src/components/social/like-button.tsx": [
+    "bg-rose-500/15",
+    "border-rose-500/30",
+    "dark:fill-rose-400",
+    "dark:text-rose-400",
+    "dark:text-rose-400",
+    "fill-rose-500",
+    "text-rose-500",
+    "text-rose-500"
+  ],
+  "src/components/social/report-dialog.tsx": [
+    "bg-emerald-500/10",
+    "border-emerald-500/20",
+    "text-emerald-400"
+  ],
+  "src/components/ui/badge.tsx": [
+    "bg-amber-500/15",
+    "bg-emerald-500/15",
+    "border-amber-500/30",
+    "border-emerald-500/30",
+    "dark:text-amber-400",
+    "dark:text-emerald-400",
+    "text-amber-600",
+    "text-emerald-600"
+  ]
+}
