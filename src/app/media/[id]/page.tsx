@@ -10,6 +10,8 @@ import { getBlockedUserIds } from "@/lib/safety";
 import { ArrowLeft, Star, Film, Tv, MessageSquare, ExternalLink, EyeOff } from "lucide-react";
 import { WriteReviewButton } from "@/components/reviews/write-review-button";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
+import { canShowReviewRating, tmdbAudienceRating } from "@/lib/review-rating";
+import { getCommunityAverage } from "@/lib/community-rating";
 
 export default async function MediaDetailsPage({
   params,
@@ -64,6 +66,7 @@ export default async function MediaDetailsPage({
               seasonNumber: null,
               episodeNumber: null,
               parentMediaId: null,
+              tmdbMetadata: { voteAverage: tv.vote_average, voteCount: tv.vote_count },
             };
           }
         } else if (requestedType === "movie") {
@@ -82,6 +85,7 @@ export default async function MediaDetailsPage({
               seasonNumber: null,
               episodeNumber: null,
               parentMediaId: null,
+              tmdbMetadata: { voteAverage: movie.vote_average, voteCount: movie.vote_count },
             };
           }
         } else {
@@ -102,6 +106,7 @@ export default async function MediaDetailsPage({
                 seasonNumber: null,
                 episodeNumber: null,
                 parentMediaId: null,
+                tmdbMetadata: { voteAverage: movie.vote_average, voteCount: movie.vote_count },
               };
             }
           } catch {
@@ -120,6 +125,7 @@ export default async function MediaDetailsPage({
                 seasonNumber: null,
                 episodeNumber: null,
                 parentMediaId: null,
+                tmdbMetadata: { voteAverage: tv.vote_average, voteCount: tv.vote_count },
               };
             }
           }
@@ -209,9 +215,9 @@ export default async function MediaDetailsPage({
       title: r.title,
       reviewText: r.content,
       contentFormat: r.contentFormat,
-      score: r.rating ? (r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null) : null,
+      score: r.rating && canShowReviewRating(r) ? (r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null) : null,
       scale: 10,
-      tier: r.rating?.tier
+      tier: canShowReviewRating(r) && r.rating?.tier
         ? {
             id: r.rating.tier.id,
             name: r.rating.tier.name,
@@ -233,13 +239,14 @@ export default async function MediaDetailsPage({
 
   const publicReviews = firstClassReviews;
 
-  const scores = publicReviews
-    .map((r) => r.score)
-    .filter((s): s is number => typeof s === "number" && Number.isFinite(s));
-
-  const averageScore = scores.length
-    ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)
-    : null;
+  const averageScore = await getCommunityAverage(journalMediaId, blockedUserIds);
+  let tmdbRating = tmdbAudienceRating(media.tmdbMetadata);
+  if (media.tmdbId && (media.mediaType === "movie" || media.mediaType === "tv")) {
+    try {
+      const details = media.mediaType === "movie" ? await tmdb.getMovieDetails(media.tmdbId) : await tmdb.getTvDetails(media.tmdbId);
+      tmdbRating = tmdbAudienceRating(details) ?? tmdbRating;
+    } catch { /* Keep available cached metadata when TMDB is unavailable. */ }
+  }
 
   const isTv = media.mediaType === "tv" || media.mediaType === "episode" || Boolean(media.seasonNumber);
   const stillUrl = media.stillPath ? getTmdbImageUrl(media.stillPath, "original") : null;
@@ -306,10 +313,11 @@ export default async function MediaDetailsPage({
           {averageScore && (
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-border text-xs font-semibold">
               <Star size={13} className="text-amber-400 fill-amber-400" />
-              <span>★ {averageScore} / 10 community mean</span>
+              <span>★ {averageScore.average.toFixed(1)} / 10 Aubrey average ({averageScore.count} people)</span>
               <span className="text-muted-foreground">({publicReviews.length} reviews)</span>
             </div>
           )}
+          {tmdbRating && <p className="text-xs text-foreground">TMDB audience: {tmdbRating.score.toFixed(1)} / 10{tmdbRating.votes !== null ? ` · ${tmdbRating.votes.toLocaleString()} votes` : ""}</p>}
         </div>
       </div>
 
@@ -353,6 +361,8 @@ export default async function MediaDetailsPage({
                 visibility: ownerJournalReview.visibility as "private" | "unlisted" | "public",
                 isSpoiler: ownerJournalReview.isSpoiler,
                 ratingId: ownerJournalReview.ratingId,
+                shareRating: ownerJournalReview.shareRating,
+                isJournal: true,
               } : null}
             />
           </div>
@@ -381,6 +391,8 @@ export default async function MediaDetailsPage({
                     visibility: ownerJournalReview.visibility as "private" | "unlisted" | "public",
                     isSpoiler: ownerJournalReview.isSpoiler,
                     ratingId: ownerJournalReview.ratingId,
+                    shareRating: ownerJournalReview.shareRating,
+                    isJournal: true,
                   } : null}
                 />
                 <Link

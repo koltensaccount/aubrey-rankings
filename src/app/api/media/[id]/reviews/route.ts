@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { canShowReviewRating } from "@/lib/review-rating";
+import { getCommunityAverage } from "@/lib/community-rating";
 import { db } from "@/db";
 import { mediaItems, ratings, collections, user, reviews } from "@/db/schema";
 import { eq, and, isNotNull, ne, desc } from "drizzle-orm";
@@ -171,9 +173,9 @@ export async function GET(
       title: r.title,
       reviewText: r.content,
       contentFormat: r.contentFormat,
-      score: r.rating ? (r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null) : null,
+      score: r.rating && canShowReviewRating(r) ? (r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null) : null,
       scale: 10,
-      tier: r.rating?.tier
+      tier: canShowReviewRating(r) && r.rating?.tier
         ? {
             id: r.rating.tier.id,
             name: r.rating.tier.name,
@@ -195,13 +197,8 @@ export async function GET(
     }));
 
   const reviewsList = firstClassReviews;
-  const scores = reviewsList
-    .map((r) => r.score)
-    .filter((s): s is number => typeof s === "number" && Number.isFinite(s));
-
-  const averageScore = scores.length
-    ? (scores.reduce((a, b) => a + b, 0) / scores.length).toFixed(1)
-    : null;
+  const community = await getCommunityAverage(media.id, blockedUserIds);
+  const averageScore = community ? community.average.toFixed(1) : null;
 
   return NextResponse.json({
     mediaItem: {

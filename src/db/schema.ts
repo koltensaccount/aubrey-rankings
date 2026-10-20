@@ -364,6 +364,7 @@ export const reviews = pgTable(
     visibility: text("visibility").notNull().default("public"), // 'public' | 'unlisted' | 'private'
     isSpoiler: boolean("is_spoiler").notNull().default(false),
     isJournal: boolean("is_journal").notNull().default(false),
+    shareRating: boolean("share_rating").notNull().default(false),
     publishedAt: timestamp("published_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),

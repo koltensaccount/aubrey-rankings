@@ -5,6 +5,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { getServerSession } from "@/lib/server-session";
 import { isBlocked } from "@/lib/safety";
 import { ReviewDetailClient } from "./components/review-detail-client";
+import { canShowReviewRating } from "@/lib/review-rating";
 
 interface ReviewPageProps {
   params: Promise<{ id: string }>;
@@ -104,6 +105,8 @@ export default async function ReviewPage({ params }: ReviewPageProps) {
     status: review.status as any,
     visibility: review.visibility as any,
     isSpoiler: review.isSpoiler,
+    isJournal: review.isJournal,
+    shareRating: isAuthor ? review.shareRating : false,
     publishedAt: review.publishedAt ? review.publishedAt.toISOString() : null,
     createdAt: review.createdAt.toISOString(),
     updatedAt: review.updatedAt.toISOString(),
@@ -125,7 +128,7 @@ export default async function ReviewPage({ params }: ReviewPageProps) {
       seasonNumber: review.mediaItem.seasonNumber,
       episodeNumber: review.mediaItem.episodeNumber,
     },
-    rating: review.rating
+    rating: review.rating && canShowReviewRating(review, session?.user.id)
       ? {
           id: review.rating.id,
           score: review.rating.calculatedOverallScore ?? review.rating.sourceRating ?? null,

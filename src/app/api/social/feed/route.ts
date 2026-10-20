@@ -3,6 +3,7 @@ import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
 import { collections, follows, likes, savedRankings, comments, ratings, user, reviews } from "@/db/schema";
 import { desc, eq, inArray, and, or, sql, isNotNull, ne } from "drizzle-orm";
+import { canShowReviewRating } from "@/lib/review-rating";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(request);
@@ -325,9 +326,9 @@ export async function GET(request: NextRequest) {
         reviewText: r.content,
         contentFormat: r.contentFormat,
         isSpoiler: r.isSpoiler,
-        score: r.rating ? (r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null) : null,
+        score: r.rating && canShowReviewRating(r) ? (r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null) : null,
         scale: 10,
-        tier: r.rating?.tier
+        tier: canShowReviewRating(r) && r.rating?.tier
           ? {
               id: r.rating.tier.id,
               name: r.rating.tier.name,

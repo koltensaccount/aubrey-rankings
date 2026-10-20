@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { collections, ratings, reviews } from "@/db/schema";
 import { eq, and, desc, isNotNull, isNull, inArray, or, ne } from "drizzle-orm";
+import { canShowReviewRating } from "@/lib/review-rating";
 
 export interface UnifiedPublicReview {
   id: string;
@@ -59,9 +60,9 @@ export async function getPublicReviews(
     reviewText: r.content,
     contentFormat: r.contentFormat as "plain" | "markdown",
     isSpoiler: r.isSpoiler,
-    sourceRating: r.rating?.sourceRating ?? null,
-    calculatedOverallScore: r.rating?.calculatedOverallScore ?? null,
-    tier: r.rating?.tier ? { name: r.rating.tier.name, color: r.rating.tier.color } : null,
+    sourceRating: canShowReviewRating(r) ? r.rating?.sourceRating ?? null : null,
+    calculatedOverallScore: canShowReviewRating(r) ? r.rating?.calculatedOverallScore ?? null : null,
+    tier: canShowReviewRating(r) && r.rating?.tier ? { name: r.rating.tier.name, color: r.rating.tier.color } : null,
     watchDate: null,
     publishedAt: r.publishedAt,
     updatedAt: r.updatedAt,

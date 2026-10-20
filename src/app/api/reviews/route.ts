@@ -7,6 +7,7 @@ import { randomUUID } from "crypto";
 import { requireRateLimit } from "@/lib/request-limits";
 import { getBlockedUserIds } from "@/lib/safety";
 import { tmdb } from "@/lib/tmdb";
+import { canShowReviewRating } from "@/lib/review-rating";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,7 @@ export async function resolveMediaItem(mediaId: string): Promise<string | null> 
             posterPath: tv.poster_path || null,
             backdropPath: tv.backdrop_path || null,
             releaseDate: tv.first_air_date || null,
+            tmdbMetadata: { voteAverage: tv.vote_average, voteCount: tv.vote_count },
           })
           .onConflictDoNothing();
         return id;
@@ -83,6 +85,7 @@ export async function resolveMediaItem(mediaId: string): Promise<string | null> 
             releaseDate: movie.release_date || null,
             tmdbMetadata: {
               voteAverage: movie.vote_average,
+            voteCount: movie.vote_count,
               runtime: movie.runtime,
             },
           })
@@ -199,7 +202,7 @@ export async function GET(request: NextRequest) {
         seasonNumber: r.mediaItem.seasonNumber,
         episodeNumber: r.mediaItem.episodeNumber,
       },
-      rating: r.rating
+      rating: r.rating && canShowReviewRating(r, session?.user.id)
         ? {
             id: r.rating.id,
             score: r.rating.calculatedOverallScore ?? r.rating.sourceRating ?? null,

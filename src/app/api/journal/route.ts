@@ -111,6 +111,8 @@ export async function POST(request: NextRequest) {
       });
       if (id && !existingReview) fail(404, "Review not found or access denied");
       const content = typeof reviewInput.content === "string" ? reviewInput.content : "";
+      if (reviewInput.shareRating !== undefined && typeof reviewInput.shareRating !== "boolean") fail(400, "Invalid rating sharing choice");
+      const shareRating = typeof reviewInput.shareRating === "boolean" ? reviewInput.shareRating : (existingReview?.shareRating ?? false);
       const status = reviewInput.status === "published" ? "published" : reviewInput.status === "unpublished" ? "unpublished" : "draft";
       const requestedVisibility = visibilityValues.includes(reviewInput.visibility as typeof visibilityValues[number]) ? reviewInput.visibility as typeof visibilityValues[number] : (existingReview?.visibility ?? "private");
       const visibility = status === "unpublished" ? "private" : requestedVisibility;
@@ -129,6 +131,7 @@ export async function POST(request: NextRequest) {
           draftContentFormat: status === "draft" ? "markdown" : null,
           status,
           visibility,
+          shareRating,
           isSpoiler: Boolean(reviewInput.isSpoiler),
           ratingId: reviewRatingId,
           publishedAt: status === "published" ? (existingReview.publishedAt ?? now) : null,
@@ -141,6 +144,7 @@ export async function POST(request: NextRequest) {
           content, draftContent: status === "draft" ? content : null, contentFormat: "markdown", draftContentFormat: status === "draft" ? "markdown" : null,
           status, visibility, isSpoiler: Boolean(reviewInput.isSpoiler), publishedAt: status === "published" ? now : null, createdAt: now, updatedAt: now,
           isJournal: true,
+          shareRating,
         });
       }
       review = await tx.query.reviews.findFirst({ where: (r, { eq }) => eq(r.id, reviewId) });

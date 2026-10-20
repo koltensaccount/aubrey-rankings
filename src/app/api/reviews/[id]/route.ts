@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { reviews, likes, comments, user, mediaItems, ratings } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { isBlocked } from "@/lib/safety";
+import { canShowReviewRating } from "@/lib/review-rating";
 
 export const dynamic = "force-dynamic";
 
@@ -129,7 +130,7 @@ export async function GET(
         seasonNumber: review.mediaItem.seasonNumber,
         episodeNumber: review.mediaItem.episodeNumber,
       },
-      rating: review.rating
+      rating: review.rating && canShowReviewRating(review, session?.user.id)
         ? {
             id: review.rating.id,
             score: review.rating.calculatedOverallScore ?? review.rating.sourceRating ?? null,
@@ -182,7 +183,8 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid request payload" }, { status: 400 });
   }
 
-  const { title, content, draftContent, contentFormat, draftContentFormat, status, visibility, isSpoiler, ratingId } = body;
+  const { title, content, draftContent, contentFormat, draftContentFormat, status, visibility, isSpoiler, ratingId, shareRating } = body;
+  if (shareRating !== undefined && typeof shareRating !== "boolean") return NextResponse.json({ error: "Invalid rating sharing choice" }, { status: 400 });
 
   const validStatuses = ["draft", "published", "unpublished"];
   const newStatus = status && validStatuses.includes(status) ? status : review.status;
@@ -258,6 +260,7 @@ export async function PATCH(
       status: newStatus,
       visibility: newVisibility,
       isSpoiler: typeof isSpoiler === "boolean" ? isSpoiler : review.isSpoiler,
+      shareRating: review.isJournal && typeof shareRating === "boolean" ? shareRating : review.shareRating,
       publishedAt,
       ratingId: newRatingId,
       updatedAt: now,
