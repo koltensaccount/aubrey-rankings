@@ -8,6 +8,7 @@ import { getTmdbImageUrl } from "@/lib/tmdb";
 import { getTopRankedEntries, getRatingSummary } from "@/lib/scoring";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
+import { reviewScoreOnTen } from "@/lib/review-rating";
 
 export default async function HomePage() {
   const session = await getServerSession();
@@ -171,14 +172,23 @@ export default async function HomePage() {
     limit: 12,
     with: {
       mediaItem: true,
-      rating: { columns: { calculatedOverallScore: true, sourceRating: true } },
+      rating: {
+        with: {
+          ratingSystem: { columns: { scale: true, type: true } },
+          categoryScores: true,
+        },
+      },
     },
   });
   const linkedRatingIds = new Set(userReviews.map((review) => review.ratingId).filter(Boolean));
   const ratingOnlyJournalEntries = (await db.query.ratings.findMany({
     where: (r, { and, eq, isNull }) => and(eq(r.userId, session.user.id), isNull(r.collectionId)),
     orderBy: [desc(ratings.updatedAt)],
-    with: { mediaItem: true },
+    with: {
+      mediaItem: true,
+      ratingSystem: { columns: { scale: true, type: true } },
+      categoryScores: true,
+    },
   })).filter((rating) => !linkedRatingIds.has(rating.id));
   const hasLibraryContent = userCollections.length > 0 || userReviews.length > 0 || ratingOnlyJournalEntries.length > 0 || accessibleSavedCollections.length > 0;
 
@@ -444,8 +454,8 @@ export default async function HomePage() {
               {userReviews.map((review) => {
                 const isDraft = review.status === "draft" || review.status === "unpublished";
                 const statusLabel = isDraft ? (review.status === "draft" ? "Draft" : "Unpublished") : (review.visibility === "private" ? "Private" : review.visibility === "unlisted" ? "Unlisted" : "Public");
-                const hasScore = review.rating?.calculatedOverallScore !== null && review.rating?.calculatedOverallScore !== undefined;
-                const scoreValue = hasScore ? review.rating!.calculatedOverallScore : null;
+                const normalizedScore = review.rating ? reviewScoreOnTen(review.rating) : null;
+                const hasScore = normalizedScore !== null;
                 const isEpisode = review.mediaItem?.mediaType === "episode" || Boolean(review.mediaItem?.seasonNumber && review.mediaItem?.episodeNumber);
                 const epLabel = isEpisode && review.mediaItem?.seasonNumber && review.mediaItem?.episodeNumber
                   ? `S${String(review.mediaItem.seasonNumber).padStart(2, "0")}E${String(review.mediaItem.episodeNumber).padStart(2, "0")}`
@@ -456,7 +466,7 @@ export default async function HomePage() {
                   : isDraft
                     ? `/review/${review.id}?edit=1`
                     : review.isJournal
-                      ? `/media/${review.mediaItemId}`
+                      ? `/media/${review.mediaItemId}?journal=1`
                       : `/review/${review.id}`;
 
                 return (
@@ -493,9 +503,9 @@ export default async function HomePage() {
                               <span className="text-amber-600 dark:text-amber-400">Spoiler</span>
                             </>
                           )}
-                          {scoreValue !== null && (
+                          {normalizedScore !== null && (
                             <span className="ml-auto px-2 py-0.5 rounded bg-primary/10 border border-primary/20 text-primary font-bold text-xs">
-                              ★ {scoreValue.toFixed(1)} / 10
+                              ★ {normalizedScore.toFixed(1)} / 10
                             </span>
                           )}
                         </div>
@@ -551,6 +561,7 @@ export default async function HomePage() {
                 const epLabel = isEpisode && rating.mediaItem?.seasonNumber && rating.mediaItem?.episodeNumber
                   ? `S${String(rating.mediaItem.seasonNumber).padStart(2, "0")}E${String(rating.mediaItem.episodeNumber).padStart(2, "0")}`
                   : null;
+                const normalizedScore = reviewScoreOnTen(rating);
 
                 return (
                   <Link
@@ -578,7 +589,7 @@ export default async function HomePage() {
                       </div>
                       <h3 className="font-semibold text-sm text-foreground truncate mt-0.5">{rating.mediaItem?.title}</h3>
                       <p className="text-xs text-primary font-bold mt-1">
-                        {rating.calculatedOverallScore !== null ? `★ ${rating.calculatedOverallScore.toFixed(1)} / 10` : "Unrated"}
+                        {normalizedScore !== null ? `★ ${normalizedScore.toFixed(1)} / 10` : "Unrated"}
                       </p>
                     </div>
                   </Link>

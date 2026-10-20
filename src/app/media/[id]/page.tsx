@@ -80,6 +80,67 @@ export default async function MediaDetailsPage({
   }
 
   const lookupId = media ? media.id : decodedId;
+  const tvShowPrefixMatch = !media ? /^(?:tmdb-)?tv_?(\d+)$/i.exec(lookupId) : null;
+  const moviePrefixMatch = !media ? /^(?:tmdb-)?movie_?(\d+)$/i.exec(lookupId) : null;
+
+  if (!media && tvShowPrefixMatch) {
+    const tmdbNum = parseInt(tvShowPrefixMatch[1], 10);
+    media = await db.query.mediaItems.findFirst({
+      where: (m, { eq, and }) => and(eq(m.tmdbId, tmdbNum), eq(m.mediaType, "tv")),
+    });
+    if (!media) {
+      try {
+        const tv = await tmdb.getTvDetails(tmdbNum);
+        if (tv && (tv.name || tv.id)) {
+          media = {
+            id: `tmdb-tv-${tv.id}`,
+            tmdbId: tv.id,
+            mediaType: "tv",
+            title: tv.name || "Untitled Series",
+            overview: tv.overview || null,
+            posterPath: tv.poster_path || null,
+            backdropPath: tv.backdrop_path || null,
+            stillPath: null,
+            releaseDate: tv.first_air_date || null,
+            seasonNumber: null,
+            episodeNumber: null,
+            parentMediaId: null,
+            tmdbMetadata: { voteAverage: tv.vote_average, voteCount: tv.vote_count },
+          };
+        }
+      } catch {}
+    }
+  }
+
+  if (!media && moviePrefixMatch) {
+    const tmdbNum = parseInt(moviePrefixMatch[1], 10);
+    media = await db.query.mediaItems.findFirst({
+      where: (m, { eq, and }) => and(eq(m.tmdbId, tmdbNum), eq(m.mediaType, "movie")),
+    });
+    if (!media) {
+      try {
+        const movie = await tmdb.getMovieDetails(tmdbNum);
+        if (movie && (movie.title || movie.id)) {
+          media = {
+            id: `tmdb-movie-${movie.id}`,
+            tmdbId: movie.id,
+            mediaType: "movie",
+            title: movie.title || "Untitled Film",
+            overview: movie.overview || null,
+            posterPath: movie.poster_path || null,
+            backdropPath: movie.backdrop_path || null,
+            stillPath: null,
+            releaseDate: movie.release_date || null,
+            seasonNumber: null,
+            episodeNumber: null,
+            parentMediaId: null,
+            tmdbMetadata: { voteAverage: movie.vote_average, voteCount: movie.vote_count },
+          };
+        }
+      } catch {}
+    }
+  }
+
   if (!media && /^\d+$/.test(lookupId)) {
     const tmdbNum = parseInt(lookupId, 10);
     if (requestedType === "movie" || requestedType === "tv") {
@@ -333,6 +394,17 @@ export default async function MediaDetailsPage({
         ? `Season ${media.seasonNumber}`
         : null;
 
+  const parentTvIdMatch = media.parentMediaId
+    ? /^(?:tmdb-)?tv_?(\d+)$/i.exec(media.parentMediaId) || /^\d+$/.exec(media.parentMediaId)
+    : null;
+  const parentTvNumericId = parentTvIdMatch ? parentTvIdMatch[1] ?? parentTvIdMatch[0] : null;
+  const seriesDetailsHref = parentTvNumericId
+    ? `/media/${parentTvNumericId}?type=tv`
+    : media.parentMediaId
+      ? `/media/${media.parentMediaId}?type=tv`
+      : null;
+  const shouldAutoOpen = Boolean(session && (resolvedSearchParams.journal === "1" || resolvedSearchParams.journal === "true"));
+
   return (
     <div className="min-h-screen bg-background text-foreground pb-24 transition-colors">
       {/* Hero Banner */}
@@ -358,9 +430,9 @@ export default async function MediaDetailsPage({
             <ArrowLeft size={13} />
             <span>Back to Explore</span>
           </Link>
-          {media.parentMediaId && (
+          {seriesDetailsHref && (
             <Link
-              href={`/media/${media.parentMediaId}`}
+              href={seriesDetailsHref}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card/80 backdrop-blur-sm text-xs font-semibold text-foreground hover:bg-surface transition-colors"
             >
               <Tv size={13} />
@@ -435,7 +507,7 @@ export default async function MediaDetailsPage({
                 {tvSeasonsList.map((s) => (
                   <Link
                     key={s.id || s.season_number}
-                    href={`/media/${rawMediaId}?season=${s.season_number}`}
+                    href={`/media/${encodeURIComponent(rawMediaId)}?type=tv&season=${s.season_number}`}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
                       s.season_number === activeSeasonNumber
                         ? "bg-primary text-white shadow-sm"
@@ -516,6 +588,7 @@ export default async function MediaDetailsPage({
             </div>
 
             <WriteReviewButton
+              autoOpen={shouldAutoOpen}
               mediaItemId={journalMediaId}
               mediaTitle={media.title}
               posterPath={media.posterPath}
