@@ -399,7 +399,13 @@ export function ReviewEditorDialog({
               </div>
               <p className="text-[11px] text-muted-foreground">
                 {attachRating
-                  ? "Your rating will be publicly visible alongside this review."
+                  ? visibility === "unlisted"
+                    ? "Your rating will be visible alongside this review to anyone with the direct link."
+                    : visibility === "private"
+                      ? "Your rating is attached to this review, but the review is private."
+                      : isCurrentlyPublished
+                        ? "Your rating will be publicly visible alongside this review."
+                        : "Your rating will be publicly visible alongside this review when published (saving as a draft keeps it private)."
                   : "Your rating will remain private to your ranking and will not be disclosed on this review."}
               </p>
             </div>
@@ -553,6 +559,38 @@ export function ReviewEditorDialog({
 
           const hasScore = scoringMethod === "quick" ? quickScore !== null : Boolean(selectedSystem);
 
+          let ratingDisclosureText = "";
+          if (hasScore) {
+            if (!shareRating) {
+              ratingDisclosureText = "🔒 Your numerical rating remains private and will NOT be shown.";
+            } else if (isCurrentlyPublished && !hasUnsavedVisibilityChange) {
+              if (visibility === "public") {
+                ratingDisclosureText = "✓ Your numerical rating is shared publicly.";
+              } else if (visibility === "unlisted") {
+                ratingDisclosureText = "✓ Your numerical rating is visible to anyone with the direct link.";
+              } else {
+                ratingDisclosureText = "🔒 Private entries are only visible to you; your rating is not shared with others.";
+              }
+            } else if (hasUnsavedVisibilityChange) {
+              if (visibility === "public") {
+                ratingDisclosureText = "✓ Your numerical rating will be shared publicly once saved.";
+              } else if (visibility === "unlisted") {
+                ratingDisclosureText = "✓ Your numerical rating will be visible via direct link once saved.";
+              } else {
+                ratingDisclosureText = "🔒 Once saved as private, your rating will no longer be shared with others.";
+              }
+            } else {
+              // Draft or new entry
+              if (visibility === "public") {
+                ratingDisclosureText = "✓ Your numerical rating will be shared publicly when published (saving as a draft keeps it private).";
+              } else if (visibility === "unlisted") {
+                ratingDisclosureText = "✓ Your numerical rating will be visible via direct link when published (saving as a draft keeps it private).";
+              } else {
+                ratingDisclosureText = "🔒 Private entries are only visible to you; your rating is not shared with others.";
+              }
+            }
+          }
+
           return (
             <div
               className={`p-3 rounded-xl border text-xs space-y-1 transition-colors ${
@@ -567,15 +605,9 @@ export function ReviewEditorDialog({
               </div>
               <p className="text-[11px] leading-relaxed">
                 {bannerDescription}
-                {hasScore && (
+                {hasScore && ratingDisclosureText && (
                   <span className="block mt-0.5 font-medium text-foreground">
-                    {shareRating
-                      ? isCurrentlyPublished && !hasUnsavedVisibilityChange && visibility === "public"
-                        ? "✓ Your numerical rating is shared publicly."
-                        : visibility === "public"
-                          ? "✓ Your numerical rating will be shared publicly when saved."
-                          : "🔒 Numerical rating is only visible if the entry is published publicly."
-                      : "🔒 Your numerical rating remains private and will NOT be shown."}
+                    {ratingDisclosureText}
                   </span>
                 )}
               </p>
