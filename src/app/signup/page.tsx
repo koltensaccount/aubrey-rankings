@@ -63,7 +63,7 @@ export default function SignUpPage() {
       const res = await signIn.social({
         provider: "google",
         callbackURL: "/onboarding",
-        errorCallbackURL: "/login?error=oauth_error",
+        errorCallbackURL: "/login",
       });
       if (res?.error) {
         setError(

@@ -18,6 +18,7 @@ export async function GET() {
         id: user.id,
         name: user.name,
         email: user.email,
+        emailVerified: user.emailVerified,
         image: user.image,
         username: user.username,
         bio: user.bio,

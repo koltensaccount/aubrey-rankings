@@ -20,11 +20,15 @@ function LoginFormContent() {
   useEffect(() => {
     if (urlError) {
       if (urlError === "account_not_linked") {
-        setError("An account already exists with that email. Please sign in with your email and password.");
+        setError(
+          "An Aubrey account already exists with this email address. Please sign in with your email and password first, then connect Google in Settings → Account."
+        );
       } else if (urlError === "access_denied") {
-        setError("Sign-in request was canceled.");
+        setError("Google sign-in request was canceled.");
+      } else if (urlError === "email_not_verified" || urlError === "google_unverified") {
+        setError("Your Google account email is not verified. Please verify your email with Google before signing in.");
       } else {
-        setError("Google Sign-In could not be completed. Please try signing in with email.");
+        setError("Google Sign-In could not be completed. Please try signing in with your email and password.");
       }
     }
   }, [urlError]);
@@ -60,7 +64,7 @@ function LoginFormContent() {
         if (user && !user.username) {
           router.push("/onboarding");
         } else {
-          router.push("/");
+          router.push("/profile");
         }
         router.refresh();
       }
@@ -94,7 +98,7 @@ function LoginFormContent() {
       const res = await signIn.social({
         provider: "google",
         callbackURL: "/onboarding",
-        errorCallbackURL: "/login?error=oauth_error",
+        errorCallbackURL: "/login",
       });
       if (res?.error) {
         setError(
