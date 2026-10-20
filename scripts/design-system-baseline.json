@@ -46,8 +46,8 @@
   ],
   "src/app/explore/page.tsx": [
     "bg-red-500/10",
-    "bg-red-500/20",
     "border-red-500/30",
+    "hover:bg-red-500/20",
     "text-red-400"
   ],
   "src/app/login/page.tsx": [
@@ -68,8 +68,8 @@
     "text-rose-400"
   ],
   "src/app/page.tsx": [
-    "text-amber-400",
-    "text-amber-400",
+    "dark:text-amber-400",
+    "dark:text-amber-400",
     "text-amber-600",
     "text-amber-600"
   ],
@@ -93,16 +93,16 @@
     "bg-red-500/10",
     "bg-red-500/10",
     "bg-red-500/10",
-    "bg-red-500/20",
     "bg-red-600",
-    "bg-red-700",
     "border-red-500/20",
     "border-red-500/30",
     "border-red-500/30",
     "border-red-500/30",
-    "text-red-400",
-    "text-red-400",
-    "text-red-400",
+    "hover:bg-red-500/20",
+    "hover:bg-red-700",
+    "hover:text-red-400",
+    "hover:text-red-400",
+    "hover:text-red-400",
     "text-red-400",
     "text-red-400",
     "text-red-400",
@@ -116,13 +116,13 @@
   "src/components/bug-report-button.tsx": [
     "bg-red-500/10",
     "border-red-500/20",
-    "text-red-300",
+    "hover:text-red-300",
     "text-red-400",
     "text-red-400",
     "text-red-400"
   ],
   "src/components/navbar.tsx": [
-    "text-red-400"
+    "hover:text-red-400"
   ],
   "src/components/notification-bell.tsx": [
     "fill-amber-400/20",
@@ -134,10 +134,10 @@
   ],
   "src/components/rating/rating-clear-dialog.tsx": [
     "bg-red-500/20",
-    "bg-red-500/30",
     "bg-red-950/20",
     "border-red-500/30",
     "border-red-500/40",
+    "hover:bg-red-500/30",
     "text-red-300",
     "text-red-400"
   ],
@@ -161,17 +161,17 @@
   ],
   "src/components/social/follow-button.tsx": [
     "bg-red-500/10",
-    "bg-red-500/20",
     "border-red-500/30",
+    "hover:bg-red-500/20",
     "text-red-400"
   ],
   "src/components/social/like-button.tsx": [
     "bg-rose-500/15",
     "border-rose-500/30",
-    "fill-rose-400",
+    "dark:fill-rose-400",
+    "dark:text-rose-400",
+    "dark:text-rose-400",
     "fill-rose-500",
-    "text-rose-400",
-    "text-rose-400",
     "text-rose-500",
     "text-rose-500"
   ],
@@ -185,9 +185,9 @@
     "bg-emerald-500/15",
     "border-amber-500/30",
     "border-emerald-500/30",
-    "text-amber-400",
+    "dark:text-amber-400",
+    "dark:text-emerald-400",
     "text-amber-600",
-    "text-emerald-400",
     "text-emerald-600"
   ]
 }

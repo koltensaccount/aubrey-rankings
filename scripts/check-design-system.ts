@@ -9,13 +9,14 @@ export const BASELINE_PATH = path.join(ROOT, "scripts/design-system-baseline.jso
 // Banned legacy crypto/dark hexes that bypass semantic tokens
 export const FORBIDDEN_HEX_REGEX = /#(?:141a17|303b34|181f1b|102523|202b26|19241f|202824)/i;
 
-// Raw Tailwind color utility classes forbidden in UI chrome
+// Covers all 22 standard Tailwind color families, all UI color prefixes (bg, text, border, fill, ring, from, to, via, accent, outline, divide),
+// standard shades (50, 100-900, 950), optional opacity modifiers (/10, /25, etc.), and arbitrary variant prefixes (hover:, dark:, etc.)
 export const COLOR_UTILITY_REGEX =
-  /\b(?:bg|text|border|fill|ring)-(?:amber|yellow|emerald|green|red|rose|blue|purple|orange)-(?:[1-9]00|\d{2,3})(?:\/\d+)?\b/g;
+  /\b(?:[a-z0-9-]+:)*(?:bg|text|border|fill|ring|from|to|via|accent|outline|divide)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:50|[1-9]00|950)(?:\/\d+)?\b/g;
 
-// Arbitrary hex color utilities forbidden in UI chrome
+// Arbitrary hex color utilities forbidden in UI chrome (including variant prefixes)
 export const ARBITRARY_HEX_REGEX =
-  /\b(?:bg|text|border|fill|ring)-\[#[0-9a-fA-F]{3,8}\]/g;
+  /\b(?:[a-z0-9-]+:)*(?:bg|text|border|fill|ring|from|to|via|accent|outline|divide)-\[#[0-9a-fA-F]{3,8}\]/g;
 
 export interface TokenOccurrence {
   line: number;
@@ -102,7 +103,9 @@ export function extractColorTokens(content: string): TokenOccurrence[] {
 
 /**
  * Audits tokens found in a file against its allowed baseline list.
- * Any token not in the baseline pool is reported as a new violation.
+ * Note: The compact baseline enforces per-file token occurrence pools for historical files.
+ * If a file is unbaselined, any token occurrence is flagged as a new violation.
+ * For baselined files, any token occurrence exceeding or outside the historical pool is flagged.
  */
 export function auditFileTokens(
   filePath: string,
@@ -185,7 +188,7 @@ export function runDesignSystemAudit(rootDir: string = ROOT) {
       errors.push(`Hardcoded legacy hex violation in ${relPath}`);
     }
 
-    // Check color utility tokens against baseline
+    // Check color utility tokens against baseline pool
     const tokensFound = extractColorTokens(content);
     const allowed = baseline[relPath] || [];
     const violations = auditFileTokens(relPath, tokensFound, allowed);
