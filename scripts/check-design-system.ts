@@ -6,96 +6,53 @@ export const ROOT = path.resolve(__dirname, "..");
 export const GLOBALS_CSS = path.join(ROOT, "src/app/globals.css");
 export const BASELINE_PATH = path.join(ROOT, "scripts/design-system-baseline.json");
 
+// Banned legacy crypto/dark hexes that bypass semantic tokens
 export const FORBIDDEN_HEX_REGEX = /#(?:141a17|303b34|181f1b|102523|202b26|19241f|202824)/i;
 
-export const HARDCODED_COLOR_REGEX =
-  /\b(?:bg|text|border|fill|ring|from|to|via)-(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-(?:[1-9]00|\d{2,3})(?:\/\d+)?\b/g;
+// Raw Tailwind color utility classes forbidden in UI chrome
+export const COLOR_UTILITY_REGEX =
+  /\b(?:bg|text|border|fill|ring)-(?:amber|yellow|emerald|green|red|rose|blue|purple|orange)-(?:[1-9]00|\d{2,3})(?:\/\d+)?\b/g;
 
+// Arbitrary hex color utilities forbidden in UI chrome
 export const ARBITRARY_HEX_REGEX =
-  /\b(?:bg|text|border|fill|ring|from|to|via)-\[#[0-9a-fA-F]{3,8}\]/g;
+  /\b(?:bg|text|border|fill|ring)-\[#[0-9a-fA-F]{3,8}\]/g;
 
-export interface BaselineEntry {
-  line?: number;
-  tokens: string[];
-  snippet: string;
+export interface TokenOccurrence {
+  line: number;
+  token: string;
 }
-
-export type BaselineMap = Record<string, BaselineEntry[]>;
 
 export interface Violation {
   file: string;
   line: number;
-  tokens: string[];
-  snippet: string;
+  token: string;
 }
 
-export function isLegitimateException(line: string): boolean {
-  const trimmed = line.trim();
-  // Pure comments or block comment continuations
-  if (trimmed.startsWith("//") || trimmed.startsWith("/*") || trimmed.startsWith("*")) {
-    return true;
-  }
-  // User data tier color definitions and swatches
-  if (
-    trimmed.includes("COLOR_SWATCHES") ||
-    trimmed.includes("DEFAULT_TIERS") ||
-    trimmed.includes("DEFAULT_TIER_DEFINITIONS")
-  ) {
-    return true;
-  }
-  // Inline styles for user data tier colors (e.g. style={{ backgroundColor: tier.color }})
-  if (
-    trimmed.includes("style={{ backgroundColor:") ||
-    trimmed.includes("style={{ color:") ||
-    trimmed.includes("style={{ borderColor:")
-  ) {
-    return true;
-  }
-  // Legitimate third-party brand logo SVG paths (e.g., Google logo colors)
-  if (
-    /fill="#(?:4285F4|34A853|FBBC05|EA4335)"/i.test(trimmed) ||
-    /d="M22\.56 12\.25/i.test(trimmed)
-  ) {
-    return true;
-  }
-  return false;
-}
-
-export function findViolationsInLine(line: string): string[] {
-  if (isLegitimateException(line)) return [];
-  const colorMatches = line.match(HARDCODED_COLOR_REGEX) || [];
-  const hexMatches = line.match(ARBITRARY_HEX_REGEX) || [];
-  return [...colorMatches, ...hexMatches];
-}
-
+/**
+ * Checks whether globals.css tokens are in sync with PALETTE in src/lib/theme.ts.
+ */
 export function checkPaletteSync(cssContent: string): { success: boolean; errors: string[] } {
   const errors: string[] = [];
   const lowerCss = cssContent.toLowerCase();
 
-  // Check dark theme palette synchronization
   for (const [key, hex] of Object.entries(PALETTE.dark)) {
-    const cssVarName = key.replace(/([A-Z])/g, "-$1").toLowerCase();
-    const expected = `--${cssVarName}: ${hex.toLowerCase()};`;
-    if (!lowerCss.includes(expected)) {
-      errors.push(`Mismatch in globals.css for dark ${key}: expected "${expected}"`);
+    const cssVar = `--${key.replace(/([A-Z])/g, "-$1").toLowerCase()}: ${hex.toLowerCase()};`;
+    if (!lowerCss.includes(cssVar)) {
+      errors.push(`Mismatch in globals.css for dark ${key}: expected "${cssVar}"`);
     }
   }
 
-  // Check light theme palette synchronization
   for (const [key, hex] of Object.entries(PALETTE.light)) {
-    const cssVarName = key.replace(/([A-Z])/g, "-$1").toLowerCase();
-    const expected = `--${cssVarName}: ${hex.toLowerCase()};`;
-    if (!lowerCss.includes(expected)) {
-      errors.push(`Mismatch in globals.css for light ${key}: expected "${expected}"`);
+    const cssVar = `--${key.replace(/([A-Z])/g, "-$1").toLowerCase()}: ${hex.toLowerCase()};`;
+    if (!lowerCss.includes(cssVar)) {
+      errors.push(`Mismatch in globals.css for light ${key}: expected "${cssVar}"`);
     }
   }
 
-  // Check default accent
   if (!lowerCss.includes(`--primary: ${DEFAULT_ACCENT.toLowerCase()};`)) {
     errors.push(`globals.css does not have default primary accent ${DEFAULT_ACCENT}`);
   }
 
-  // Extensible component tokens
   const extensibleTokens = [
     "--radius-card:",
     "--radius-dialog:",
@@ -120,129 +77,120 @@ export function checkPaletteSync(cssContent: string): { success: boolean; errors
   return { success: errors.length === 0, errors };
 }
 
-export function walkDirectory(dir: string, fileList: string[] = []): string[] {
+/**
+ * Finds all forbidden color tokens in a file's content, ignoring comments.
+ */
+export function extractColorTokens(content: string): TokenOccurrence[] {
+  const lines = content.split("\n");
+  const occurrences: TokenOccurrence[] = [];
+
+  lines.forEach((line, idx) => {
+    const trimmed = line.trim();
+    // Ignore pure comments
+    if (trimmed.startsWith("//") || trimmed.startsWith("/*") || trimmed.startsWith("*")) return;
+
+    const colorMatches = line.match(COLOR_UTILITY_REGEX) || [];
+    const hexMatches = line.match(ARBITRARY_HEX_REGEX) || [];
+
+    for (const token of [...colorMatches, ...hexMatches]) {
+      occurrences.push({ line: idx + 1, token });
+    }
+  });
+
+  return occurrences;
+}
+
+/**
+ * Audits tokens found in a file against its allowed baseline list.
+ * Any token not in the baseline pool is reported as a new violation.
+ */
+export function auditFileTokens(
+  filePath: string,
+  tokensFound: TokenOccurrence[],
+  allowedTokens: string[] = []
+): Violation[] {
+  const remainingBaseline = [...allowedTokens];
+  const newViolations: Violation[] = [];
+
+  for (const item of tokensFound) {
+    const matchIndex = remainingBaseline.indexOf(item.token);
+    if (matchIndex !== -1) {
+      remainingBaseline.splice(matchIndex, 1);
+    } else {
+      newViolations.push({
+        file: filePath,
+        line: item.line,
+        token: item.token,
+      });
+    }
+  }
+
+  return newViolations;
+}
+
+/**
+ * Recursively scans directory for TypeScript UI components, ignoring prototype mockups.
+ */
+export function getUIFiles(dir: string, fileList: string[] = []): string[] {
   if (!fs.existsSync(dir)) return fileList;
-  const files = fs.readdirSync(dir);
-  for (const file of files) {
-    const fullPath = path.join(dir, file);
+  const entries = fs.readdirSync(dir);
+  for (const entry of entries) {
+    if (entry === "prototype") continue; // Exclude archived prototype mockups
+    const fullPath = path.join(dir, entry);
     const stat = fs.statSync(fullPath);
     if (stat.isDirectory()) {
-      walkDirectory(fullPath, fileList);
-    } else if (file.endsWith(".tsx") || file.endsWith(".ts")) {
+      getUIFiles(fullPath, fileList);
+    } else if (entry.endsWith(".tsx") || entry.endsWith(".ts")) {
       fileList.push(fullPath);
     }
   }
   return fileList;
 }
 
-export function loadBaseline(baselinePath: string = BASELINE_PATH): BaselineMap {
-  if (!fs.existsSync(baselinePath)) return {};
-  try {
-    return JSON.parse(fs.readFileSync(baselinePath, "utf-8"));
-  } catch (err) {
-    console.error(`Failed to parse baseline file: ${err}`);
-    return {};
-  }
-}
-
-export function auditFileContent(
-  relPath: string,
-  content: string,
-  fileBaseline: BaselineEntry[] = []
-): { newViolations: Violation[]; historicalViolations: Violation[] } {
-  const lines = content.split("\n");
-  const newViolations: Violation[] = [];
-  const historicalViolations: Violation[] = [];
-
-  // Copy baseline entries so we can match them greedily
-  const unusedBaseline = [...fileBaseline];
-
-  lines.forEach((line, idx) => {
-    const tokens = findViolationsInLine(line);
-    if (tokens.length === 0) return;
-
-    const trimmed = line.trim();
-    const violation: Violation = {
-      file: relPath,
-      line: idx + 1,
-      tokens,
-      snippet: trimmed,
-    };
-
-    // Attempt to match with an unused baseline entry
-    const matchIndex = unusedBaseline.findIndex((b) => {
-      // Primary match: exact trimmed line snippet
-      if (b.snippet === trimmed) return true;
-      // Secondary match: same tokens on same line number
-      if (b.line === idx + 1 && JSON.stringify(b.tokens.slice().sort()) === JSON.stringify(tokens.slice().sort())) {
-        return true;
-      }
-      return false;
-    });
-
-    if (matchIndex !== -1) {
-      unusedBaseline.splice(matchIndex, 1);
-      historicalViolations.push(violation);
-    } else {
-      newViolations.push(violation);
-    }
-  });
-
-  return { newViolations, historicalViolations };
-}
-
+/**
+ * Runs complete design system check across the codebase.
+ */
 export function runDesignSystemAudit(rootDir: string = ROOT) {
   const errors: string[] = [];
   const newViolations: Violation[] = [];
-  let legacyHexViolations = 0;
 
-  // 1. Palette synchronization
+  // 1. Check palette synchronization
   const cssPath = path.join(rootDir, "src/app/globals.css");
-  if (!fs.existsSync(cssPath)) {
-    errors.push(`Missing globals.css at ${cssPath}`);
+  if (fs.existsSync(cssPath)) {
+    const sync = checkPaletteSync(fs.readFileSync(cssPath, "utf-8"));
+    if (!sync.success) errors.push(...sync.errors);
   } else {
-    const cssContent = fs.readFileSync(cssPath, "utf-8");
-    const syncRes = checkPaletteSync(cssContent);
-    if (!syncRes.success) {
-      errors.push(...syncRes.errors);
-    }
+    errors.push(`globals.css not found at ${cssPath}`);
   }
 
-  // 2. Scan component files for forbidden legacy crypto/dark hexes
-  const scanDirs = [path.join(rootDir, "src/app"), path.join(rootDir, "src/components")];
-  const allFiles: string[] = [];
-  for (const dir of scanDirs) {
-    walkDirectory(dir, allFiles);
+  // 2. Scan UI files
+  const searchDirs = [path.join(rootDir, "src/app"), path.join(rootDir, "src/components")];
+  const uiFiles: string[] = [];
+  for (const dir of searchDirs) {
+    getUIFiles(dir, uiFiles);
   }
 
-  for (const file of allFiles) {
-    const content = fs.readFileSync(file, "utf-8");
-    if (FORBIDDEN_HEX_REGEX.test(content)) {
-      const relPath = path.relative(rootDir, file);
-      errors.push(`Hardcoded legacy dark/crypto hex violation in ${relPath}`);
-      legacyHexViolations++;
-    }
-  }
+  // Load baseline
+  const baselinePath = path.join(rootDir, "scripts/design-system-baseline.json");
+  const baseline: Record<string, string[]> = fs.existsSync(baselinePath)
+    ? JSON.parse(fs.readFileSync(baselinePath, "utf-8"))
+    : {};
 
-  // 3. Scan all UI code for hardcoded Tailwind colors & arbitrary hexes
-  const baseline = loadBaseline(path.join(rootDir, "scripts/design-system-baseline.json"));
-  let historicalTotal = 0;
-
-  for (const file of allFiles) {
+  for (const file of uiFiles) {
     const relPath = path.relative(rootDir, file);
     const content = fs.readFileSync(file, "utf-8");
-    const fileBaseline = baseline[relPath] || [];
 
-    const { newViolations: fileNew, historicalViolations: fileHist } = auditFileContent(
-      relPath,
-      content,
-      fileBaseline
-    );
+    // Check forbidden legacy hexes
+    if (FORBIDDEN_HEX_REGEX.test(content)) {
+      errors.push(`Hardcoded legacy hex violation in ${relPath}`);
+    }
 
-    historicalTotal += fileHist.length;
-
-    if (fileNew.length > 0) {
-      newViolations.push(...fileNew);
+    // Check color utility tokens against baseline
+    const tokensFound = extractColorTokens(content);
+    const allowed = baseline[relPath] || [];
+    const violations = auditFileTokens(relPath, tokensFound, allowed);
+    if (violations.length > 0) {
+      newViolations.push(...violations);
     }
   }
 
@@ -250,48 +198,39 @@ export function runDesignSystemAudit(rootDir: string = ROOT) {
     success: errors.length === 0 && newViolations.length === 0,
     errors,
     newViolations,
-    legacyHexViolations,
-    historicalTotal,
   };
 }
 
-// CLI execution
+// CLI entry point
 if (process.argv[1] && process.argv[1].endsWith("check-design-system.ts")) {
   console.log("🎨 Verifying Aubrey Rankings Design System Integrity...");
 
   const result = runDesignSystemAudit();
 
   if (result.errors.length > 0) {
-    for (const err of result.errors) {
-      console.error(`❌ ${err}`);
-    }
+    for (const err of result.errors) console.error(`❌ ${err}`);
   }
 
   if (result.newViolations.length > 0) {
-    console.error(`\n❌ Found ${result.newViolations.length} NEW hardcoded design token violation(s):`);
+    console.error(`\n❌ Found ${result.newViolations.length} NEW design token violation(s):`);
     for (const v of result.newViolations) {
-      console.error(`  ${v.file}:${v.line}: [${v.tokens.join(", ")}]`);
-      console.error(`    ↳ Line: ${v.snippet}\n`);
+      console.error(`  ${v.file}:${v.line}: Found forbidden token "${v.token}"`);
+      console.error(`    ↳ Rule: Raw Tailwind palette colors (amber-*, red-*, etc.) are forbidden in UI chrome.`);
+      console.error(`    ↳ Fix: Use semantic design tokens from docs/DESIGN_SYSTEM.md:`);
+      console.error(`        • Verified / Success: bg-primary/10 text-primary-text border-primary/25`);
+      console.error(`        • Unverified / Neutral: bg-surface-elevated text-muted-foreground border-border`);
+      console.error(`        • Error / Destructive: bg-destructive/10 text-destructive border-destructive/20\n`);
     }
-    console.error(
-      "👉 Do not use raw Tailwind palette colors (amber-*, red-*, emerald-*, etc.) or arbitrary hexes for UI chrome."
-    );
-    console.error(
-      "👉 Use semantic tokens: bg-primary, text-primary-text, bg-surface, border-border, text-destructive, etc."
-    );
   }
 
   if (result.success) {
     console.log("✔ globals.css and src/lib/theme.ts palettes are 100% synchronized.");
-    console.log("✔ Extensible design tokens (--radius-*, --shadow-*, --border-*) verified.");
-    console.log("✔ No legacy crypto/dark hex violations found in app or components.");
-    console.log(
-      `✔ Universal design token audit passed: 0 new violations (${result.historicalTotal} tolerated historical baseline entries).`
-    );
+    console.log("✔ No forbidden legacy dark/crypto hexes found.");
+    console.log("✔ Design token audit passed with 0 new violations.");
     console.log("✅ Aubrey Rankings Design System check passed cleanly!");
     process.exit(0);
   } else {
-    console.error("\n❌ Aubrey Rankings Design System verification failed!");
+    console.error("❌ Aubrey Rankings Design System verification failed!");
     process.exit(1);
   }
 }

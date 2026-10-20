@@ -1,0 +1,64 @@
+name: Pull Request Quality Gate
+
+on:
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: pr-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Design System, Types & Tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: koltenbendickson
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: aubrey_rankings
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install Dependencies
+        run: npm ci
+
+      # Fast gate: Fails in milliseconds if any hardcoded colors or token drift exist
+      - name: Verify Design System Integrity
+        run: npm run check:design-system
+
+      # Typecheck without emitting JS
+      - name: Run TypeScript Typecheck
+        run: npx tsc --noEmit
+
+      # Database migration test
+      - name: Run Schema Migrations
+        env:
+          DATABASE_URL: postgresql://koltenbendickson:password@localhost:5432/aubrey_rankings
+          MIGRATIONS_DIR: ./src/db/migrations
+        run: node scripts/migrate.cjs
+
+      # Automated test suite
+      - name: Run Test Suite
+        env:
+          DATABASE_URL: postgresql://koltenbendickson:password@localhost:5432/aubrey_rankings
+          BETTER_AUTH_SECRET: 9c58715c7f3f67ff199150b1a4b2a3b25804c43657b0fd945f997ce752797c2e
+          BETTER_AUTH_URL: http://localhost:3000
+        run: npm test

@@ -1,947 +1,193 @@
 {
   "src/app/admin/reports/page.tsx": [
-    {
-      "line": 111,
-      "tokens": [
-        "bg-red-500"
-      ],
-      "snippet": "? \"bg-red-500 text-white\""
-    },
-    {
-      "line": 121,
-      "tokens": [
-        "bg-amber-500"
-      ],
-      "snippet": "? \"bg-amber-500 text-black\""
-    },
-    {
-      "line": 131,
-      "tokens": [
-        "bg-emerald-600"
-      ],
-      "snippet": "? \"bg-emerald-600 text-white\""
-    },
-    {
-      "line": 146,
-      "tokens": [
-        "border-red-500/20",
-        "bg-red-500/5"
-      ],
-      "snippet": "<div className=\"p-6 rounded-xl border border-red-500/20 bg-red-500/5 text-center max-w-md mx-auto space-y-3\">"
-    },
-    {
-      "line": 147,
-      "tokens": [
-        "text-red-400"
-      ],
-      "snippet": "<AlertCircle size={24} className=\"mx-auto text-red-400\" />"
-    },
-    {
-      "line": 171,
-      "tokens": [
-        "bg-red-500/20",
-        "text-red-400",
-        "border-red-500/30"
-      ],
-      "snippet": "? \"bg-red-500/20 text-red-400 border border-red-500/30\""
-    },
-    {
-      "line": 173,
-      "tokens": [
-        "bg-amber-500/20",
-        "text-amber-400",
-        "border-amber-500/30"
-      ],
-      "snippet": "? \"bg-amber-500/20 text-amber-400 border border-amber-500/30\""
-    },
-    {
-      "line": 174,
-      "tokens": [
-        "bg-emerald-500/20",
-        "text-emerald-400",
-        "border-emerald-500/30"
-      ],
-      "snippet": ": \"bg-emerald-500/20 text-emerald-400 border border-emerald-500/30\""
-    }
+    "bg-amber-500",
+    "bg-amber-500/20",
+    "bg-emerald-500/20",
+    "bg-emerald-600",
+    "bg-red-500",
+    "bg-red-500/20",
+    "bg-red-500/5",
+    "border-amber-500/30",
+    "border-emerald-500/30",
+    "border-red-500/20",
+    "border-red-500/30",
+    "text-amber-400",
+    "text-emerald-400",
+    "text-red-400",
+    "text-red-400"
   ],
   "src/app/collection/[id]/components/tier-board-editor-modal.tsx": [
-    {
-      "line": 670,
-      "tokens": [
-        "text-emerald-400"
-      ],
-      "snippet": "<Check size={12} className=\"text-emerald-400\" />"
-    }
+    "text-emerald-400"
   ],
   "src/app/compare/page.tsx": [
-    {
-      "line": 199,
-      "tokens": [
-        "text-red-400"
-      ],
-      "snippet": "<p className=\"text-sm text-red-400\">{error || \"Could not load comparison\"}</p>"
-    },
-    {
-      "line": 214,
-      "tokens": [
-        "text-emerald-400",
-        "border-emerald-500/30",
-        "bg-emerald-500/10"
-      ],
-      "snippet": "Identical: \"text-emerald-400 border-emerald-500/30 bg-emerald-500/10\","
-    },
-    {
-      "line": 216,
-      "tokens": [
-        "text-amber-400",
-        "border-amber-500/30",
-        "bg-amber-500/10"
-      ],
-      "snippet": "\"Moderate Divergence\": \"text-amber-400 border-amber-500/30 bg-amber-500/10\","
-    },
-    {
-      "line": 217,
-      "tokens": [
-        "text-red-400",
-        "border-red-500/30",
-        "bg-red-500/10"
-      ],
-      "snippet": "\"Sharp Dispute\": \"text-red-400 border-red-500/30 bg-red-500/10\","
-    },
-    {
-      "line": 218,
-      "tokens": [
-        "text-rose-400",
-        "border-rose-500/30",
-        "bg-rose-500/10"
-      ],
-      "snippet": "\"Polar Opposites\": \"text-rose-400 border-rose-500/30 bg-rose-500/10\","
-    },
-    {
-      "line": 357,
-      "tokens": [
-        "bg-red-500/10",
-        "text-red-400",
-        "border-red-500/30"
-      ],
-      "snippet": "? \"bg-red-500/10 text-red-400 border border-red-500/30\""
-    },
-    {
-      "line": 473,
-      "tokens": [
-        "text-emerald-400"
-      ],
-      "snippet": "<span className=\"text-emerald-400\">+{item.rightRank - item.leftRank}</span>"
-    },
-    {
-      "line": 475,
-      "tokens": [
-        "text-red-400"
-      ],
-      "snippet": "<span className=\"text-red-400\">-{item.leftRank - item.rightRank}</span>"
-    }
+    "bg-amber-500/10",
+    "bg-emerald-500/10",
+    "bg-red-500/10",
+    "bg-red-500/10",
+    "bg-rose-500/10",
+    "border-amber-500/30",
+    "border-emerald-500/30",
+    "border-red-500/30",
+    "border-red-500/30",
+    "border-rose-500/30",
+    "text-amber-400",
+    "text-emerald-400",
+    "text-emerald-400",
+    "text-red-400",
+    "text-red-400",
+    "text-red-400",
+    "text-red-400",
+    "text-rose-400"
   ],
   "src/app/create/page.tsx": [
-    {
-      "line": 140,
-      "tokens": [
-        "bg-red-500/10",
-        "border-red-500/20",
-        "text-red-400"
-      ],
-      "snippet": "<div className=\"p-3.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2.5\">"
-    }
+    "bg-red-500/10",
+    "border-red-500/20",
+    "text-red-400"
   ],
   "src/app/explore/page.tsx": [
-    {
-      "line": 245,
-      "tokens": [
-        "bg-red-500/10",
-        "text-red-400",
-        "border-red-500/30",
-        "bg-red-500/20"
-      ],
-      "snippet": "? \"bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20\""
-    }
+    "bg-red-500/10",
+    "bg-red-500/20",
+    "border-red-500/30",
+    "text-red-400"
   ],
   "src/app/login/page.tsx": [
-    {
-      "line": 135,
-      "tokens": [
-        "bg-red-500/10",
-        "border-red-500/20",
-        "text-red-400"
-      ],
-      "snippet": "<div className=\"p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2\">"
-    }
+    "bg-red-500/10",
+    "border-red-500/20",
+    "text-red-400"
   ],
   "src/app/media/[id]/page.tsx": [
-    {
-      "line": 467,
-      "tokens": [
-        "text-amber-400",
-        "fill-amber-400"
-      ],
-      "snippet": "<Star size={13} className=\"text-amber-400 fill-amber-400\" />"
-    }
+    "fill-amber-400",
+    "text-amber-400"
   ],
   "src/app/notifications/page.tsx": [
-    {
-      "line": 162,
-      "tokens": [
-        "text-rose-400",
-        "fill-rose-400/20"
-      ],
-      "snippet": "return <Heart className=\"w-4 h-4 text-rose-400 fill-rose-400/20\" />;"
-    },
-    {
-      "line": 164,
-      "tokens": [
-        "text-amber-400",
-        "fill-amber-400/20"
-      ],
-      "snippet": "return <MessageSquare className=\"w-4 h-4 text-amber-400 fill-amber-400/20\" />;"
-    },
-    {
-      "line": 166,
-      "tokens": [
-        "text-purple-400"
-      ],
-      "snippet": "return <Tv className=\"w-4 h-4 text-purple-400\" />;"
-    },
-    {
-      "line": 168,
-      "tokens": [
-        "text-emerald-400"
-      ],
-      "snippet": "return <Film className=\"w-4 h-4 text-emerald-400\" />;"
-    }
+    "fill-amber-400/20",
+    "fill-rose-400/20",
+    "text-amber-400",
+    "text-emerald-400",
+    "text-purple-400",
+    "text-rose-400"
   ],
   "src/app/page.tsx": [
-    {
-      "line": 487,
-      "tokens": [
-        "text-amber-600",
-        "text-amber-400"
-      ],
-      "snippet": "<span className={isDraft ? \"text-amber-600 dark:text-amber-400 font-bold\" : \"text-primary\"}>"
-    },
-    {
-      "line": 503,
-      "tokens": [
-        "text-amber-600",
-        "text-amber-400"
-      ],
-      "snippet": "<span className=\"text-amber-600 dark:text-amber-400\">Spoiler</span>"
-    }
-  ],
-  "src/app/prototype/ranking/page.tsx": [
-    {
-      "line": 269,
-      "tokens": [
-        "bg-[#161614]",
-        "border-[#2A2926]"
-      ],
-      "snippet": "<div className=\"flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 p-3 rounded-2xl bg-[#161614] border border-[#2A2926]\">"
-    },
-    {
-      "line": 280,
-      "tokens": [
-        "text-[#9C9993]",
-        "text-[#F2EFE9]",
-        "bg-[#1E1E1C]"
-      ],
-      "snippet": ": \"text-[#9C9993] hover:text-[#F2EFE9] hover:bg-[#1E1E1C]\""
-    },
-    {
-      "line": 289,
-      "tokens": [
-        "border-[#262523]"
-      ],
-      "snippet": "<div className=\"flex items-center justify-between sm:justify-end gap-3 pt-2 sm:pt-0 border-t sm:border-t-0 border-[#262523]\">"
-    },
-    {
-      "line": 295,
-      "tokens": [
-        "bg-[#1E1E1C]",
-        "text-[#F2EFE9]",
-        "border-[#343331]",
-        "border-[#89D5D5]"
-      ],
-      "snippet": "className=\"bg-[#1E1E1C] text-xs font-mono text-[#F2EFE9] border border-[#343331] rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-[#89D5D5]\""
-    },
-    {
-      "line": 303,
-      "tokens": [
-        "bg-[#121212]",
-        "border-[#2A2926]"
-      ],
-      "snippet": "<div className=\"flex items-center gap-1 bg-[#121212] p-1 rounded-lg border border-[#2A2926]\">"
-    },
-    {
-      "line": 316,
-      "tokens": [
-        "bg-[#282826]",
-        "text-[#F2EFE9]"
-      ],
-      "snippet": "? \"bg-[#282826] text-[#F2EFE9]\""
-    },
-    {
-      "line": 317,
-      "tokens": [
-        "text-[#9C9993]",
-        "text-[#F2EFE9]"
-      ],
-      "snippet": ": \"text-[#9C9993] hover:text-[#F2EFE9]\""
-    },
-    {
-      "line": 328,
-      "tokens": [
-        "bg-[#282826]",
-        "text-[#F2EFE9]"
-      ],
-      "snippet": "? \"bg-[#282826] text-[#F2EFE9]\""
-    },
-    {
-      "line": 329,
-      "tokens": [
-        "text-[#9C9993]",
-        "text-[#F2EFE9]"
-      ],
-      "snippet": ": \"text-[#9C9993] hover:text-[#F2EFE9]\""
-    },
-    {
-      "line": 538,
-      "tokens": [
-        "border-[#2A2926]",
-        "bg-[#161614]"
-      ],
-      "snippet": "<div className=\"rounded-2xl border border-[#2A2926] bg-[#161614] overflow-hidden\">"
-    },
-    {
-      "line": 542,
-      "tokens": [
-        "border-[#2A2926]",
-        "bg-[#1B1B19]",
-        "text-[#9C9993]"
-      ],
-      "snippet": "<tr className=\"border-b border-[#2A2926] bg-[#1B1B19] text-[#9C9993]\">"
-    },
-    {
-      "line": 557,
-      "tokens": [
-        "text-[#89D5D5]"
-      ],
-      "snippet": "<th className=\"py-3 px-4 text-center hidden sm:table-cell text-[#89D5D5]\">"
-    },
-    {
-      "line": 568,
-      "tokens": [
-        "bg-[#1E1E1C]"
-      ],
-      "snippet": "className=\"hover:bg-[#1E1E1C] transition-colors\""
-    },
-    {
-      "line": 570,
-      "tokens": [
-        "text-[#B8DAD6]"
-      ],
-      "snippet": "<td className=\"py-3 px-4 text-center font-display text-sm text-[#B8DAD6]\">"
-    },
-    {
-      "line": 573,
-      "tokens": [
-        "text-[#F2EFE9]"
-      ],
-      "snippet": "<td className=\"py-3 px-4 font-sans font-semibold text-[#F2EFE9]\">"
-    },
-    {
-      "line": 575,
-      "tokens": [
-        "text-[#6B6862]"
-      ],
-      "snippet": "<span className=\"font-mono text-[11px] text-[#6B6862] ml-2\">"
-    },
-    {
-      "line": 579,
-      "tokens": [
-        "text-[#9C9993]"
-      ],
-      "snippet": "<td className=\"py-3 px-4 text-center hidden sm:table-cell text-[#9C9993]\">"
-    },
-    {
-      "line": 582,
-      "tokens": [
-        "text-[#9C9993]"
-      ],
-      "snippet": "<td className=\"py-3 px-4 text-center hidden md:table-cell text-[#9C9993]\">"
-    },
-    {
-      "line": 585,
-      "tokens": [
-        "text-[#9C9993]"
-      ],
-      "snippet": "<td className=\"py-3 px-4 text-center hidden md:table-cell text-[#9C9993]\">"
-    },
-    {
-      "line": 588,
-      "tokens": [
-        "text-[#9C9993]"
-      ],
-      "snippet": "<td className=\"py-3 px-4 text-center hidden lg:table-cell text-[#9C9993]\">"
-    },
-    {
-      "line": 591,
-      "tokens": [
-        "text-[#89D5D5]"
-      ],
-      "snippet": "<td className=\"py-3 px-4 text-center hidden sm:table-cell text-[#89D5D5] font-bold\">"
-    },
-    {
-      "line": 594,
-      "tokens": [
-        "text-[#F2EFE9]"
-      ],
-      "snippet": "<td className=\"py-3 px-4 text-right font-bold text-[#F2EFE9]\">"
-    },
-    {
-      "line": 600,
-      "tokens": [
-        "bg-[#242321]",
-        "bg-[#89D5D5]"
-      ],
-      "snippet": "className=\"px-2.5 py-1 rounded bg-[#242321] text-white hover:bg-[#89D5D5] transition-colors\""
-    },
-    {
-      "line": 624,
-      "tokens": [
-        "border-[#383632]",
-        "bg-[#161614]"
-      ],
-      "snippet": "className=\"relative w-full max-w-lg rounded-3xl border border-[#383632] bg-[#161614] p-6 sm:p-8 space-y-6 shadow-2xl\""
-    },
-    {
-      "line": 627,
-      "tokens": [
-        "border-[#2A2926]"
-      ],
-      "snippet": "<div className=\"flex items-start justify-between pb-4 border-b border-[#2A2926]\">"
-    },
-    {
-      "line": 629,
-      "tokens": [
-        "text-[#89D5D5]"
-      ],
-      "snippet": "<span className=\"text-[10px] font-mono uppercase tracking-widest text-[#89D5D5]\">"
-    },
-    {
-      "line": 632,
-      "tokens": [
-        "text-[#F2EFE9]"
-      ],
-      "snippet": "<h3 className=\"font-display text-3xl text-[#F2EFE9] tracking-tight uppercase mt-0.5\">"
-    },
-    {
-      "line": 635,
-      "tokens": [
-        "text-[#9C9993]"
-      ],
-      "snippet": "<span className=\"text-xs text-[#9C9993]\">"
-    },
-    {
-      "line": 643,
-      "tokens": [
-        "text-[#9C9993]",
-        "bg-[#242321]"
-      ],
-      "snippet": "className=\"p-1 rounded-full text-[#9C9993] hover:text-white hover:bg-[#242321]\""
-    },
-    {
-      "line": 650,
-      "tokens": [
-        "bg-[#1B1B19]",
-        "border-[#2A2926]"
-      ],
-      "snippet": "<div className=\"p-4 rounded-2xl bg-[#1B1B19] border border-[#2A2926] flex items-center justify-between\">"
-    },
-    {
-      "line": 652,
-      "tokens": [
-        "text-[#9C9993]"
-      ],
-      "snippet": "<span className=\"text-xs text-[#9C9993] uppercase font-mono block\">"
-    },
-    {
-      "line": 655,
-      "tokens": [
-        "text-[#6B6862]"
-      ],
-      "snippet": "<span className=\"text-[11px] text-[#6B6862]\">"
-    },
-    {
-      "line": 660,
-      "tokens": [
-        "text-[#B8DAD6]"
-      ],
-      "snippet": "<span className=\"font-display text-4xl text-[#B8DAD6]\">"
-    },
-    {
-      "line": 663,
-      "tokens": [
-        "text-[#6B6862]"
-      ],
-      "snippet": "<span className=\"text-xs text-[#6B6862] font-mono block\">"
-    },
-    {
-      "line": 673,
-      "tokens": [
-        "text-[#F2EFE9]"
-      ],
-      "snippet": "<div className=\"flex justify-between text-[#F2EFE9]\">"
-    },
-    {
-      "line": 675,
-      "tokens": [
-        "text-[#B8DAD6]"
-      ],
-      "snippet": "<span className=\"font-bold text-[#B8DAD6]\">"
-    },
-    {
-      "line": 693,
-      "tokens": [
-        "text-[#F2EFE9]"
-      ],
-      "snippet": "<div className=\"flex justify-between text-[#F2EFE9]\">"
-    },
-    {
-      "line": 695,
-      "tokens": [
-        "text-[#B8DAD6]"
-      ],
-      "snippet": "<span className=\"font-bold text-[#B8DAD6]\">"
-    },
-    {
-      "line": 713,
-      "tokens": [
-        "text-[#F2EFE9]"
-      ],
-      "snippet": "<div className=\"flex justify-between text-[#F2EFE9]\">"
-    },
-    {
-      "line": 715,
-      "tokens": [
-        "text-[#B8DAD6]"
-      ],
-      "snippet": "<span className=\"font-bold text-[#B8DAD6]\">"
-    },
-    {
-      "line": 733,
-      "tokens": [
-        "text-[#F2EFE9]"
-      ],
-      "snippet": "<div className=\"flex justify-between text-[#F2EFE9]\">"
-    },
-    {
-      "line": 735,
-      "tokens": [
-        "text-[#B8DAD6]"
-      ],
-      "snippet": "<span className=\"font-bold text-[#B8DAD6]\">"
-    },
-    {
-      "line": 753,
-      "tokens": [
-        "text-[#89D5D5]"
-      ],
-      "snippet": "<div className=\"flex justify-between text-[#89D5D5]\">"
-    },
-    {
-      "line": 776,
-      "tokens": [
-        "text-[#9C9993]"
-      ],
-      "snippet": "className=\"px-4 py-2.5 rounded-xl text-xs font-semibold text-[#9C9993] hover:text-white\""
-    }
+    "text-amber-400",
+    "text-amber-400",
+    "text-amber-600",
+    "text-amber-600"
   ],
   "src/app/settings/components/appearance-tab.tsx": [
-    {
-      "line": 221,
-      "tokens": [
-        "text-red-500"
-      ],
-      "snippet": "<span className=\"text-[11px] text-red-500 font-medium\">"
-    },
-    {
-      "line": 309,
-      "tokens": [
-        "text-emerald-500"
-      ],
-      "snippet": "<span className=\"text-emerald-500 font-semibold\">(Pass)</span>"
-    },
-    {
-      "line": 311,
-      "tokens": [
-        "text-amber-500"
-      ],
-      "snippet": "<span className=\"text-amber-500 font-semibold\">(Large text only)</span>"
-    },
-    {
-      "line": 379,
-      "tokens": [
-        "text-emerald-500"
-      ],
-      "snippet": "<span className=\"flex items-center gap-1 text-[11px] text-emerald-500 font-medium\">"
-    }
+    "text-amber-500",
+    "text-emerald-500",
+    "text-emerald-500",
+    "text-red-500"
   ],
   "src/app/settings/components/data-tab.tsx": [
-    {
-      "line": 113,
-      "tokens": [
-        "bg-red-500/10",
-        "border-red-500/20",
-        "text-red-400"
-      ],
-      "snippet": "<div className=\"p-3 rounded-card bg-red-500/10 border border-red-500/20 text-red-400 text-xs\">"
-    }
+    "bg-red-500/10",
+    "border-red-500/20",
+    "text-red-400"
   ],
   "src/app/settings/components/privacy-tab.tsx": [
-    {
-      "line": 134,
-      "tokens": [
-        "bg-emerald-500/10",
-        "border-emerald-500/20",
-        "text-emerald-400"
-      ],
-      "snippet": "<div className=\"p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs flex items-center gap-2\">"
-    }
+    "bg-emerald-500/10",
+    "border-emerald-500/20",
+    "text-emerald-400"
   ],
   "src/app/settings/components/rating-systems-tab.tsx": [
-    {
-      "line": 552,
-      "tokens": [
-        "text-red-400"
-      ],
-      "snippet": "className=\"text-muted-foreground hover:text-red-400 transition-colors p-0.5 cursor-pointer\""
-    },
-    {
-      "line": 590,
-      "tokens": [
-        "bg-red-500/10",
-        "border-red-500/30",
-        "text-red-400"
-      ],
-      "snippet": "<div className=\"p-3 rounded-card bg-red-500/10 border border-red-500/30 text-red-400 text-xs flex items-center gap-2\">"
-    },
-    {
-      "line": 788,
-      "tokens": [
-        "text-red-400"
-      ],
-      "snippet": "className=\"text-muted-foreground hover:text-red-400 p-1.5 transition-colors cursor-pointer shrink-0 self-end sm:self-center\""
-    },
-    {
-      "line": 828,
-      "tokens": [
-        "text-red-400"
-      ],
-      "snippet": "className=\"text-muted-foreground hover:text-red-400 p-1 transition-colors bg-transparent border-0 cursor-pointer shrink-0\""
-    },
-    {
-      "line": 873,
-      "tokens": [
-        "text-red-400"
-      ],
-      "snippet": "<span className=\"font-semibold text-red-400 block\">"
-    },
-    {
-      "line": 883,
-      "tokens": [
-        "bg-red-500/10",
-        "bg-red-500/20",
-        "text-red-400",
-        "border-red-500/30"
-      ],
-      "snippet": "className=\"px-4 py-2 rounded-button bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/30 text-xs font-semibold flex items-center gap-1.5 transition-all cursor-pointer self-start sm:self-auto\""
-    },
-    {
-      "line": 901,
-      "tokens": [
-        "border-red-500/30"
-      ],
-      "snippet": "<div className=\"w-full max-w-md rounded-dialog bg-card border border-red-500/30 p-6 shadow-dialog space-y-4\">"
-    },
-    {
-      "line": 902,
-      "tokens": [
-        "text-red-400"
-      ],
-      "snippet": "<div className=\"flex items-center gap-3 text-red-400\">"
-    },
-    {
-      "line": 903,
-      "tokens": [
-        "bg-red-500/10",
-        "border-red-500/20"
-      ],
-      "snippet": "<div className=\"h-10 w-10 rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0\">"
-    },
-    {
-      "line": 933,
-      "tokens": [
-        "bg-red-600",
-        "bg-red-700"
-      ],
-      "snippet": "className=\"px-4 py-2 rounded-button bg-red-600 hover:bg-red-700 text-white text-xs font-semibold transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50\""
-    }
+    "bg-red-500/10",
+    "bg-red-500/10",
+    "bg-red-500/10",
+    "bg-red-500/20",
+    "bg-red-600",
+    "bg-red-700",
+    "border-red-500/20",
+    "border-red-500/30",
+    "border-red-500/30",
+    "border-red-500/30",
+    "text-red-400",
+    "text-red-400",
+    "text-red-400",
+    "text-red-400",
+    "text-red-400",
+    "text-red-400",
+    "text-red-400"
   ],
   "src/app/signup/page.tsx": [
-    {
-      "line": 101,
-      "tokens": [
-        "bg-red-500/10",
-        "border-red-500/20",
-        "text-red-400"
-      ],
-      "snippet": "<div className=\"p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 text-xs flex items-start gap-2\">"
-    }
+    "bg-red-500/10",
+    "border-red-500/20",
+    "text-red-400"
   ],
   "src/components/bug-report-button.tsx": [
-    {
-      "line": 149,
-      "tokens": [
-        "bg-red-500/10",
-        "border-red-500/20",
-        "text-red-400"
-      ],
-      "snippet": "<div className=\"p-3 rounded bg-red-500/10 border border-red-500/20 text-red-400 text-xs\">"
-    },
-    {
-      "line": 165,
-      "tokens": [
-        "text-red-400"
-      ],
-      "snippet": "Description <span className=\"text-red-400\">*</span>"
-    },
-    {
-      "line": 198,
-      "tokens": [
-        "text-red-400",
-        "text-red-300"
-      ],
-      "snippet": "className=\"absolute top-2 right-2 p-1 rounded-full bg-black/80 hover:bg-black text-red-400 hover:text-red-300 transition-colors\""
-    }
+    "bg-red-500/10",
+    "border-red-500/20",
+    "text-red-300",
+    "text-red-400",
+    "text-red-400",
+    "text-red-400"
   ],
   "src/components/navbar.tsx": [
-    {
-      "line": 74,
-      "tokens": [
-        "text-red-400"
-      ],
-      "snippet": "<button onClick={handleSignOut} title=\"Sign out\" className=\"p-2 text-muted-foreground hover:text-red-400 transition-colors bg-transparent border-0 cursor-pointer\">"
-    }
+    "text-red-400"
   ],
   "src/components/notification-bell.tsx": [
-    {
-      "line": 147,
-      "tokens": [
-        "text-rose-400",
-        "fill-rose-400/20"
-      ],
-      "snippet": "return <Heart className=\"w-3.5 h-3.5 text-rose-400 fill-rose-400/20\" />;"
-    },
-    {
-      "line": 149,
-      "tokens": [
-        "text-amber-400",
-        "fill-amber-400/20"
-      ],
-      "snippet": "return <MessageSquare className=\"w-3.5 h-3.5 text-amber-400 fill-amber-400/20\" />;"
-    },
-    {
-      "line": 151,
-      "tokens": [
-        "text-purple-400"
-      ],
-      "snippet": "return <Tv className=\"w-3.5 h-3.5 text-purple-400\" />;"
-    },
-    {
-      "line": 153,
-      "tokens": [
-        "text-emerald-400"
-      ],
-      "snippet": "return <Film className=\"w-3.5 h-3.5 text-emerald-400\" />;"
-    }
+    "fill-amber-400/20",
+    "fill-rose-400/20",
+    "text-amber-400",
+    "text-emerald-400",
+    "text-purple-400",
+    "text-rose-400"
   ],
   "src/components/rating/rating-clear-dialog.tsx": [
-    {
-      "line": 21,
-      "tokens": [
-        "bg-red-950/20",
-        "border-red-500/30"
-      ],
-      "snippet": "<div className=\"p-4 bg-red-950/20 border-t border-red-500/30 space-y-3 shrink-0\">"
-    },
-    {
-      "line": 22,
-      "tokens": [
-        "text-red-400"
-      ],
-      "snippet": "<div className=\"flex items-center gap-2 text-red-400 text-xs font-semibold uppercase tracking-wider\">"
-    },
-    {
-      "line": 50,
-      "tokens": [
-        "bg-red-500/20",
-        "bg-red-500/30",
-        "text-red-300",
-        "border-red-500/40"
-      ],
-      "snippet": "className=\"px-3 py-1.5 rounded-button text-xs font-semibold bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/40 cursor-pointer transition-colors\""
-    }
+    "bg-red-500/20",
+    "bg-red-500/30",
+    "bg-red-950/20",
+    "border-red-500/30",
+    "border-red-500/40",
+    "text-red-300",
+    "text-red-400"
   ],
   "src/components/rating-dialog.tsx": [
-    {
-      "line": 598,
-      "tokens": [
-        "bg-red-500/10",
-        "border-red-500/30",
-        "text-red-500"
-      ],
-      "snippet": "? \"bg-red-500/10 border-red-500/30 text-red-500\""
-    },
-    {
-      "line": 602,
-      "tokens": [
-        "fill-red-500"
-      ],
-      "snippet": "<Heart size={13} className={isFavorite ? \"fill-red-500\" : \"\"} />"
-    }
+    "bg-red-500/10",
+    "border-red-500/30",
+    "fill-red-500",
+    "text-red-500"
   ],
   "src/components/social/comments-section.tsx": [
-    {
-      "line": 463,
-      "tokens": [
-        "text-amber-500"
-      ],
-      "snippet": "<AlertTriangle size={12} className={newIsSpoiler ? \"text-amber-500\" : \"\"} />"
-    },
-    {
-      "line": 717,
-      "tokens": [
-        "bg-amber-500/10",
-        "border-amber-500/30"
-      ],
-      "snippet": "<div className=\"rounded-card bg-amber-500/10 border border-amber-500/30 px-3.5 py-2.5 flex items-center justify-between gap-3 text-xs\">"
-    },
-    {
-      "line": 718,
-      "tokens": [
-        "text-amber-500"
-      ],
-      "snippet": "<div className=\"flex items-center gap-2 text-amber-500 font-medium\">"
-    },
-    {
-      "line": 736,
-      "tokens": [
-        "text-amber-500"
-      ],
-      "snippet": "<div className=\"flex items-center gap-2 text-[11px] text-amber-500 font-medium\">"
-    },
-    {
-      "line": 1044,
-      "tokens": [
-        "bg-amber-500/10",
-        "border-amber-500/30"
-      ],
-      "snippet": "<div className=\"rounded-card bg-amber-500/10 border border-amber-500/30 px-3 py-2 flex items-center justify-between gap-2 text-xs\">"
-    },
-    {
-      "line": 1045,
-      "tokens": [
-        "text-amber-500"
-      ],
-      "snippet": "<div className=\"flex items-center gap-1.5 text-amber-500 font-medium\">"
-    },
-    {
-      "line": 1063,
-      "tokens": [
-        "text-amber-500"
-      ],
-      "snippet": "<div className=\"flex items-center gap-2 text-[10px] text-amber-500 font-medium\">"
-    },
-    {
-      "line": 1102,
-      "tokens": [
-        "text-amber-500"
-      ],
-      "snippet": "<span className=\"block mt-2 text-amber-500 font-medium\">"
-    }
+    "bg-amber-500/10",
+    "bg-amber-500/10",
+    "border-amber-500/30",
+    "border-amber-500/30",
+    "text-amber-500",
+    "text-amber-500",
+    "text-amber-500",
+    "text-amber-500",
+    "text-amber-500",
+    "text-amber-500"
   ],
   "src/components/social/follow-button.tsx": [
-    {
-      "line": 129,
-      "tokens": [
-        "bg-red-500/10",
-        "text-red-400",
-        "border-red-500/30",
-        "bg-red-500/20"
-      ],
-      "snippet": "? \"bg-red-500/10 text-red-400 border border-red-500/30 hover:bg-red-500/20\""
-    }
+    "bg-red-500/10",
+    "bg-red-500/20",
+    "border-red-500/30",
+    "text-red-400"
   ],
   "src/components/social/like-button.tsx": [
-    {
-      "line": 98,
-      "tokens": [
-        "bg-rose-500/15",
-        "text-rose-500",
-        "text-rose-400",
-        "border-rose-500/30"
-      ],
-      "snippet": "? \"bg-rose-500/15 text-rose-500 dark:text-rose-400 border border-rose-500/30\""
-    },
-    {
-      "line": 107,
-      "tokens": [
-        "fill-rose-500",
-        "text-rose-500",
-        "fill-rose-400",
-        "text-rose-400"
-      ],
-      "snippet": "isLiked ? \"fill-rose-500 text-rose-500 dark:fill-rose-400 dark:text-rose-400 scale-110\" : \"text-muted-foreground\""
-    }
+    "bg-rose-500/15",
+    "border-rose-500/30",
+    "fill-rose-400",
+    "fill-rose-500",
+    "text-rose-400",
+    "text-rose-400",
+    "text-rose-500",
+    "text-rose-500"
   ],
   "src/components/social/report-dialog.tsx": [
-    {
-      "line": 115,
-      "tokens": [
-        "bg-emerald-500/10",
-        "border-emerald-500/20",
-        "text-emerald-400"
-      ],
-      "snippet": "<div className=\"mx-auto w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400\">"
-    }
+    "bg-emerald-500/10",
+    "border-emerald-500/20",
+    "text-emerald-400"
   ],
   "src/components/ui/badge.tsx": [
-    {
-      "line": 24,
-      "tokens": [
-        "border-emerald-500/30",
-        "bg-emerald-500/15",
-        "text-emerald-600",
-        "text-emerald-400"
-      ],
-      "snippet": "\"border-emerald-500/30 bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 font-semibold\","
-    },
-    {
-      "line": 26,
-      "tokens": [
-        "border-amber-500/30",
-        "bg-amber-500/15",
-        "text-amber-600",
-        "text-amber-400"
-      ],
-      "snippet": "\"border-amber-500/30 bg-amber-500/15 text-amber-600 dark:text-amber-400 font-semibold\","
-    }
+    "bg-amber-500/15",
+    "bg-emerald-500/15",
+    "border-amber-500/30",
+    "border-emerald-500/30",
+    "text-amber-400",
+    "text-amber-600",
+    "text-emerald-400",
+    "text-emerald-600"
   ]
 }
