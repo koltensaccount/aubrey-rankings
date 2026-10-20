@@ -174,7 +174,6 @@ describe("Phase 13C: Journal, Rankings & Feed Integration", () => {
       await db.delete(collectionEntries).where(eq(collectionEntries.mediaItemId, id));
       await db.delete(mediaItems).where(eq(mediaItems.id, id));
     }
-    await db.delete(mediaItems).where(eq(mediaItems.title, "Indie Short Film"));
 
     await db.delete(mediaItems).where(eq(mediaItems.id, movieMediaId));
     await db.delete(mediaItems).where(eq(mediaItems.id, episode1MediaId));
@@ -429,13 +428,13 @@ describe("Phase 13C: Journal, Rankings & Feed Integration", () => {
       postEntryRequest(customRankingId, { customTitle: "Indie Short Film" }, ownerCookie),
       { params: Promise.resolve({ id: customRankingId }) }
     );
-    assert.equal(customRes.status, 200);
     const customData = await customRes.json();
-    assert.equal(customData.success, true);
-    assert.equal(customData.entry?.mediaItem?.title, "Indie Short Film");
     if (customData.entry?.mediaItemId) {
       trackedCreatedMediaItemIds.push(customData.entry.mediaItemId);
     }
+    assert.equal(customRes.status, 200);
+    assert.equal(customData.success, true);
+    assert.equal(customData.entry?.mediaItem?.title, "Indie Short Film");
 
     // 9b. Reorder entries
     const entries = await db.query.collectionEntries.findMany({
@@ -456,8 +455,13 @@ describe("Phase 13C: Journal, Rankings & Feed Integration", () => {
   });
 
   it("10. Adds an unsaved episode with neither episode nor parent series stored in DB (mocks TMDB, verifies parent foreign key and identity)", async () => {
-    const unsavedTvId = 887766;
+    // Generate unique run-specific TV ID to avoid collisions across runs
+    const unsavedTvId = Math.floor(700000 + (Date.now() % 200000) + Math.random() * 10000);
     const unsavedEpId = `tv_${unsavedTvId}_s1_e3`;
+
+    // Track dynamic IDs immediately so cleanup hook runs even if an assertion fails
+    trackedCreatedMediaItemIds.push(unsavedEpId);
+    trackedCreatedMediaItemIds.push(`tv_${unsavedTvId}`);
 
     // Verify neither parent series nor episode exists in DB beforehand
     assert.equal(
@@ -543,9 +547,6 @@ describe("Phase 13C: Journal, Rankings & Feed Integration", () => {
           and(eq(ce.collectionId, customRankingId), eq(ce.mediaItemId, unsavedEpId)),
       });
       assert.ok(entryInDb, "Collection entry must be created");
-
-      trackedCreatedMediaItemIds.push(unsavedEpId);
-      trackedCreatedMediaItemIds.push(`tv_${unsavedTvId}`);
     } finally {
       tmdb.getTvDetails = originalGetTvDetails;
       tmdb.getTvSeason = originalGetTvSeason;

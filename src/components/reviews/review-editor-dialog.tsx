@@ -488,64 +488,100 @@ export function ReviewEditorDialog({
         </div>
 
         {/* Deliberate Sharing Clarity Banner */}
-        <div
-          className={`p-3 rounded-xl border text-xs space-y-1 transition-colors ${
-            visibility === "public"
-              ? "bg-primary/10 border-primary/20 text-foreground"
-              : "bg-surface border-border text-muted-foreground"
-          }`}
-        >
-          <div className="flex items-center gap-2 font-semibold text-foreground">
-            {visibility === "public" ? (
-              <>
-                <Globe size={14} className="text-primary" />
-                <span>
-                  {isCurrentlyPublished
-                    ? "Published Public Review"
-                    : "Public Review (When Published)"}
-                </span>
-              </>
-            ) : visibility === "unlisted" ? (
-              <>
-                <Link2 size={14} className="text-primary" />
-                <span>
-                  {isCurrentlyPublished
-                    ? "Unlisted Review (Live by Direct Link)"
-                    : "Unlisted Entry (When Published)"}
-                </span>
-              </>
-            ) : (
-              <>
-                <Lock size={14} className="text-foreground" />
-                <span>Private Journal Entry (Never Shared)</span>
-              </>
-            )}
-          </div>
-          <p className="text-[11px] leading-relaxed">
-            {visibility === "public" ? (
-              <>
-                {isCurrentlyPublished
-                  ? "This published review is visible in the Community Feed, on this title's public page, and on your profile."
-                  : "When published, this review will appear in the Community Feed, on this title's public page, and on your profile. Saving as a draft will keep it private and unpublished."}
-                {(scoringMethod === "quick" ? quickScore !== null : Boolean(selectedSystem)) && (
+        {(() => {
+          const persistedVisibility = existingReview?.visibility ?? "private";
+          const hasUnsavedVisibilityChange = Boolean(existingReview && existingReview.visibility !== visibility);
+
+          let bannerTitle = "";
+          let bannerDescription = "";
+          let Icon = Lock;
+          let isPublicThemed = false;
+
+          if (isCurrentlyPublished && !hasUnsavedVisibilityChange) {
+            if (visibility === "public") {
+              Icon = Globe;
+              isPublicThemed = true;
+              bannerTitle = "Published Public Review";
+              bannerDescription = "This published review is visible in the Community Feed, on this title's public page, and on your profile.";
+            } else if (visibility === "unlisted") {
+              Icon = Link2;
+              isPublicThemed = false;
+              bannerTitle = "Unlisted Review (Live by Direct Link)";
+              bannerDescription = "Accessible to anyone with the direct link. Hidden from the Community Feed and search discovery.";
+            } else {
+              Icon = Lock;
+              isPublicThemed = false;
+              bannerTitle = "Private Journal Entry (Never Shared)";
+              bannerDescription = "Visible exclusively to you in your personal Journal. Never published to the Community Feed or visible to other members.";
+            }
+          } else if (hasUnsavedVisibilityChange) {
+            if (visibility === "public") {
+              Icon = Globe;
+              isPublicThemed = true;
+              bannerTitle = "Unsaved Change: Publish to Community";
+              bannerDescription = `This entry is currently ${persistedVisibility === "private" ? "private" : "unlisted"}. Once saved, it will become publicly visible in the Community Feed, on your profile, and on this title's page.`;
+            } else if (visibility === "unlisted") {
+              Icon = Link2;
+              isPublicThemed = false;
+              bannerTitle = "Unsaved Change: Make Unlisted";
+              bannerDescription = `This entry is currently ${persistedVisibility === "public" ? "public" : "private"}. Once saved, it will be accessible only via direct link and hidden from feeds.`;
+            } else {
+              Icon = Lock;
+              isPublicThemed = false;
+              bannerTitle = "Unsaved Change: Set to Private";
+              bannerDescription = `This entry is currently ${persistedVisibility === "public" ? "publicly visible" : "accessible via direct link"}. Saving your changes will make it private and remove it from public view.`;
+            }
+          } else {
+            // New entry or currently unpublished/draft
+            if (visibility === "public") {
+              Icon = Globe;
+              isPublicThemed = true;
+              bannerTitle = "Public Review (When Published)";
+              bannerDescription = "When published, this review will appear in the Community Feed, on this title's public page, and on your profile. Saving as a draft will keep it private and unpublished.";
+            } else if (visibility === "unlisted") {
+              Icon = Link2;
+              isPublicThemed = false;
+              bannerTitle = "Unlisted Entry (When Published)";
+              bannerDescription = "When published, this review is accessible only via direct link and hidden from the Community Feed. Saving as a draft keeps it private.";
+            } else {
+              Icon = Lock;
+              isPublicThemed = false;
+              bannerTitle = "Private Journal Entry (Never Shared)";
+              bannerDescription = "Visible exclusively to you in your personal Journal. Never published to the Community Feed or visible to other members.";
+            }
+          }
+
+          const hasScore = scoringMethod === "quick" ? quickScore !== null : Boolean(selectedSystem);
+
+          return (
+            <div
+              className={`p-3 rounded-xl border text-xs space-y-1 transition-colors ${
+                isPublicThemed
+                  ? "bg-primary/10 border-primary/20 text-foreground"
+                  : "bg-surface border-border text-muted-foreground"
+              }`}
+            >
+              <div className="flex items-center gap-2 font-semibold text-foreground">
+                <Icon size={14} className={isPublicThemed ? "text-primary" : "text-foreground"} />
+                <span>{bannerTitle}</span>
+              </div>
+              <p className="text-[11px] leading-relaxed">
+                {bannerDescription}
+                {hasScore && (
                   <span className="block mt-0.5 font-medium text-foreground">
                     {shareRating
-                      ? isCurrentlyPublished
+                      ? isCurrentlyPublished && !hasUnsavedVisibilityChange && visibility === "public"
                         ? "✓ Your numerical rating is shared publicly."
-                        : "✓ Your numerical rating will be shared publicly when published."
+                        : visibility === "public"
+                          ? "✓ Your numerical rating will be shared publicly when saved."
+                          : "🔒 Numerical rating is only visible if the entry is published publicly."
                       : "🔒 Your numerical rating remains private and will NOT be shown."}
                   </span>
                 )}
-              </>
-            ) : visibility === "unlisted" ? (
-              isCurrentlyPublished
-                ? "Accessible to anyone with the direct link. Hidden from the Community Feed and search discovery."
-                : "When published, this review is accessible only via direct link and hidden from the Community Feed. Saving as a draft keeps it private."
-            ) : (
-              "Visible exclusively to you in your personal Journal. Never published to the Community Feed or visible to other members."
-            )}
-          </p>
-        </div>
+              </p>
+            </div>
+          );
+        })()}
 
         {/* Delete confirmation modal view */}
         {showDeleteConfirm && (
