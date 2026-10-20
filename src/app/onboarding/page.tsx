@@ -108,7 +108,9 @@ export default function OnboardingPage() {
         throw new Error(json.error || "Failed to set username.");
       }
 
-      router.push("/profile");
+      const rawRedirect = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("redirect") : null;
+      const safeRedirect = rawRedirect && rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") ? rawRedirect : "/profile";
+      router.push(safeRedirect);
       router.refresh();
     } catch (err: any) {
       setSubmitError(err?.message || "An unexpected error occurred.");
@@ -142,7 +144,7 @@ export default function OnboardingPage() {
             Claim Your Handle
           </h1>
           <p className="text-xs text-muted-foreground max-w-sm mx-auto leading-relaxed">
-            Choose your unique public handle. This will identify your ranked collections, critiques, and profile across Aubrey Rankings.
+            Choose your unique public handle. This will identify your journal entries, critiques, and ranked collections across Aubrey Rankings.
           </p>
         </div>
 

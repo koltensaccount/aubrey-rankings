@@ -7,7 +7,7 @@ import { getTmdbImageUrl, tmdb } from "@/lib/tmdb";
 import { resolvePosterUrl } from "@/lib/artwork";
 import { getServerSession } from "@/lib/server-session";
 import { getBlockedUserIds } from "@/lib/safety";
-import { ArrowLeft, Star, Film, Tv, MessageSquare, ExternalLink, EyeOff } from "lucide-react";
+import { ArrowLeft, Star, Film, Tv, MessageSquare, ExternalLink, EyeOff, PenLine, BookOpen } from "lucide-react";
 import { WriteReviewButton, JournalTriggerButton } from "@/components/reviews/write-review-button";
 import { AddToRankingButton } from "@/components/collections/add-to-ranking-dialog";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
@@ -475,6 +475,87 @@ export default async function MediaDetailsPage({
       </div>
 
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-10">
+        {/* Media Primary Action Bar */}
+        <section aria-label="Media actions" className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl border border-border bg-card shadow-sm">
+          <div className="flex flex-wrap items-center gap-2.5">
+            {media.mediaType === "tv" ? (
+              <a
+                href="#seasons-and-episodes"
+                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground font-semibold text-xs transition-colors shadow-sm"
+              >
+                <Tv size={14} />
+                <span>Journal an Episode</span>
+              </a>
+            ) : (
+              <WriteReviewButton
+                autoOpen={shouldAutoOpen}
+                mediaItemId={journalMediaId}
+                mediaTitle={media.title}
+                posterPath={media.posterPath || media.stillPath}
+                initialQuickScore={ownerGlobalRating?.calculatedOverallScore ?? null}
+                initialDetailedRating={ownerGlobalRating?.ratingSystemId ? { ratingSystemId: ownerGlobalRating.ratingSystemId, categoryScores: ownerGlobalRating.categoryScores.map((score) => ({ categoryId: score.categoryId, score: score.score })) } : null}
+                existingReview={ownerJournalReview ? {
+                  id: ownerJournalReview.id,
+                  title: ownerJournalReview.title,
+                  content: ownerJournalReview.content,
+                  draftContent: ownerJournalReview.draftContent,
+                  contentFormat: ownerJournalReview.contentFormat as "plain" | "markdown",
+                  draftContentFormat: ownerJournalReview.draftContentFormat as "plain" | "markdown" | null,
+                  status: ownerJournalReview.status as "draft" | "published" | "unpublished",
+                  visibility: ownerJournalReview.visibility as "private" | "unlisted" | "public",
+                  isSpoiler: ownerJournalReview.isSpoiler,
+                  ratingId: ownerJournalReview.ratingId,
+                  shareRating: ownerJournalReview.shareRating,
+                  isJournal: true,
+                } : null}
+              />
+            )}
+
+            <AddToRankingButton
+              mediaItemId={journalMediaId}
+              mediaTitle={media.title}
+              mediaType={media.mediaType}
+              seasonNumber={media.seasonNumber}
+              episodeNumber={media.episodeNumber}
+              parentShowTmdbId={
+                media.mediaType === "episode" && media.parentMediaId
+                  ? parseInt(media.parentMediaId.replace(/^tv_/, ""), 10) || null
+                  : null
+              }
+              posterPath={media.posterPath}
+              stillPath={media.stillPath}
+            />
+          </div>
+
+          {/* User's existing status on this media item */}
+          <div className="text-xs text-muted-foreground flex items-center gap-2">
+            {session ? (
+              ownerGlobalRating || ownerJournalReview ? (
+                <div className="flex items-center gap-2">
+                  <span className="inline-block w-2 h-2 rounded-full bg-primary" />
+                  <span className="font-medium text-foreground">In your Journal</span>
+                  {ownerGlobalRating?.calculatedOverallScore !== undefined && ownerGlobalRating.calculatedOverallScore !== null && (
+                    <span className="px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20 text-primary font-bold text-[11px]">
+                      ★ {ownerGlobalRating.calculatedOverallScore.toFixed(1)}/10
+                    </span>
+                  )}
+                  {ownerJournalReview?.status === "draft" && (
+                    <span className="text-[10px] uppercase font-bold text-primary">
+                      · Draft saved
+                    </span>
+                  )}
+                </div>
+              ) : media.mediaType === "tv" ? (
+                <span>Select an episode below to log in your Journal</span>
+              ) : (
+                <span>Not in your Journal yet</span>
+              )
+            ) : (
+              <span>Sign in to log this in your personal Journal</span>
+            )}
+          </div>
+        </section>
+
         {/* Overview */}
         {media.overview && (
           <section className="space-y-2">
@@ -489,7 +570,7 @@ export default async function MediaDetailsPage({
 
         {/* Seasons & Episodes section for TV shows */}
         {media.mediaType === "tv" && tvSeasonsList.length > 0 && (
-          <section className="space-y-4 pt-4 border-t border-border">
+          <section id="seasons-and-episodes" className="space-y-4 pt-4 border-t border-border">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
                 <Tv size={18} className="text-primary-text" />
@@ -562,12 +643,13 @@ export default async function MediaDetailsPage({
                           </p>
                         )}
                       </div>
-                      <div className="pt-2 flex items-center gap-3">
+                      <div className="pt-2 flex items-center gap-2">
                         <Link
-                          href={`/media/${epMediaId}`}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-primary-text hover:underline"
+                          href={`/media/${epMediaId}?journal=1`}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-button bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-xs font-semibold transition-colors"
                         >
-                          <span>Journal Episode &rarr;</span>
+                          <PenLine size={12} />
+                          <span>Add to Journal</span>
                         </Link>
                         <AddToRankingButton
                           mediaItemId={epMediaId}
@@ -590,83 +672,21 @@ export default async function MediaDetailsPage({
 
         {/* Community Reviews Section */}
         <section className="space-y-6 pt-4 border-t border-border">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-2.5">
               <MessageSquare size={18} className="text-primary-text" />
               <h2 className="font-display text-2xl uppercase tracking-tight text-foreground">
                 Community Reviews ({publicReviews.length})
               </h2>
             </div>
-
-            <div className="flex items-center gap-2">
-              <AddToRankingButton
-                mediaItemId={journalMediaId}
-                mediaTitle={media.title}
-                mediaType={media.mediaType}
-                seasonNumber={media.seasonNumber}
-                episodeNumber={media.episodeNumber}
-                parentShowTmdbId={
-                  media.mediaType === "episode" && media.parentMediaId
-                    ? parseInt(media.parentMediaId.replace(/^tv_/, ""), 10) || null
-                    : null
-                }
-                posterPath={media.posterPath}
-                stillPath={media.stillPath}
-              />
-              <WriteReviewButton
-                autoOpen={shouldAutoOpen}
-                mediaItemId={journalMediaId}
-                mediaTitle={media.title}
-                posterPath={media.posterPath}
-                initialQuickScore={ownerGlobalRating?.calculatedOverallScore ?? null}
-                initialDetailedRating={ownerGlobalRating?.ratingSystemId ? { ratingSystemId: ownerGlobalRating.ratingSystemId, categoryScores: ownerGlobalRating.categoryScores.map((score) => ({ categoryId: score.categoryId, score: score.score })) } : null}
-                existingReview={ownerJournalReview ? {
-                  id: ownerJournalReview.id,
-                  title: ownerJournalReview.title,
-                  content: ownerJournalReview.content,
-                  draftContent: ownerJournalReview.draftContent,
-                  contentFormat: ownerJournalReview.contentFormat as "plain" | "markdown",
-                  draftContentFormat: ownerJournalReview.draftContentFormat as "plain" | "markdown" | null,
-                  status: ownerJournalReview.status as "draft" | "published" | "unpublished",
-                  visibility: ownerJournalReview.visibility as "private" | "unlisted" | "public",
-                  isSpoiler: ownerJournalReview.isSpoiler,
-                  ratingId: ownerJournalReview.ratingId,
-                  shareRating: ownerJournalReview.shareRating,
-                  isJournal: true,
-                } : null}
-              />
-            </div>
           </div>
 
           {publicReviews.length === 0 ? (
             <div className="py-12 text-center rounded-xl border border-dashed border-border bg-card/60 p-6 space-y-3">
-              <p className="text-sm font-semibold text-foreground">No published reviews yet</p>
+              <p className="text-sm font-semibold text-foreground">No published community reviews yet</p>
               <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                Be the first to write a critical dispatch or rank &ldquo;{media.title}&rdquo;.
+                Be the first to share a review for &ldquo;{media.title}&rdquo; from your personal Journal.
               </p>
-              <div className="pt-2 flex items-center justify-center gap-3 flex-wrap">
-                <JournalTriggerButton hasEntry={Boolean(ownerJournalReview || ownerGlobalRating)} />
-                <AddToRankingButton
-                  mediaItemId={journalMediaId}
-                  mediaTitle={media.title}
-                  mediaType={media.mediaType}
-                  seasonNumber={media.seasonNumber}
-                  episodeNumber={media.episodeNumber}
-                  parentShowTmdbId={
-                    media.mediaType === "episode" && media.parentMediaId
-                      ? parseInt(media.parentMediaId.replace(/^tv_/, ""), 10) || null
-                      : null
-                  }
-                  posterPath={media.posterPath}
-                  stillPath={media.stillPath}
-                />
-                <Link
-                  href={`/create?suggest=${encodeURIComponent(media.title)}`}
-                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-border bg-surface hover:bg-surface-raised text-foreground font-semibold text-xs transition-colors"
-                >
-                  Start a Ranking with this Title
-                </Link>
-              </div>
             </div>
           ) : (
             <div className="space-y-4">

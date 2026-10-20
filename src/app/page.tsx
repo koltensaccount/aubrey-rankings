@@ -3,7 +3,7 @@ import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
 import { collections, ratings, savedRankings, reviews } from "@/db/schema";
 import { desc, eq, isNull } from "drizzle-orm";
-import { Plus, ArrowRight, Tv, Film, ListPlus, Bookmark, FileText, PenLine } from "lucide-react";
+import { Plus, ArrowRight, Tv, Film, ListPlus, Bookmark, FileText, PenLine, BookOpen } from "lucide-react";
 import { getTmdbImageUrl } from "@/lib/tmdb";
 import { getTopRankedEntries, getRatingSummary } from "@/lib/scoring";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
@@ -35,7 +35,7 @@ export default async function HomePage() {
 
             <div className="relative z-10 max-w-2xl space-y-6">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary uppercase tracking-wider">
-                <span>Rank What You Watch</span>
+                <span>Cinema & TV Journal · Critique · Weighted Rankings</span>
               </div>
 
               {/* Aubrey Rankings Brand Mark */}
@@ -46,14 +46,13 @@ export default async function HomePage() {
               </div>
 
               <h1 className="font-display text-5xl sm:text-7xl lg:text-8xl tracking-tight text-foreground leading-[0.92] uppercase">
-                Rank What
+                Log. Critique.
                 <br />
-                <span className="text-primary">You Watch.</span>
+                <span className="text-primary">Rank What You Watch.</span>
               </h1>
 
               <p className="text-base sm:text-lg text-muted-foreground leading-relaxed max-w-xl">
-                Rate TV anthologies, entire director filmographies, and custom collections by weighted rubrics:
-                Writing, Acting, Cinematography, Sound Design, and Emotional Impact.
+                Track and rate everything you watch in a personal cinema journal. Write critical reviews and selectively publish them to the community. Build weighted ranking rubrics for anthology television, director sagas, and custom collections.
               </p>
 
               <div className="flex flex-wrap items-center gap-4 pt-4">
@@ -64,8 +63,14 @@ export default async function HomePage() {
                   Get started
                 </Link>
                 <Link
-                  href="/login"
+                  href="/discover"
                   className="px-6 py-3.5 rounded-xl bg-secondary hover:bg-muted text-secondary-foreground border border-border font-semibold text-sm transition-all"
+                >
+                  Explore & Journal
+                </Link>
+                <Link
+                  href="/login"
+                  className="px-6 py-3.5 rounded-xl text-muted-foreground hover:text-foreground font-semibold text-sm transition-all"
                 >
                   Sign in
                 </Link>
@@ -73,8 +78,24 @@ export default async function HomePage() {
             </div>
           </div>
 
-          {/* Three Ranking Types Showcase */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-12">
+          {/* Balanced Feature Pillars */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pt-12">
+            <div className="p-6 rounded-xl border border-border bg-card space-y-3 shadow-sm">
+              <span className="text-xs text-primary font-semibold uppercase tracking-wider block">Private Watch History</span>
+              <h3 className="font-display text-2xl uppercase text-foreground">Personal Journal</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Log films and episodes as you watch. Score with quick or weighted rubrics, and keep personal notes and drafts visible only to you.
+              </p>
+            </div>
+
+            <div className="p-6 rounded-xl border border-border bg-card space-y-3 shadow-sm">
+              <span className="text-xs text-primary font-semibold uppercase tracking-wider block">Critical Writing</span>
+              <h3 className="font-display text-2xl uppercase text-foreground">Reviews & Feed</h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Publish longform critiques to the Community Feed, share unlisted direct links with friends, or keep entries strictly private.
+              </p>
+            </div>
+
             <div className="p-6 rounded-xl border border-border bg-card space-y-3 shadow-sm">
               <span className="text-xs text-primary font-semibold uppercase tracking-wider block">Anthology Television</span>
               <h3 className="font-display text-2xl uppercase text-foreground">Episode-by-Episode</h3>
@@ -85,17 +106,9 @@ export default async function HomePage() {
 
             <div className="p-6 rounded-xl border border-border bg-card space-y-3 shadow-sm">
               <span className="text-xs text-primary font-semibold uppercase tracking-wider block">Franchises & Sagas</span>
-              <h3 className="font-display text-2xl uppercase text-foreground">Franchises & Auteurs</h3>
+              <h3 className="font-display text-2xl uppercase text-foreground">Canons & Auteurs</h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                Rank complete director sagas from David Fincher, Christopher Nolan, or Denis Villeneuve with official key art.
-              </p>
-            </div>
-
-            <div className="p-6 rounded-xl border border-border bg-card space-y-3 shadow-sm">
-              <span className="text-xs text-primary font-semibold uppercase tracking-wider block">Custom Collections</span>
-              <h3 className="font-display text-2xl uppercase text-foreground">Personal Indexes</h3>
-              <p className="text-xs text-muted-foreground leading-relaxed">
-                Mix movies, single episodes, and miniseries in custom collections like &quot;Sci-Fi Anthology Essentials&quot;.
+                Rank complete director sagas from David Fincher, Christopher Nolan, or Denis Villeneuve with official key art and averages.
               </p>
             </div>
           </div>
@@ -204,10 +217,19 @@ export default async function HomePage() {
               My Library
             </h1>
           </div>
-          <Link href="/create" className="ar-neutralButton">
-            <Plus size={15} />
-            <span>New ranking</span>
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/discover"
+              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold transition-colors shadow-sm"
+            >
+              <PenLine size={14} />
+              <span>Add to Journal</span>
+            </Link>
+            <Link href="/create" className="ar-neutralButton">
+              <Plus size={15} />
+              <span>New ranking</span>
+            </Link>
+          </div>
         </header>
 
         {/* Subtle Horizontal Metadata Bar */}
@@ -224,47 +246,92 @@ export default async function HomePage() {
             <strong className="text-primary font-semibold">{meanScore}</strong> mean /10
           </span>
           <span className="text-muted-foreground/60">·</span>
-          <Link href="/settings?tab=rating_systems" className="text-primary ml-auto font-medium hover:underline">
+          <Link href="/journal" className="text-primary font-medium hover:underline inline-flex items-center gap-1">
+            <BookOpen size={13} />
+            <span>My Journal ({userReviews.length + ratingOnlyJournalEntries.length})</span>
+          </Link>
+          <span className="text-muted-foreground/60">·</span>
+          <Link href="/settings?tab=rating_systems" className="text-muted-foreground hover:text-foreground ml-auto font-medium hover:underline">
             Rating Systems
           </Link>
         </div>
 
         {/* =========================================================================
-            EMPTY STATE (Honest & Clean)
+            EMPTY STATE (Both Journal and Ranking Pathways Clearly Presented)
             ========================================================================= */}
         {!hasLibraryContent ? (
-          <div className="text-center py-20 px-4 rounded-xl border border-border bg-card space-y-5 shadow-sm">
-            <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-              <Film className="h-6 w-6" />
-            </div>
-            <div className="max-w-md mx-auto space-y-1.5">
-              <h3 className="font-display text-3xl uppercase text-foreground">Your library is waiting</h3>
+          <div className="rounded-xl border border-border bg-card p-6 sm:p-10 space-y-6 shadow-sm">
+            <div className="text-center max-w-lg mx-auto space-y-2">
+              <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                <BookOpen className="h-6 w-6" />
+              </div>
+              <h3 className="font-display text-3xl uppercase text-foreground font-bold">
+                Your Library is Waiting
+              </h3>
               <p className="text-xs text-muted-foreground leading-relaxed">
-            Start with a TV show, franchise, or custom collection. Your private rankings, reviews, and drafts will live here.
+                Start by logging a movie or episode in your personal Journal, or create an organized ranking collection.
               </p>
             </div>
-            <div className="flex flex-wrap justify-center gap-3 pt-2">
-              <Link
-                href="/create?type=tv_show"
-                className="px-4 py-2.5 rounded-lg bg-secondary hover:bg-muted text-secondary-foreground border border-border text-xs font-semibold flex items-center gap-2 transition-colors"
-              >
-                <Tv className="h-4 w-4 text-primary" />
-                <span>Rank a TV Series</span>
-              </Link>
-              <Link
-                href="/create?type=movie_franchise"
-                className="px-4 py-2.5 rounded-lg bg-secondary hover:bg-muted text-secondary-foreground border border-border text-xs font-semibold flex items-center gap-2 transition-colors"
-              >
-                <Film className="h-4 w-4 text-primary" />
-                <span>Rank a Movie Franchise</span>
-              </Link>
-              <Link
-                href="/create?type=custom"
-                className="px-4 py-2.5 rounded-lg bg-secondary hover:bg-muted text-secondary-foreground border border-border text-xs font-semibold flex items-center gap-2 transition-colors"
-              >
-                <ListPlus className="h-4 w-4 text-primary" />
-                <span>Custom Collection</span>
-              </Link>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl mx-auto pt-2">
+              {/* Journal Pathway */}
+              <div className="p-5 rounded-xl border border-primary/30 bg-primary/5 space-y-3 flex flex-col justify-between">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-wider">
+                    <PenLine size={14} />
+                    <span>Option 1 · Quick & Personal</span>
+                  </div>
+                  <h4 className="font-display text-xl uppercase font-bold text-foreground">
+                    Start Your Journal
+                  </h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Log any movie or TV episode you just watched. Score it with a quick or detailed rating, save private notes, or draft a review.
+                  </p>
+                </div>
+                <Link
+                  href="/discover"
+                  className="w-full py-2.5 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors shadow-sm"
+                >
+                  <PenLine size={13} />
+                  <span>Search a Title to Journal</span>
+                </Link>
+              </div>
+
+              {/* Ranking Pathway */}
+              <div className="p-5 rounded-xl border border-border bg-card space-y-3 flex flex-col justify-between">
+                <div className="space-y-1.5">
+                  <div className="flex items-center gap-2 text-muted-foreground font-bold text-xs uppercase tracking-wider">
+                    <ListPlus size={14} />
+                    <span>Option 2 · Structured Canons</span>
+                  </div>
+                  <h4 className="font-display text-xl uppercase font-bold text-foreground">
+                    Create a Ranking
+                  </h4>
+                  <p className="text-xs text-muted-foreground leading-relaxed">
+                    Build a weighted ranking for an anthology TV series, a director filmography, or a custom movie collection.
+                  </p>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5 pt-1">
+                  <Link
+                    href="/create?type=tv_show"
+                    className="py-2 rounded-button bg-secondary hover:bg-muted text-secondary-foreground border border-border text-[10px] font-semibold flex items-center justify-center text-center transition-colors"
+                  >
+                    TV Series
+                  </Link>
+                  <Link
+                    href="/create?type=movie_franchise"
+                    className="py-2 rounded-button bg-secondary hover:bg-muted text-secondary-foreground border border-border text-[10px] font-semibold flex items-center justify-center text-center transition-colors"
+                  >
+                    Franchise
+                  </Link>
+                  <Link
+                    href="/create?type=custom"
+                    className="py-2 rounded-button bg-secondary hover:bg-muted text-secondary-foreground border border-border text-[10px] font-semibold flex items-center justify-center text-center transition-colors"
+                  >
+                    Custom
+                  </Link>
+                </div>
+              </div>
             </div>
           </div>
         ) : (
@@ -446,10 +513,15 @@ export default async function HomePage() {
           <section className="space-y-4 pt-6">
             <div className="flex items-center justify-between pb-2 border-b border-border">
               <div className="flex items-center gap-2">
-                <FileText size={16} className="text-primary" />
+                <BookOpen size={16} className="text-primary" />
                 <h2 className="font-display text-2xl uppercase text-foreground">Your Journal & Reviews</h2>
               </div>
-              <span className="text-xs text-muted-foreground">{userReviews.length} recent</span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-muted-foreground">{userReviews.length} recent</span>
+                <Link href="/journal" className="text-xs font-semibold text-primary hover:underline">
+                  View Full Journal →
+                </Link>
+              </div>
             </div>
             <div className="space-y-3">
               {userReviews.map((review) => {
@@ -563,10 +635,15 @@ export default async function HomePage() {
           <section className="space-y-4 pt-6">
             <div className="flex items-center justify-between pb-2 border-b border-border">
               <div className="flex items-center gap-2">
-                <FileText size={16} className="text-primary" />
+                <BookOpen size={16} className="text-primary" />
                 <h2 className="font-display text-2xl uppercase text-foreground">Rated in Your Journal</h2>
               </div>
-              <span className="text-xs text-muted-foreground">{ratingOnlyJournalEntries.length} entries</span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-muted-foreground">{ratingOnlyJournalEntries.length} entries</span>
+                <Link href="/journal" className="text-xs font-semibold text-primary hover:underline">
+                  View Full Journal →
+                </Link>
+              </div>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {ratingOnlyJournalEntries.map((rating) => {

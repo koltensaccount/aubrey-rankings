@@ -30,7 +30,9 @@ export default function SignUpPage() {
       if (res.error) {
         setError(res.error.message || "Failed to create account. Please try again.");
       } else {
-        router.push("/onboarding");
+        const rawRedirect = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("redirect") : null;
+        const safeRedirect = rawRedirect && rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") ? rawRedirect : null;
+        router.push(safeRedirect ? `/onboarding?redirect=${encodeURIComponent(safeRedirect)}` : "/onboarding");
         router.refresh();
       }
     } catch (err: any) {
@@ -93,7 +95,7 @@ export default function SignUpPage() {
             Create Account
           </h1>
           <p className="text-xs text-muted-foreground">
-            Join Aubrey Rankings to build custom ratings and rank media collections.
+            Join Aubrey Rankings to journal what you watch, write reviews, and build custom rankings.
           </p>
         </div>
 

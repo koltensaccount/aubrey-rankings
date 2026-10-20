@@ -75,6 +75,13 @@ export function WriteReviewButton({
   };
 
   const handleClick = () => {
+    if (!session?.user) {
+      const currentUrl = typeof window !== "undefined"
+        ? window.location.pathname + (window.location.search ? (window.location.search.includes("journal=1") ? window.location.search : `${window.location.search}&journal=1`) : "?journal=1")
+        : `/media/${mediaItemId}?journal=1`;
+      router.push(`/login?redirect=${encodeURIComponent(currentUrl)}`);
+      return;
+    }
     setIsOpen(true);
   };
 

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Search, Film, Tv, Users, Compass, ArrowRight, Loader2, UserPlus, UserCheck } from "lucide-react";
+import { Search, Film, Tv, Users, Compass, ArrowRight, Loader2, UserPlus, UserCheck, BookOpen, PenLine, Plus, Star } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { useSession } from "@/lib/auth-client";
 
@@ -121,19 +121,25 @@ export default function ExplorePage() {
       <div>
         <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary uppercase tracking-wider mb-2">
           <Compass size={13} />
-          <span>Find what to watch</span>
+          <span>Find what to watch & journal</span>
         </div>
         <h1 className="font-display text-4xl sm:text-5xl font-bold uppercase tracking-tight text-foreground">
           Discover
         </h1>
         <p className="text-xs text-muted-foreground mt-1 max-w-xl">
-          Search movies, television series, and community members. Start a ranking whenever you find a collection worth making your own.
+          Search movies, television series, and community curators. Log what you watch directly into your personal Journal or start a ranking collection.
         </p>
         {session && (
-          <Link href="/create" className="inline-flex items-center gap-1.5 mt-4 px-4 py-2 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold transition-colors">
-            <Film size={14} />
-            Create Ranking
-          </Link>
+          <div className="flex flex-wrap items-center gap-2 mt-4">
+            <Link href="/journal" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold transition-colors">
+              <BookOpen size={14} />
+              My Journal
+            </Link>
+            <Link href="/create" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-secondary hover:bg-muted text-secondary-foreground border border-border text-xs font-semibold transition-colors">
+              <Plus size={14} />
+              Create Ranking
+            </Link>
+          </div>
         )}
       </div>
 
@@ -297,6 +303,10 @@ export default function ExplorePage() {
                   const title = m.title || m.name;
                   const year = (m.release_date || m.first_air_date || "").split("-")[0];
                   const isTv = m.media_type === "tv" || !m.title;
+                  const movieJournalHref = session?.user
+                    ? `/media/${m.id}?type=movie&journal=1`
+                    : `/login?redirect=${encodeURIComponent(`/media/${m.id}?type=movie&journal=1`)}`;
+                  const tvDetailsHref = `/media/${m.id}?type=tv`;
 
                   return (
                     <div
@@ -309,27 +319,50 @@ export default function ExplorePage() {
                           {isTv ? "TV" : "Movie"}
                         </span>
                       </div>
-                      <div className="p-3 space-y-1">
+                      <div className="p-3 space-y-1.5">
                         <Link
-                          href={`/media/${m.id}?type=${isTv ? "tv" : "movie"}`}
+                          href={isTv ? tvDetailsHref : `/media/${m.id}?type=movie`}
                           className="font-semibold text-xs text-foreground hover:text-primary transition-colors line-clamp-1 block"
                         >
                           {title}
                         </Link>
                         <span className="text-[10px] text-muted-foreground block">{year || "—"}</span>
-                        <div className="flex items-center gap-1.5 pt-1.5">
-                          <Link
-                            href={`/media/${m.id}?type=${isTv ? "tv" : "movie"}`}
-                            className="flex-1 py-1 rounded-md bg-surface hover:bg-surface-raised text-foreground border border-border text-[10px] font-semibold flex items-center justify-center transition-colors"
-                          >
-                            Reviews
-                          </Link>
-                          <Link
-                            href={`/create?type=${isTv ? "tv_show" : "movie_franchise"}&suggest=${encodeURIComponent(title)}`}
-                            className="flex-1 py-1 rounded-md bg-secondary hover:bg-muted text-secondary-foreground border border-border text-[10px] font-semibold flex items-center justify-center transition-colors"
-                          >
-                            Rank
-                          </Link>
+
+                        {/* Primary Journal Action */}
+                        <div className="pt-1 space-y-1.5">
+                          {isTv ? (
+                            <Link
+                              href={tvDetailsHref}
+                              className="w-full py-1.5 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-[10px] font-semibold flex items-center justify-center gap-1 transition-colors"
+                            >
+                              <Tv size={11} />
+                              <span>Episodes & Journal</span>
+                            </Link>
+                          ) : (
+                            <Link
+                              href={movieJournalHref}
+                              className="w-full py-1.5 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-[10px] font-semibold flex items-center justify-center gap-1 transition-colors"
+                            >
+                              <PenLine size={11} />
+                              <span>Add to Journal</span>
+                            </Link>
+                          )}
+
+                          {/* Secondary Ranking & Reviews Actions */}
+                          <div className="flex items-center gap-1">
+                            <Link
+                              href={`/create?type=${isTv ? "tv_show" : "movie_franchise"}&suggest=${encodeURIComponent(title)}`}
+                              className="flex-1 py-1 rounded-button bg-secondary hover:bg-muted text-secondary-foreground border border-border text-[9px] font-medium flex items-center justify-center transition-colors"
+                            >
+                              Rank
+                            </Link>
+                            <Link
+                              href={isTv ? tvDetailsHref : `/media/${m.id}?type=movie`}
+                              className="flex-1 py-1 rounded-button bg-surface hover:bg-surface-elevated text-foreground border border-border text-[9px] font-medium flex items-center justify-center transition-colors"
+                            >
+                              Reviews
+                            </Link>
+                          </div>
                         </div>
                       </div>
                     </div>
@@ -347,58 +380,85 @@ export default function ExplorePage() {
         </div>
       ) : (
         /* Discovery Prompts / Suggested Hubs */
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-4">
-          <div className="p-6 rounded-xl border border-border bg-card space-y-3 shadow-sm">
-            <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-              <Tv size={18} />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-4">
+          <div className="p-5 rounded-xl border border-border bg-card space-y-2.5 shadow-sm flex flex-col justify-between">
+            <div className="space-y-2.5">
+              <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                <BookOpen size={18} />
+              </div>
+              <h3 className="font-display text-lg uppercase font-bold text-foreground">
+                Personal Cinema Journal
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Log any film or TV episode as you watch. Rate with quick scores or weighted categories, and keep private notes.
+              </p>
             </div>
-            <h3 className="font-display text-xl uppercase font-bold text-foreground">
-              TV Anthologies & Series
-            </h3>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Explore episode-by-episode weighted breakdowns for series like Severance, Twin Peaks, and Black Mirror.
-            </p>
+            <Link
+              href="/journal"
+              className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline font-semibold pt-2"
+            >
+              <span>Open Your Journal</span>
+              <ArrowRight size={13} />
+            </Link>
+          </div>
+
+          <div className="p-5 rounded-xl border border-border bg-card space-y-2.5 shadow-sm flex flex-col justify-between">
+            <div className="space-y-2.5">
+              <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                <Tv size={18} />
+              </div>
+              <h3 className="font-display text-lg uppercase font-bold text-foreground">
+                TV Anthologies & Series
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Explore episode-by-episode breakdowns for series like Severance, Twin Peaks, and Black Mirror.
+              </p>
+            </div>
             <Link
               href="/create?type=tv_show"
-              className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline font-semibold pt-1"
+              className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline font-semibold pt-2"
             >
               <span>Rank a Television Series</span>
               <ArrowRight size={13} />
             </Link>
           </div>
 
-          <div className="p-6 rounded-xl border border-border bg-card space-y-3 shadow-sm">
-            <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-              <Film size={18} />
+          <div className="p-5 rounded-xl border border-border bg-card space-y-2.5 shadow-sm flex flex-col justify-between">
+            <div className="space-y-2.5">
+              <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                <Film size={18} />
+              </div>
+              <h3 className="font-display text-lg uppercase font-bold text-foreground">
+                Director & Franchise Canons
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Compare complete cinematic universes like Alien, Denis Villeneuve, or Christopher Nolan.
+              </p>
             </div>
-            <h3 className="font-display text-xl uppercase font-bold text-foreground">
-              Director & Franchise Canons
-            </h3>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Compare complete cinematic universes like Alien, James Bond, Denis Villeneuve, or Stanley Kubrick.
-            </p>
             <Link
               href="/create?type=movie_franchise"
-              className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline font-semibold pt-1"
+              className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline font-semibold pt-2"
             >
               <span>Rank a Movie Franchise</span>
               <ArrowRight size={13} />
             </Link>
           </div>
 
-          <div className="p-6 rounded-xl border border-border bg-card space-y-3 shadow-sm">
-            <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-              <Users size={18} />
+          <div className="p-5 rounded-xl border border-border bg-card space-y-2.5 shadow-sm flex flex-col justify-between">
+            <div className="space-y-2.5">
+              <div className="w-9 h-9 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
+                <Users size={18} />
+              </div>
+              <h3 className="font-display text-lg uppercase font-bold text-foreground">
+                Community Curators
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Follow fellow critics, read published reviews in the Feed, and discover curated rankings.
+              </p>
             </div>
-            <h3 className="font-display text-xl uppercase font-bold text-foreground">
-              Community Curators
-            </h3>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Follow fellow critics, inspect their weighted evaluation rubrics, and read detailed critical commentary.
-            </p>
             <Link
-              href="/"
-              className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline font-semibold pt-1"
+              href="/feed"
+              className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline font-semibold pt-2"
             >
               <span>Browse Community Feed</span>
               <ArrowRight size={13} />

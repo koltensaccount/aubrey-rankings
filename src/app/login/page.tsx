@@ -60,11 +60,13 @@ function LoginFormContent() {
         } catch {
           // If profile check fails, fallback to user payload
         }
+        const rawRedirect = searchParams.get("redirect") || searchParams.get("callbackUrl");
+        const safeRedirect = rawRedirect && rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") ? rawRedirect : "/profile";
         const user = res.data?.user as any;
         if (user && !user.username) {
-          router.push("/onboarding");
+          router.push(safeRedirect !== "/profile" ? `/onboarding?redirect=${encodeURIComponent(safeRedirect)}` : "/onboarding");
         } else {
-          router.push("/profile");
+          router.push(safeRedirect);
         }
         router.refresh();
       }
@@ -95,9 +97,13 @@ function LoginFormContent() {
     }
     setGoogleLoading(true);
     try {
+      const rawRedirect = searchParams.get("redirect") || searchParams.get("callbackUrl");
+      const safeRedirect = rawRedirect && rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") ? rawRedirect : null;
+      const callbackURL = safeRedirect ? `/onboarding?redirect=${encodeURIComponent(safeRedirect)}` : "/onboarding";
+
       const res = await signIn.social({
         provider: "google",
-        callbackURL: "/onboarding",
+        callbackURL,
         errorCallbackURL: "/login",
       });
       if (res?.error) {
