@@ -10,15 +10,74 @@ import { resolveMediaItem } from "../app/api/reviews/route";
 import { tmdb } from "../lib/tmdb";
 import { reviewScoreOnTen } from "../lib/review-rating";
 
+function assertNonProductionEnvironment() {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Safety check: Cannot run tests in production environment (NODE_ENV=production)");
+  }
+  if (process.env.APP_ENV === "production" || process.env.VERCEL_ENV === "production") {
+    throw new Error("Safety check: Cannot run tests in production environment");
+  }
+  const dbUrl = process.env.DATABASE_URL || "";
+  if (/prod|production|live/i.test(dbUrl) && !/test/i.test(dbUrl)) {
+    throw new Error("Safety check: DATABASE_URL appears to reference a production database");
+  }
+}
+
 describe("Phase 13B Standalone Episode Journaling & Review Corrections", () => {
   const suffix = `${process.pid}_${Date.now()}`;
   const email = `phase13b_ep_${suffix}@example.com`;
-  const mockTvId = 998877;
-  const mockEpisodeMediaId = `tv_${mockTvId}_s2_e5`;
-  const parentShowId = `tv_${mockTvId}`;
 
   let userId = "";
   let cookie = "";
+
+  // Dynamic unique test media identifiers per run
+  let mockTvId: number;
+  let mockEpisodeMediaId: string;
+  let parentShowId: string;
+
+  let orphanTvId: number;
+  let orphanEpisodeId: string;
+
+  let customTvId: number;
+  let customParentId: string;
+  let customEpisodeId: string;
+
+  let sharedNumericId: number;
+
+  const testOwnedMediaIds = new Set<string>();
+
+  // Use a high 800M+ range (vastly above real TMDB IDs and safely below Postgres 2.14B 32-bit int limit)
+  let nextTmdbSeed = 800000000 + ((Date.now() + (process.pid * 137)) % 100000000);
+
+  async function generateUniqueTmdbId(): Promise<number> {
+    while (true) {
+      const candidate = nextTmdbSeed;
+      nextTmdbSeed += 100; // Increment by 100 to leave room for child episode TMDB IDs
+      const existing = await db.query.mediaItems.findFirst({
+        where: (m, { or, eq }) =>
+          or(
+            eq(m.tmdbId, candidate),
+            eq(m.tmdbId, candidate + 1),
+            eq(m.tmdbId, candidate + 2),
+            eq(m.tmdbId, candidate + 5)
+          ),
+        columns: { id: true },
+      });
+      if (!existing) return candidate;
+    }
+  }
+
+  async function ensureUniqueMediaId(id: string): Promise<string> {
+    const existing = await db.query.mediaItems.findFirst({
+      where: eq(mediaItems.id, id),
+      columns: { id: true },
+    });
+    if (existing) {
+      throw new Error(`Safety check failed: media record ${id} already exists prior to test`);
+    }
+    testOwnedMediaIds.add(id);
+    return id;
+  }
 
   // Preserve original TMDB methods for mocking
   const originalGetTvDetails = tmdb.getTvDetails;
@@ -36,6 +95,30 @@ describe("Phase 13B Standalone Episode Journaling & Review Corrections", () => {
     });
 
   before(async () => {
+    // 1. Safety check against destructive runs in production
+    assertNonProductionEnvironment();
+
+    // 2. Dynamically assign unique, collision-safe numeric TMDB IDs & media IDs
+    mockTvId = await generateUniqueTmdbId();
+    mockEpisodeMediaId = `tv_${mockTvId}_s2_e5`;
+    parentShowId = `tv_${mockTvId}`;
+    await ensureUniqueMediaId(mockEpisodeMediaId);
+    await ensureUniqueMediaId(parentShowId);
+
+    orphanTvId = await generateUniqueTmdbId();
+    orphanEpisodeId = `tv_${orphanTvId}_s1_e1`;
+    await ensureUniqueMediaId(orphanEpisodeId);
+
+    customTvId = await generateUniqueTmdbId();
+    customParentId = `custom_series_${suffix}`;
+    customEpisodeId = `tv_${customTvId}_s1_e2`;
+    await ensureUniqueMediaId(customParentId);
+    await ensureUniqueMediaId(customEpisodeId);
+
+    sharedNumericId = await generateUniqueTmdbId();
+    await ensureUniqueMediaId(`tv_${sharedNumericId}`);
+    await ensureUniqueMediaId(`movie_${sharedNumericId}`);
+
     // Setup test user
     const response = await auth.api.signUpEmail({
       body: { email, password: "Password123!@#", name: "Episode Journaler" },
@@ -85,7 +168,7 @@ describe("Phase 13B Standalone Episode Journaling & Review Corrections", () => {
           overview: "The second chapter.",
           episodes: [
             {
-              id: 9988775,
+              id: mockTvId + 5,
               name: "Point of Divergence",
               overview: "A critical turning point occurs.",
               still_path: "/mock_episode_still.jpg",
@@ -107,21 +190,21 @@ describe("Phase 13B Standalone Episode Journaling & Review Corrections", () => {
     tmdb.getTvSeason = originalGetTvSeason;
     tmdb.getMovieDetails = originalGetMovieDetails;
 
-    // Cleanup DB records
-    await db.delete(reviews).where(eq(reviews.userId, userId));
-    await db.delete(ratings).where(eq(ratings.userId, userId));
-    await db.delete(mediaItems).where(
-      inArray(mediaItems.id, [
-        mockEpisodeMediaId,
-        parentShowId,
-        "tv_887766_s1_e1",
-        "custom_series_parent_123",
-        "tv_776655_s1_e2",
-        "tv_54321",
-        "movie_54321",
-      ])
-    );
-    await db.delete(user).where(eq(user.id, userId));
+    // Safety guard
+    assertNonProductionEnvironment();
+
+    // Cleanup only test-owned DB records
+    if (userId) {
+      await db.delete(reviews).where(eq(reviews.userId, userId));
+      await db.delete(ratings).where(eq(ratings.userId, userId));
+      await db.delete(user).where(eq(user.id, userId));
+    }
+
+    if (testOwnedMediaIds.size > 0) {
+      await db.delete(mediaItems).where(
+        inArray(mediaItems.id, Array.from(testOwnedMediaIds))
+      );
+    }
   });
 
   it("resolves a missing episode from TMDB, creating canonical episode and parent series records", async () => {
@@ -379,9 +462,6 @@ describe("Phase 13B Standalone Episode Journaling & Review Corrections", () => {
   });
 
   it("resolves an episode when parent TMDB fetch fails, inserting episode safely with null parentMediaId", async () => {
-    const orphanTvId = 887766;
-    const orphanEpisodeId = `tv_${orphanTvId}_s1_e1`;
-
     (tmdb as any).getTvSeason = async (tvId: number, seasonNumber: number) => {
       if (tvId === orphanTvId && seasonNumber === 1) {
         return {
@@ -390,7 +470,7 @@ describe("Phase 13B Standalone Episode Journaling & Review Corrections", () => {
           season_number: 1,
           episodes: [
             {
-              id: 8877661,
+              id: orphanTvId + 1,
               name: "Orphan Episode",
               overview: "Episode with unreachable parent series.",
               still_path: "/orphan_still.jpg",
@@ -429,10 +509,6 @@ describe("Phase 13B Standalone Episode Journaling & Review Corrections", () => {
   });
 
   it("resolves an episode reusing an existing parent series with a non-canonical ID", async () => {
-    const customTvId = 776655;
-    const customParentId = "custom_series_parent_123";
-    const customEpisodeId = `tv_${customTvId}_s1_e2`;
-
     // Pre-insert parent show with non-canonical ID but matching tmdbId and mediaType
     await db.insert(mediaItems).values({
       id: customParentId,
@@ -449,7 +525,7 @@ describe("Phase 13B Standalone Episode Journaling & Review Corrections", () => {
           season_number: 1,
           episodes: [
             {
-              id: 7766552,
+              id: customTvId + 2,
               name: "Reused Parent Episode",
               air_date: "2025-04-01",
               episode_number: 2,
@@ -469,7 +545,7 @@ describe("Phase 13B Standalone Episode Journaling & Review Corrections", () => {
       where: eq(mediaItems.id, customEpisodeId),
     });
     assert.ok(episode);
-    // Verifies parentMediaId points to the existing custom series ID, not a duplicate tv_776655
+    // Verifies parentMediaId points to the existing custom series ID, not a duplicate tv_[id]
     assert.equal(episode.parentMediaId, customParentId);
 
     // Verify no redundant canonical parent was created
@@ -480,8 +556,6 @@ describe("Phase 13B Standalone Episode Journaling & Review Corrections", () => {
   });
 
   it("handles synthetic movie and TV IDs, isolating collisions between movie and TV with identical numeric IDs", async () => {
-    const sharedNumericId = 54321;
-
     (tmdb as any).getTvDetails = async (id: number) => {
       if (id === sharedNumericId) {
         return {
@@ -506,7 +580,7 @@ describe("Phase 13B Standalone Episode Journaling & Review Corrections", () => {
       return originalGetMovieDetails.call(tmdb, id);
     };
 
-    // Test synthetic TV IDs: tv_54321 and tmdb-tv-54321
+    // Test synthetic TV IDs: tv_[id] and tmdb-tv-[id]
     const resolvedTv1 = await resolveMediaItem(`tv_${sharedNumericId}`);
     assert.equal(resolvedTv1, `tv_${sharedNumericId}`);
 
@@ -517,11 +591,11 @@ describe("Phase 13B Standalone Episode Journaling & Review Corrections", () => {
     assert.equal(tvRecord.mediaType, "tv");
     assert.equal(tvRecord.title, "The Colliding TV Series");
 
-    // Resolving with tmdb-tv-54321 reuses the existing TV item
+    // Resolving with tmdb-tv-[id] reuses the existing TV item
     const resolvedTv2 = await resolveMediaItem(`tmdb-tv-${sharedNumericId}`);
     assert.equal(resolvedTv2, `tv_${sharedNumericId}`);
 
-    // Test synthetic Movie IDs: movie_54321 and tmdb-movie-54321
+    // Test synthetic Movie IDs: movie_[id] and tmdb-movie-[id]
     const resolvedMovie1 = await resolveMediaItem(`movie_${sharedNumericId}`);
     assert.equal(resolvedMovie1, `movie_${sharedNumericId}`);
 
@@ -537,7 +611,7 @@ describe("Phase 13B Standalone Episode Journaling & Review Corrections", () => {
     assert.equal(tvRecord.tmdbId, sharedNumericId);
     assert.equal(movieRecord.tmdbId, sharedNumericId);
 
-    // Resolving with tmdb-movie-54321 reuses the existing movie item
+    // Resolving with tmdb-movie-[id] reuses the existing movie item
     const resolvedMovie2 = await resolveMediaItem(`tmdb-movie-${sharedNumericId}`);
     assert.equal(resolvedMovie2, `movie_${sharedNumericId}`);
 
@@ -606,5 +680,20 @@ describe("Phase 13B Standalone Episode Journaling & Review Corrections", () => {
     }
     assert.equal(willOpen, true);
     assert.equal(autoOpenedMediaId, nextMediaId);
+  });
+
+  it("enforces production safety check preventing destructive test execution on production", () => {
+    assert.throws(
+      () => {
+        const originalNodeEnv = process.env.NODE_ENV;
+        try {
+          (process.env as any).NODE_ENV = "production";
+          assertNonProductionEnvironment();
+        } finally {
+          (process.env as any).NODE_ENV = originalNodeEnv;
+        }
+      },
+      { message: /Safety check: Cannot run tests in production environment/ }
+    );
   });
 });
