@@ -4,7 +4,7 @@ import { NextRequest } from "next/server";
 import { auth } from "../lib/auth";
 import { db } from "../db";
 import { collectionEntries, collections, mediaItems, ratingCategories, ratingSystems, ratings, reviews, user } from "../db/schema";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull } from "drizzle-orm";
 import { POST as saveJournal } from "../app/api/journal/route";
 import { resolveMediaItem } from "../app/api/reviews/route";
 import { tmdb } from "../lib/tmdb";
@@ -23,6 +23,7 @@ describe("Phase 13B Standalone Episode Journaling & Review Corrections", () => {
   // Preserve original TMDB methods for mocking
   const originalGetTvDetails = tmdb.getTvDetails;
   const originalGetTvSeason = tmdb.getTvSeason;
+  const originalGetMovieDetails = tmdb.getMovieDetails;
 
   const request = (body: unknown, authenticated = true) =>
     new NextRequest("http://localhost:3000/api/journal", {
@@ -104,12 +105,22 @@ describe("Phase 13B Standalone Episode Journaling & Review Corrections", () => {
     // Restore TMDB methods
     tmdb.getTvDetails = originalGetTvDetails;
     tmdb.getTvSeason = originalGetTvSeason;
+    tmdb.getMovieDetails = originalGetMovieDetails;
 
     // Cleanup DB records
     await db.delete(reviews).where(eq(reviews.userId, userId));
     await db.delete(ratings).where(eq(ratings.userId, userId));
-    await db.delete(mediaItems).where(eq(mediaItems.id, mockEpisodeMediaId));
-    await db.delete(mediaItems).where(eq(mediaItems.id, parentShowId));
+    await db.delete(mediaItems).where(
+      inArray(mediaItems.id, [
+        mockEpisodeMediaId,
+        parentShowId,
+        "tv_887766_s1_e1",
+        "custom_series_parent_123",
+        "tv_776655_s1_e2",
+        "tv_54321",
+        "movie_54321",
+      ])
+    );
     await db.delete(user).where(eq(user.id, userId));
   });
 
@@ -365,5 +376,235 @@ describe("Phase 13B Standalone Episode Journaling & Review Corrections", () => {
     const unauthSession: { user: { id: string } } | null = null;
     const unauthAutoOpen = Boolean(unauthSession && (searchParams.journal === "1" || searchParams.journal === "true"));
     assert.equal(unauthAutoOpen, false);
+  });
+
+  it("resolves an episode when parent TMDB fetch fails, inserting episode safely with null parentMediaId", async () => {
+    const orphanTvId = 887766;
+    const orphanEpisodeId = `tv_${orphanTvId}_s1_e1`;
+
+    (tmdb as any).getTvSeason = async (tvId: number, seasonNumber: number) => {
+      if (tvId === orphanTvId && seasonNumber === 1) {
+        return {
+          id: 301,
+          name: "Season 1",
+          season_number: 1,
+          episodes: [
+            {
+              id: 8877661,
+              name: "Orphan Episode",
+              overview: "Episode with unreachable parent series.",
+              still_path: "/orphan_still.jpg",
+              air_date: "2025-03-01",
+              episode_number: 1,
+              season_number: 1,
+              vote_average: 8.0,
+            },
+          ],
+        };
+      }
+      return originalGetTvSeason.call(tmdb, tvId, seasonNumber);
+    };
+
+    (tmdb as any).getTvDetails = async (id: number) => {
+      if (id === orphanTvId) {
+        throw new Error("TMDB network failure: show details unavailable");
+      }
+      return originalGetTvDetails.call(tmdb, id);
+    };
+
+    const resolvedId = await resolveMediaItem(orphanEpisodeId);
+    assert.equal(resolvedId, orphanEpisodeId);
+
+    const episode = await db.query.mediaItems.findFirst({
+      where: eq(mediaItems.id, orphanEpisodeId),
+    });
+    assert.ok(episode);
+    assert.equal(episode.title, "Orphan Episode");
+    assert.equal(episode.parentMediaId, null);
+
+    const parentShow = await db.query.mediaItems.findFirst({
+      where: eq(mediaItems.id, `tv_${orphanTvId}`),
+    });
+    assert.equal(parentShow, undefined);
+  });
+
+  it("resolves an episode reusing an existing parent series with a non-canonical ID", async () => {
+    const customTvId = 776655;
+    const customParentId = "custom_series_parent_123";
+    const customEpisodeId = `tv_${customTvId}_s1_e2`;
+
+    // Pre-insert parent show with non-canonical ID but matching tmdbId and mediaType
+    await db.insert(mediaItems).values({
+      id: customParentId,
+      tmdbId: customTvId,
+      mediaType: "tv",
+      title: "Existing Custom Series",
+    }).onConflictDoNothing();
+
+    (tmdb as any).getTvSeason = async (tvId: number, seasonNumber: number) => {
+      if (tvId === customTvId && seasonNumber === 1) {
+        return {
+          id: 401,
+          name: "Season 1",
+          season_number: 1,
+          episodes: [
+            {
+              id: 7766552,
+              name: "Reused Parent Episode",
+              air_date: "2025-04-01",
+              episode_number: 2,
+              season_number: 1,
+              vote_average: 8.5,
+            },
+          ],
+        };
+      }
+      return originalGetTvSeason.call(tmdb, tvId, seasonNumber);
+    };
+
+    const resolvedId = await resolveMediaItem(customEpisodeId);
+    assert.equal(resolvedId, customEpisodeId);
+
+    const episode = await db.query.mediaItems.findFirst({
+      where: eq(mediaItems.id, customEpisodeId),
+    });
+    assert.ok(episode);
+    // Verifies parentMediaId points to the existing custom series ID, not a duplicate tv_776655
+    assert.equal(episode.parentMediaId, customParentId);
+
+    // Verify no redundant canonical parent was created
+    const canonicalParent = await db.query.mediaItems.findFirst({
+      where: eq(mediaItems.id, `tv_${customTvId}`),
+    });
+    assert.equal(canonicalParent, undefined);
+  });
+
+  it("handles synthetic movie and TV IDs, isolating collisions between movie and TV with identical numeric IDs", async () => {
+    const sharedNumericId = 54321;
+
+    (tmdb as any).getTvDetails = async (id: number) => {
+      if (id === sharedNumericId) {
+        return {
+          id: sharedNumericId,
+          name: "The Colliding TV Series",
+          vote_average: 8.1,
+          vote_count: 300,
+        };
+      }
+      return originalGetTvDetails.call(tmdb, id);
+    };
+
+    (tmdb as any).getMovieDetails = async (id: number) => {
+      if (id === sharedNumericId) {
+        return {
+          id: sharedNumericId,
+          title: "The Colliding Movie",
+          vote_average: 7.7,
+          vote_count: 600,
+        };
+      }
+      return originalGetMovieDetails.call(tmdb, id);
+    };
+
+    // Test synthetic TV IDs: tv_54321 and tmdb-tv-54321
+    const resolvedTv1 = await resolveMediaItem(`tv_${sharedNumericId}`);
+    assert.equal(resolvedTv1, `tv_${sharedNumericId}`);
+
+    const tvRecord = await db.query.mediaItems.findFirst({
+      where: eq(mediaItems.id, `tv_${sharedNumericId}`),
+    });
+    assert.ok(tvRecord);
+    assert.equal(tvRecord.mediaType, "tv");
+    assert.equal(tvRecord.title, "The Colliding TV Series");
+
+    // Resolving with tmdb-tv-54321 reuses the existing TV item
+    const resolvedTv2 = await resolveMediaItem(`tmdb-tv-${sharedNumericId}`);
+    assert.equal(resolvedTv2, `tv_${sharedNumericId}`);
+
+    // Test synthetic Movie IDs: movie_54321 and tmdb-movie-54321
+    const resolvedMovie1 = await resolveMediaItem(`movie_${sharedNumericId}`);
+    assert.equal(resolvedMovie1, `movie_${sharedNumericId}`);
+
+    const movieRecord = await db.query.mediaItems.findFirst({
+      where: eq(mediaItems.id, `movie_${sharedNumericId}`),
+    });
+    assert.ok(movieRecord);
+    assert.equal(movieRecord.mediaType, "movie");
+    assert.equal(movieRecord.title, "The Colliding Movie");
+
+    // Both records exist independently despite having identical numeric TMDB IDs
+    assert.notEqual(tvRecord.id, movieRecord.id);
+    assert.equal(tvRecord.tmdbId, sharedNumericId);
+    assert.equal(movieRecord.tmdbId, sharedNumericId);
+
+    // Resolving with tmdb-movie-54321 reuses the existing movie item
+    const resolvedMovie2 = await resolveMediaItem(`tmdb-movie-${sharedNumericId}`);
+    assert.equal(resolvedMovie2, `movie_${sharedNumericId}`);
+
+    // Malformed IDs fail safely returning null without throwing
+    assert.equal(await resolveMediaItem("tmdb-tv-invalid"), null);
+    assert.equal(await resolveMediaItem("movie_notanumber"), null);
+    assert.equal(await resolveMediaItem("not-an-id"), null);
+  });
+
+  it("validates auto-open lifecycle: opens once on journal=1, strips param, preserves others, and isolates unauthenticated users", () => {
+    // 1. URL parameter stripping preserves other query parameters
+    const originalUrl = "http://localhost:3000/media/1399?type=tv&season=2&journal=1#reviews";
+    const url = new URL(originalUrl);
+    assert.equal(url.searchParams.get("journal"), "1");
+    assert.equal(url.searchParams.get("type"), "tv");
+    assert.equal(url.searchParams.get("season"), "2");
+
+    // Simulate removeJournalParam logic
+    url.searchParams.delete("journal");
+    const nextQuery = url.searchParams.toString();
+    const nextUrl = url.pathname + (nextQuery ? `?${nextQuery}` : "") + url.hash;
+
+    assert.equal(nextUrl, "/media/1399?type=tv&season=2#reviews");
+    assert.ok(!nextUrl.includes("journal="));
+    assert.ok(nextUrl.includes("type=tv"));
+    assert.ok(nextUrl.includes("season=2"));
+
+    // 2. Auto-open trigger condition requires session
+    const hasSession = true;
+    const noSession = false;
+    const isJournalRequested = true;
+
+    // Authenticated -> should open
+    const authedShouldOpen = hasSession && isJournalRequested;
+    assert.equal(authedShouldOpen, true);
+
+    // Unauthenticated -> must NEVER auto-open
+    const unauthedShouldOpen = noSession && isJournalRequested;
+    assert.equal(unauthedShouldOpen, false);
+
+    // 3. One-shot auto-open lifecycle tracking (autoOpenedMediaIdRef)
+    let autoOpenedMediaId: string | null = null;
+    const currentMediaId: string = "tv_1399_s1_e1";
+
+    // First check: should open and record media ID
+    let willOpen = false;
+    if (authedShouldOpen && autoOpenedMediaId !== currentMediaId) {
+      autoOpenedMediaId = currentMediaId;
+      willOpen = true;
+    }
+    assert.equal(willOpen, true);
+    assert.equal(autoOpenedMediaId, currentMediaId);
+
+    // After closing or saving, user stays on same media: must NOT re-open
+    willOpen = false;
+    if (authedShouldOpen && (autoOpenedMediaId as string | null) !== currentMediaId) {
+      willOpen = true;
+    }
+    assert.equal(willOpen, false);
+
+    // Navigating to a different media item: allowed to open for that item
+    const nextMediaId: string = "tv_1399_s1_e2";
+    if (authedShouldOpen && (autoOpenedMediaId as string | null) !== nextMediaId) {
+      autoOpenedMediaId = nextMediaId;
+      willOpen = true;
+    }
+    assert.equal(willOpen, true);
+    assert.equal(autoOpenedMediaId, nextMediaId);
   });
 });

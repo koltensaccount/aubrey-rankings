@@ -8,7 +8,7 @@ import { resolvePosterUrl } from "@/lib/artwork";
 import { getServerSession } from "@/lib/server-session";
 import { getBlockedUserIds } from "@/lib/safety";
 import { ArrowLeft, Star, Film, Tv, MessageSquare, ExternalLink, EyeOff } from "lucide-react";
-import { WriteReviewButton } from "@/components/reviews/write-review-button";
+import { WriteReviewButton, JournalTriggerButton } from "@/components/reviews/write-review-button";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
 import { canShowReviewRating, reviewScoreOnTen, tmdbAudienceRating } from "@/lib/review-rating";
 import { getCommunityAverage } from "@/lib/community-rating";
@@ -35,8 +35,8 @@ export default async function MediaDetailsPage({
 
   // Check if it's an episode ID (e.g., tv_1399_s1_e1 or tmdb-tv-1399-s1-e1 or tmdb-episode-1399-1-1)
   const episodeMatch =
-    /^(?:tmdb-)?tv[_-](\d+)[-_]s(\d+)[-_]e(\d+)$/i.exec(decodedId) ||
-    /^tmdb-episode-(\d+)-(\d+)-(\d+)$/i.exec(decodedId);
+    /^(?:tmdb[-_])?tv[-_](\d+)[-_]s(\d+)[-_]e(\d+)$/i.exec(decodedId) ||
+    /^(?:tmdb[-_])?episode[-_](\d+)[-_](\d+)[-_](\d+)$/i.exec(decodedId);
 
   if (!media && episodeMatch) {
     const tvId = parseInt(episodeMatch[1], 10);
@@ -80,8 +80,8 @@ export default async function MediaDetailsPage({
   }
 
   const lookupId = media ? media.id : decodedId;
-  const tvShowPrefixMatch = !media ? /^(?:tmdb-)?tv_?(\d+)$/i.exec(lookupId) : null;
-  const moviePrefixMatch = !media ? /^(?:tmdb-)?movie_?(\d+)$/i.exec(lookupId) : null;
+  const tvShowPrefixMatch = !media ? /^(?:tmdb[-_])?tv[-_]?(\d+)$/i.exec(lookupId) : null;
+  const moviePrefixMatch = !media ? /^(?:tmdb[-_])?movie[-_]?(\d+)$/i.exec(lookupId) : null;
 
   if (!media && tvShowPrefixMatch) {
     const tmdbNum = parseInt(tvShowPrefixMatch[1], 10);
@@ -618,27 +618,7 @@ export default async function MediaDetailsPage({
                 Be the first to write a critical dispatch or rank &ldquo;{media.title}&rdquo;.
               </p>
               <div className="pt-2 flex items-center justify-center gap-3 flex-wrap">
-                <WriteReviewButton
-                  mediaItemId={journalMediaId}
-                  mediaTitle={media.title}
-                  posterPath={media.posterPath}
-                  initialQuickScore={ownerGlobalRating?.calculatedOverallScore ?? null}
-                  initialDetailedRating={ownerGlobalRating?.ratingSystemId ? { ratingSystemId: ownerGlobalRating.ratingSystemId, categoryScores: ownerGlobalRating.categoryScores.map((score) => ({ categoryId: score.categoryId, score: score.score })) } : null}
-                  existingReview={ownerJournalReview ? {
-                    id: ownerJournalReview.id,
-                    title: ownerJournalReview.title,
-                    content: ownerJournalReview.content,
-                    draftContent: ownerJournalReview.draftContent,
-                    contentFormat: ownerJournalReview.contentFormat as "plain" | "markdown",
-                    draftContentFormat: ownerJournalReview.draftContentFormat as "plain" | "markdown" | null,
-                    status: ownerJournalReview.status as "draft" | "published" | "unpublished",
-                    visibility: ownerJournalReview.visibility as "private" | "unlisted" | "public",
-                    isSpoiler: ownerJournalReview.isSpoiler,
-                    ratingId: ownerJournalReview.ratingId,
-                    shareRating: ownerJournalReview.shareRating,
-                    isJournal: true,
-                  } : null}
-                />
+                <JournalTriggerButton hasEntry={Boolean(ownerJournalReview || ownerGlobalRating)} />
                 <Link
                   href={`/create?suggest=${encodeURIComponent(media.title)}`}
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-border bg-surface hover:bg-surface-raised text-foreground font-semibold text-xs transition-colors"

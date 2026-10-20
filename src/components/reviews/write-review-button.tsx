@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { Pencil } from "lucide-react";
@@ -31,22 +31,47 @@ export function WriteReviewButton({
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
-  const [isOpen, setIsOpen] = useState(Boolean(autoOpen));
+
+  const [isOpen, setIsOpen] = useState(false);
+  // Track which mediaItemId has already been auto-opened to ensure auto-open runs only ONCE per media item
+  const autoOpenedMediaIdRef = useRef<string | null>(null);
+
+  // Cleanly remove journal query parameter while strictly preserving all other parameters
+  const removeJournalParam = () => {
+    if (typeof window === "undefined") return;
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.has("journal")) {
+        url.searchParams.delete("journal");
+        const nextQuery = url.searchParams.toString();
+        const nextUrl = url.pathname + (nextQuery ? `?${nextQuery}` : "") + url.hash;
+        window.history.replaceState({}, "", nextUrl);
+      }
+    } catch {}
+  };
 
   useEffect(() => {
-    if (autoOpen || (session?.user && (searchParams?.get("journal") === "1" || searchParams?.get("journal") === "true"))) {
-      setIsOpen(true);
+    // Only auto-open if session is present (never open for unauthenticated users)
+    const isJournalRequested = autoOpen || searchParams?.get("journal") === "1" || searchParams?.get("journal") === "true";
+    if (session?.user && isJournalRequested) {
+      if (autoOpenedMediaIdRef.current !== mediaItemId) {
+        autoOpenedMediaIdRef.current = mediaItemId;
+        setIsOpen(true);
+        removeJournalParam();
+      }
     }
-  }, [autoOpen, searchParams, session]);
+  }, [autoOpen, searchParams, session, mediaItemId]);
+
+  // Listen for custom trigger from secondary buttons on the page (e.g. empty-state button)
+  useEffect(() => {
+    const handleCustomOpen = () => setIsOpen(true);
+    window.addEventListener("aubrey:open-journal", handleCustomOpen);
+    return () => window.removeEventListener("aubrey:open-journal", handleCustomOpen);
+  }, []);
 
   const handleClose = () => {
     setIsOpen(false);
-    if (typeof window !== "undefined" && window.location.search.includes("journal=")) {
-      const url = new URL(window.location.href);
-      url.searchParams.delete("journal");
-      const nextSearch = url.searchParams.toString();
-      window.history.replaceState({}, "", url.pathname + (nextSearch ? `?${nextSearch}` : ""));
-    }
+    removeJournalParam();
   };
 
   const handleClick = () => {
@@ -56,6 +81,7 @@ export function WriteReviewButton({
   return (
     <>
       <button
+        id="canonical-journal-button"
         type="button"
         onClick={handleClick}
         className={
@@ -87,5 +113,29 @@ export function WriteReviewButton({
         }}
       />
     </>
+  );
+}
+
+export function JournalTriggerButton({
+  className,
+  label,
+  hasEntry = false,
+}: {
+  className?: string;
+  label?: string;
+  hasEntry?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new CustomEvent("aubrey:open-journal"))}
+      className={
+        className ||
+        "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-primary-foreground font-semibold text-xs transition-colors cursor-pointer"
+      }
+    >
+      <Pencil size={13} />
+      <span>{label || (hasEntry ? "Edit Journal Entry" : "Add to Journal")}</span>
+    </button>
   );
 }
