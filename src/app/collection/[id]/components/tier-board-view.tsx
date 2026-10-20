@@ -1,9 +1,10 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import { getMediaArtworkAspect } from "@/lib/artwork";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
-import { Sliders, MoveRight, Check, Loader2, Layers } from "lucide-react";
+import { Sliders, MoveRight, Check, Loader2, Layers, BookOpen } from "lucide-react";
 
 interface TierBoardViewProps {
   collection: any;
@@ -151,14 +152,23 @@ export function TierBoardView({
                         <div className="space-y-1">
                           {isOwner && (
                             <>
-                              <button
-                                type="button"
-                                onClick={() => onSelectItemForRating(media)}
-                                className="w-full py-1 rounded bg-primary text-primary-foreground font-semibold text-[10px] flex items-center justify-center gap-1 cursor-pointer"
-                              >
-                                <Sliders size={10} />
-                                <span>Edit</span>
-                              </button>
+                              <div className="flex items-center gap-1">
+                                <Link
+                                  href={`/media/${encodeURIComponent(media.id)}?journal=1`}
+                                  className="py-1 px-1.5 rounded bg-surface text-foreground font-semibold text-[10px] flex items-center justify-center gap-0.5 border border-border hover:bg-surface-elevated transition-colors"
+                                  title="Open personal journal entry"
+                                >
+                                  <BookOpen size={10} />
+                                </Link>
+                                <button
+                                  type="button"
+                                  onClick={() => onSelectItemForRating(media)}
+                                  className="flex-1 py-1 rounded bg-primary text-primary-foreground font-semibold text-[10px] flex items-center justify-center gap-1 cursor-pointer hover:bg-primary-hover transition-colors"
+                                >
+                                  <Sliders size={10} />
+                                  <span>Edit</span>
+                                </button>
+                              </div>
 
                               {/* Quick move dropdown */}
                               <select
@@ -263,14 +273,23 @@ export function TierBoardView({
                       </div>
 
                       <div className="space-y-1">
-                        <button
-                          type="button"
-                          onClick={() => onSelectItemForRating(media)}
-                          className="w-full py-1 rounded bg-primary text-primary-foreground font-semibold text-[10px] flex items-center justify-center gap-1 cursor-pointer"
-                        >
-                          <Sliders size={10} />
-                          <span>Assign</span>
-                        </button>
+                        <div className="flex items-center gap-1">
+                          <Link
+                            href={`/media/${encodeURIComponent(media.id)}?journal=1`}
+                            className="py-1 px-1.5 rounded bg-surface text-foreground font-semibold text-[10px] flex items-center justify-center gap-0.5 border border-border hover:bg-surface-elevated transition-colors"
+                            title="Open personal journal entry"
+                          >
+                            <BookOpen size={10} />
+                          </Link>
+                          <button
+                            type="button"
+                            onClick={() => onSelectItemForRating(media)}
+                            className="flex-1 py-1 rounded bg-primary text-primary-foreground font-semibold text-[10px] flex items-center justify-center gap-1 cursor-pointer hover:bg-primary-hover transition-colors"
+                          >
+                            <Sliders size={10} />
+                            <span>Assign</span>
+                          </button>
+                        </div>
 
                         <select
                           defaultValue=""

@@ -399,7 +399,13 @@ export function ReviewEditorDialog({
               </div>
               <p className="text-[11px] text-muted-foreground">
                 {attachRating
-                  ? "Your rating will be publicly visible alongside this review."
+                  ? visibility === "unlisted"
+                    ? "Your rating will be visible alongside this review to anyone with the direct link."
+                    : visibility === "private"
+                      ? "Your rating is attached to this review, but the review is private."
+                      : isCurrentlyPublished
+                        ? "Your rating will be publicly visible alongside this review."
+                        : "Your rating will be publicly visible alongside this review when published (saving as a draft keeps it private)."
                   : "Your rating will remain private to your ranking and will not be disclosed on this review."}
               </p>
             </div>
@@ -487,6 +493,128 @@ export function ReviewEditorDialog({
           </div>
         </div>
 
+        {/* Deliberate Sharing Clarity Banner */}
+        {(() => {
+          const persistedVisibility = existingReview?.visibility ?? "private";
+          const hasUnsavedVisibilityChange = Boolean(existingReview && existingReview.visibility !== visibility);
+
+          let bannerTitle = "";
+          let bannerDescription = "";
+          let Icon = Lock;
+          let isPublicThemed = false;
+
+          if (isCurrentlyPublished && !hasUnsavedVisibilityChange) {
+            if (visibility === "public") {
+              Icon = Globe;
+              isPublicThemed = true;
+              bannerTitle = "Published Public Review";
+              bannerDescription = "This published review is visible in the Community Feed, on this title's public page, and on your profile.";
+            } else if (visibility === "unlisted") {
+              Icon = Link2;
+              isPublicThemed = false;
+              bannerTitle = "Unlisted Review (Live by Direct Link)";
+              bannerDescription = "Accessible to anyone with the direct link. Hidden from the Community Feed and search discovery.";
+            } else {
+              Icon = Lock;
+              isPublicThemed = false;
+              bannerTitle = "Private Journal Entry (Never Shared)";
+              bannerDescription = "Visible exclusively to you in your personal Journal. Never published to the Community Feed or visible to other members.";
+            }
+          } else if (hasUnsavedVisibilityChange) {
+            if (visibility === "public") {
+              Icon = Globe;
+              isPublicThemed = true;
+              bannerTitle = "Unsaved Change: Publish to Community";
+              bannerDescription = `This entry is currently ${persistedVisibility === "private" ? "private" : "unlisted"}. Once saved, it will become publicly visible in the Community Feed, on your profile, and on this title's page.`;
+            } else if (visibility === "unlisted") {
+              Icon = Link2;
+              isPublicThemed = false;
+              bannerTitle = "Unsaved Change: Make Unlisted";
+              bannerDescription = `This entry is currently ${persistedVisibility === "public" ? "public" : "private"}. Once saved, it will be accessible only via direct link and hidden from feeds.`;
+            } else {
+              Icon = Lock;
+              isPublicThemed = false;
+              bannerTitle = "Unsaved Change: Set to Private";
+              bannerDescription = `This entry is currently ${persistedVisibility === "public" ? "publicly visible" : "accessible via direct link"}. Saving your changes will make it private and remove it from public view.`;
+            }
+          } else {
+            // New entry or currently unpublished/draft
+            if (visibility === "public") {
+              Icon = Globe;
+              isPublicThemed = true;
+              bannerTitle = "Public Review (When Published)";
+              bannerDescription = "When published, this review will appear in the Community Feed, on this title's public page, and on your profile. Saving as a draft will keep it private and unpublished.";
+            } else if (visibility === "unlisted") {
+              Icon = Link2;
+              isPublicThemed = false;
+              bannerTitle = "Unlisted Entry (When Published)";
+              bannerDescription = "When published, this review is accessible only via direct link and hidden from the Community Feed. Saving as a draft keeps it private.";
+            } else {
+              Icon = Lock;
+              isPublicThemed = false;
+              bannerTitle = "Private Journal Entry (Never Shared)";
+              bannerDescription = "Visible exclusively to you in your personal Journal. Never published to the Community Feed or visible to other members.";
+            }
+          }
+
+          const hasScore = scoringMethod === "quick" ? quickScore !== null : Boolean(selectedSystem);
+
+          let ratingDisclosureText = "";
+          if (hasScore) {
+            if (!shareRating) {
+              ratingDisclosureText = "🔒 Your numerical rating remains private and will NOT be shown.";
+            } else if (isCurrentlyPublished && !hasUnsavedVisibilityChange) {
+              if (visibility === "public") {
+                ratingDisclosureText = "✓ Your numerical rating is shared publicly.";
+              } else if (visibility === "unlisted") {
+                ratingDisclosureText = "✓ Your numerical rating is visible to anyone with the direct link.";
+              } else {
+                ratingDisclosureText = "🔒 Private entries are only visible to you; your rating is not shared with others.";
+              }
+            } else if (hasUnsavedVisibilityChange) {
+              if (visibility === "public") {
+                ratingDisclosureText = "✓ Your numerical rating will be shared publicly once saved.";
+              } else if (visibility === "unlisted") {
+                ratingDisclosureText = "✓ Your numerical rating will be visible via direct link once saved.";
+              } else {
+                ratingDisclosureText = "🔒 Once saved as private, your rating will no longer be shared with others.";
+              }
+            } else {
+              // Draft or new entry
+              if (visibility === "public") {
+                ratingDisclosureText = "✓ Your numerical rating will be shared publicly when published (saving as a draft keeps it private).";
+              } else if (visibility === "unlisted") {
+                ratingDisclosureText = "✓ Your numerical rating will be visible via direct link when published (saving as a draft keeps it private).";
+              } else {
+                ratingDisclosureText = "🔒 Private entries are only visible to you; your rating is not shared with others.";
+              }
+            }
+          }
+
+          return (
+            <div
+              className={`p-3 rounded-xl border text-xs space-y-1 transition-colors ${
+                isPublicThemed
+                  ? "bg-primary/10 border-primary/20 text-foreground"
+                  : "bg-surface border-border text-muted-foreground"
+              }`}
+            >
+              <div className="flex items-center gap-2 font-semibold text-foreground">
+                <Icon size={14} className={isPublicThemed ? "text-primary" : "text-foreground"} />
+                <span>{bannerTitle}</span>
+              </div>
+              <p className="text-[11px] leading-relaxed">
+                {bannerDescription}
+                {hasScore && ratingDisclosureText && (
+                  <span className="block mt-0.5 font-medium text-foreground">
+                    {ratingDisclosureText}
+                  </span>
+                )}
+              </p>
+            </div>
+          );
+        })()}
+
         {/* Delete confirmation modal view */}
         {showDeleteConfirm && (
           <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/30 space-y-3 mt-2">
@@ -570,7 +698,21 @@ export function ReviewEditorDialog({
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-primary text-primary-foreground text-xs font-bold hover:bg-primary-hover transition-colors cursor-pointer disabled:opacity-50"
             >
               {saving ? <Loader2 size={13} className="animate-spin" /> : null}
-              <span>{journalMode ? "Save Journal Entry" : isCurrentlyPublished ? "Save & Update" : "Publish Review"}</span>
+              <span>
+                {journalMode
+                  ? visibility === "public"
+                    ? isCurrentlyPublished
+                      ? "Update Public Review"
+                      : "Publish to Community"
+                    : visibility === "unlisted"
+                      ? "Save as Unlisted"
+                      : "Save Private Entry"
+                  : isCurrentlyPublished
+                    ? "Save & Update"
+                    : visibility === "public"
+                      ? "Publish Review"
+                      : "Save Review"}
+              </span>
             </button>
           </div>
         </DialogFooter>

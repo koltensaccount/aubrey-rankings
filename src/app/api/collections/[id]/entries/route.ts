@@ -5,13 +5,14 @@ import { collections, collectionEntries, mediaItems } from "@/db/schema";
 import { tmdb } from "@/lib/tmdb";
 import { nanoid } from "@/lib/utils";
 import { eq, and, desc } from "drizzle-orm";
+import { resolveMediaItem } from "@/lib/media-resolution";
 
 export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id: collectionId } = await params;
-  const session = await getServerSession();
+  const session = await getServerSession(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
@@ -31,63 +32,26 @@ export async function POST(
       return NextResponse.json({ error: "Invalid request payload" }, { status: 400 });
     }
 
-    const { tmdbId, mediaType, seasonNumber, episodeNumber, customTitle, overview, posterPath, stillPath } = body;
+    const { mediaItemId, tmdbId, mediaType, seasonNumber, episodeNumber, customTitle, overview, posterPath, stillPath } = body;
 
-    if ((tmdbId !== undefined && (!Number.isInteger(tmdbId) || tmdbId <= 0)) || [seasonNumber,episodeNumber].some(v=>v!==undefined && (!Number.isInteger(v)||v<0)) || (customTitle!==undefined && (typeof customTitle!=="string" || customTitle.length>300))) return NextResponse.json({error:"Invalid entry fields"},{status:400});
+    if (
+      (mediaItemId !== undefined && (typeof mediaItemId !== "string" || !mediaItemId.trim())) ||
+      (tmdbId !== undefined && (!Number.isInteger(tmdbId) || tmdbId <= 0)) ||
+      [seasonNumber, episodeNumber].some((v) => v !== undefined && (!Number.isInteger(v) || v < 0)) ||
+      (customTitle !== undefined && (typeof customTitle !== "string" || customTitle.length > 300))
+    ) {
+      return NextResponse.json({ error: "Invalid entry fields" }, { status: 400 });
+    }
+
     let targetMediaItemId: string | null = null;
 
-    if (tmdbId && (mediaType === "movie" || !mediaType)) {
-      // Movie from TMDB
-      const movie = await tmdb.getMovieDetails(Number(tmdbId));
-      targetMediaItemId = `movie_${tmdbId}`;
-
-      await db
-        .insert(mediaItems)
-        .values({
-          id: targetMediaItemId,
-          tmdbId: Number(tmdbId),
-          mediaType: "movie",
-          title: movie.title,
-          overview: movie.overview,
-          posterPath: movie.poster_path,
-          backdropPath: movie.backdrop_path,
-          releaseDate: movie.release_date,
-          tmdbMetadata: {
-            voteAverage: movie.vote_average,
-            runtime: movie.runtime,
-          },
-        })
-        .onConflictDoNothing();
+    if (mediaItemId && typeof mediaItemId === "string") {
+      targetMediaItemId = await resolveMediaItem(mediaItemId);
     } else if (tmdbId && mediaType === "episode" && seasonNumber !== undefined && episodeNumber !== undefined) {
-      // TV Episode from TMDB
-      const seasonData = await tmdb.getTvSeason(Number(tmdbId), Number(seasonNumber));
-      const ep = seasonData.episodes?.find((e) => e.episode_number === Number(episodeNumber));
-
-      if (!ep) {
-        return NextResponse.json({ error: "Episode not found in season" }, { status: 404 });
-      }
-
-      targetMediaItemId = `tv_${tmdbId}_s${seasonNumber}_e${episodeNumber}`;
-
-      await db
-        .insert(mediaItems)
-        .values({
-          id: targetMediaItemId,
-          tmdbId: ep.id,
-          mediaType: "episode",
-          title: ep.name,
-          overview: ep.overview,
-          stillPath: ep.still_path,
-          releaseDate: ep.air_date,
-          seasonNumber: ep.season_number,
-          episodeNumber: ep.episode_number,
-          tmdbMetadata: {
-            voteAverage: ep.vote_average,
-          },
-        })
-        .onConflictDoNothing();
+      targetMediaItemId = await resolveMediaItem(`tv_${tmdbId}_s${seasonNumber}_e${episodeNumber}`);
+    } else if (tmdbId && (mediaType === "movie" || !mediaType)) {
+      targetMediaItemId = await resolveMediaItem(`movie_${tmdbId}`);
     } else if (customTitle && typeof customTitle === "string" && customTitle.trim()) {
-      // Custom entry without TMDB
       targetMediaItemId = `custom_${Date.now()}_${nanoid(6)}`;
       await db.insert(mediaItems).values({
         id: targetMediaItemId,
@@ -99,9 +63,55 @@ export async function POST(
       });
     } else {
       return NextResponse.json(
-        { error: "Must provide either tmdbId for movie/episode or customTitle" },
+        { error: "Must provide either mediaItemId, tmdbId for movie/episode, or customTitle" },
         { status: 400 }
       );
+    }
+
+    if (!targetMediaItemId) {
+      return NextResponse.json({ error: "Media item could not be resolved" }, { status: 404 });
+    }
+
+    // Resolve media item to enforce collection type compatibility
+    const targetItem = await db.query.mediaItems.findFirst({
+      where: (m, { eq }) => eq(m.id, targetMediaItemId!),
+    });
+
+    if (!targetItem) {
+      return NextResponse.json({ error: "Media item could not be resolved" }, { status: 404 });
+    }
+
+    // Validate collection type compatibility
+    if (col.collectionType === "movie_franchise") {
+      if (targetItem.mediaType !== "movie") {
+        return NextResponse.json(
+          { error: "Movie franchise rankings only accept films." },
+          { status: 400 }
+        );
+      }
+    } else if (col.collectionType === "tv_show") {
+      if (targetItem.mediaType !== "episode") {
+        return NextResponse.json(
+          { error: "TV series rankings only accept episodes." },
+          { status: 400 }
+        );
+      }
+      if (col.tmdbId) {
+        const showPrefix = `tv_${col.tmdbId}_`;
+        const belongs =
+          targetItem.id.startsWith(showPrefix) ||
+          targetItem.id.startsWith(`tmdb-tv-${col.tmdbId}`) ||
+          (targetItem.parentMediaId != null &&
+            (targetItem.parentMediaId === `tv_${col.tmdbId}` ||
+              targetItem.parentMediaId.startsWith(showPrefix) ||
+              targetItem.parentMediaId === `tmdb-tv-${col.tmdbId}`));
+        if (!belongs) {
+          return NextResponse.json(
+            { error: "This episode does not belong to the television series for this ranking." },
+            { status: 400 }
+          );
+        }
+      }
     }
 
     // Check duplicate in collection
