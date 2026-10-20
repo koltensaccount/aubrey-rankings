@@ -22,7 +22,83 @@ export async function resolveMediaItem(mediaId: string): Promise<string | null> 
   });
   if (existing) return existing.id;
 
-  // 2. TMDB ephemeral synthetic ID or numeric ID
+  // 2. Check for TV episode synthetic or target IDs (e.g. tv_1399_s1_e1 or tmdb-tv-1399-s1-e1 or tmdb-episode-1399-1-1)
+  const episodeMatch =
+    /^(?:tmdb-)?tv[_-](\d+)[-_]s(\d+)[-_]e(\d+)$/i.exec(mediaId) ||
+    /^tmdb-episode-(\d+)-(\d+)-(\d+)$/i.exec(mediaId);
+
+  if (episodeMatch) {
+    const tvId = parseInt(episodeMatch[1], 10);
+    const seasonNumber = parseInt(episodeMatch[2], 10);
+    const episodeNumber = parseInt(episodeMatch[3], 10);
+    const targetEpisodeId = `tv_${tvId}_s${seasonNumber}_e${episodeNumber}`;
+
+    const existingEp = await db.query.mediaItems.findFirst({
+      where: eq(mediaItems.id, targetEpisodeId),
+      columns: { id: true },
+    });
+    if (existingEp) return existingEp.id;
+
+    try {
+      const seasonData = await tmdb.getTvSeason(tvId, seasonNumber);
+      const ep = seasonData.episodes?.find((e) => e.episode_number === episodeNumber);
+      if (ep) {
+        // Ensure parent series exists
+        const parentShowId = `tv_${tvId}`;
+        const existingShow = await db.query.mediaItems.findFirst({
+          where: eq(mediaItems.id, parentShowId),
+          columns: { id: true },
+        });
+        if (!existingShow) {
+          try {
+            const tv = await tmdb.getTvDetails(tvId);
+            if (tv && (tv.name || tv.id)) {
+              await db
+                .insert(mediaItems)
+                .values({
+                  id: parentShowId,
+                  tmdbId: tv.id,
+                  mediaType: "tv",
+                  title: tv.name || "Untitled Series",
+                  overview: tv.overview || null,
+                  posterPath: tv.poster_path || null,
+                  backdropPath: tv.backdrop_path || null,
+                  releaseDate: tv.first_air_date || null,
+                  tmdbMetadata: { voteAverage: tv.vote_average, voteCount: tv.vote_count },
+                })
+                .onConflictDoNothing();
+            }
+          } catch {}
+        }
+
+        await db
+          .insert(mediaItems)
+          .values({
+            id: targetEpisodeId,
+            tmdbId: ep.id,
+            mediaType: "episode",
+            title: ep.name || `Episode ${ep.episode_number}`,
+            overview: ep.overview || null,
+            stillPath: ep.still_path || null,
+            posterPath: ep.still_path || null,
+            releaseDate: ep.air_date || null,
+            seasonNumber: ep.season_number,
+            episodeNumber: ep.episode_number,
+            parentMediaId: parentShowId,
+            tmdbMetadata: {
+              voteAverage: ep.vote_average,
+            },
+          })
+          .onConflictDoNothing();
+
+        return targetEpisodeId;
+      }
+    } catch {}
+
+    return null;
+  }
+
+  // 3. TMDB ephemeral synthetic ID or numeric ID
   let tmdbNum: number | null = null;
   let mediaType: "movie" | "tv" = "movie";
 

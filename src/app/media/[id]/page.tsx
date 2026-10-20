@@ -18,7 +18,7 @@ export default async function MediaDetailsPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ type?: string }>;
+  searchParams?: Promise<{ type?: string; season?: string; journal?: string }>;
 }) {
   const { id: rawMediaId } = await params;
   let decodedId = rawMediaId;
@@ -32,6 +32,52 @@ export default async function MediaDetailsPage({
   let media: any = await db.query.mediaItems.findFirst({
     where: (m, { eq, or }) => or(eq(m.id, rawMediaId), eq(m.id, decodedId)),
   });
+
+  // Check if it's an episode ID (e.g., tv_1399_s1_e1 or tmdb-tv-1399-s1-e1 or tmdb-episode-1399-1-1)
+  const episodeMatch =
+    /^(?:tmdb-)?tv[_-](\d+)[-_]s(\d+)[-_]e(\d+)$/i.exec(decodedId) ||
+    /^tmdb-episode-(\d+)-(\d+)-(\d+)$/i.exec(decodedId);
+
+  if (!media && episodeMatch) {
+    const tvId = parseInt(episodeMatch[1], 10);
+    const seasonNumber = parseInt(episodeMatch[2], 10);
+    const episodeNumber = parseInt(episodeMatch[3], 10);
+    const targetEpisodeId = `tv_${tvId}_s${seasonNumber}_e${episodeNumber}`;
+
+    media = await db.query.mediaItems.findFirst({
+      where: (m, { eq }) => eq(m.id, targetEpisodeId),
+    });
+
+    if (!media) {
+      try {
+        const seasonData = await tmdb.getTvSeason(tvId, seasonNumber);
+        const ep = seasonData.episodes?.find((e) => e.episode_number === episodeNumber);
+        if (ep) {
+          let showTitle = "";
+          try {
+            const tv = await tmdb.getTvDetails(tvId);
+            showTitle = tv?.name || "";
+          } catch {}
+
+          media = {
+            id: targetEpisodeId,
+            tmdbId: ep.id,
+            mediaType: "episode",
+            title: ep.name ? (showTitle ? `${showTitle}: ${ep.name}` : ep.name) : `Episode ${episodeNumber}`,
+            overview: ep.overview || null,
+            posterPath: ep.still_path || null,
+            backdropPath: null,
+            stillPath: ep.still_path || null,
+            releaseDate: ep.air_date || null,
+            seasonNumber: ep.season_number,
+            episodeNumber: ep.episode_number,
+            parentMediaId: `tv_${tvId}`,
+            tmdbMetadata: { voteAverage: ep.vote_average },
+          };
+        }
+      } catch {}
+    }
+  }
 
   const lookupId = media ? media.id : decodedId;
   if (!media && /^\d+$/.test(lookupId)) {
@@ -246,9 +292,29 @@ export default async function MediaDetailsPage({
 
   const averageScore = await getCommunityAverage(journalMediaId, blockedUserIds);
   let tmdbRating = tmdbAudienceRating(media.tmdbMetadata);
-  if (media.tmdbId && (media.mediaType === "movie" || media.mediaType === "tv")) {
+  let tvSeasonsList: any[] = [];
+  let seasonEpisodes: any[] = [];
+  const selectedSeason = resolvedSearchParams.season ? parseInt(resolvedSearchParams.season, 10) : 1;
+  let activeSeasonNumber = selectedSeason;
+
+  if (media.tmdbId && media.mediaType === "tv") {
     try {
-      const details = media.mediaType === "movie" ? await tmdb.getMovieDetails(media.tmdbId) : await tmdb.getTvDetails(media.tmdbId);
+      const details = await tmdb.getTvDetails(media.tmdbId);
+      tmdbRating = tmdbAudienceRating(details) ?? tmdbRating;
+      if (details?.seasons?.length) {
+        tvSeasonsList = details.seasons.filter((s: any) => s.season_number > 0);
+        if (!tvSeasonsList.length) tvSeasonsList = details.seasons;
+        const currentSeason = tvSeasonsList.find((s: any) => s.season_number === selectedSeason) || tvSeasonsList[0];
+        if (currentSeason) {
+          activeSeasonNumber = currentSeason.season_number;
+          const seasonData = await tmdb.getTvSeason(media.tmdbId, currentSeason.season_number);
+          seasonEpisodes = seasonData?.episodes || [];
+        }
+      }
+    } catch { /* Keep available cached metadata when TMDB is unavailable. */ }
+  } else if (media.tmdbId && media.mediaType === "movie") {
+    try {
+      const details = await tmdb.getMovieDetails(media.tmdbId);
       tmdbRating = tmdbAudienceRating(details) ?? tmdbRating;
     } catch { /* Keep available cached metadata when TMDB is unavailable. */ }
   }
@@ -284,7 +350,7 @@ export default async function MediaDetailsPage({
           <div className="w-full h-full bg-surface" />
         )}
 
-        <div className="absolute top-6 left-4 sm:left-8 z-20">
+        <div className="absolute top-6 left-4 sm:left-8 z-20 flex items-center gap-2">
           <Link
             href="/discover"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card/80 backdrop-blur-sm text-xs font-semibold text-foreground hover:bg-surface transition-colors"
@@ -292,12 +358,21 @@ export default async function MediaDetailsPage({
             <ArrowLeft size={13} />
             <span>Back to Explore</span>
           </Link>
+          {media.parentMediaId && (
+            <Link
+              href={`/media/${media.parentMediaId}`}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card/80 backdrop-blur-sm text-xs font-semibold text-foreground hover:bg-surface transition-colors"
+            >
+              <Tv size={13} />
+              <span>Series Details</span>
+            </Link>
+          )}
         </div>
 
         <div className="absolute bottom-6 left-4 sm:left-8 right-4 sm:right-8 z-20 max-w-4xl space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/30">
-              {isTv ? "Television" : "Film"}
+              {media.mediaType === "episode" ? "Television Episode" : isTv ? "Television" : "Film"}
             </span>
             {episodeBadge && (
               <span className="text-xs font-semibold text-muted-foreground">
@@ -336,6 +411,97 @@ export default async function MediaDetailsPage({
             <p className="text-sm text-muted-foreground leading-relaxed">
               {media.overview}
             </p>
+          </section>
+        )}
+
+        {/* Seasons & Episodes section for TV shows */}
+        {media.mediaType === "tv" && tvSeasonsList.length > 0 && (
+          <section className="space-y-4 pt-4 border-t border-border">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Tv size={18} className="text-primary-text" />
+                <h2 className="font-display text-2xl uppercase tracking-tight text-foreground">
+                  Seasons & Episodes
+                </h2>
+              </div>
+              <span className="text-xs text-muted-foreground">
+                Season {activeSeasonNumber} ({seasonEpisodes.length} episodes)
+              </span>
+            </div>
+
+            {/* Season Selector Tabs */}
+            {tvSeasonsList.length > 1 && (
+              <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
+                {tvSeasonsList.map((s) => (
+                  <Link
+                    key={s.id || s.season_number}
+                    href={`/media/${rawMediaId}?season=${s.season_number}`}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
+                      s.season_number === activeSeasonNumber
+                        ? "bg-primary text-white shadow-sm"
+                        : "bg-surface border border-border text-foreground hover:bg-surface-raised"
+                    }`}
+                  >
+                    {s.name || `Season ${s.season_number}`}
+                  </Link>
+                ))}
+              </div>
+            )}
+
+            {/* Episodes List */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {seasonEpisodes.map((ep) => {
+                const epMediaId = `tv_${media.tmdbId}_s${activeSeasonNumber}_e${ep.episode_number}`;
+                const still = ep.still_path ? getTmdbImageUrl(ep.still_path, "w300") : null;
+                return (
+                  <div
+                    key={ep.id}
+                    className="flex flex-col sm:flex-row gap-3 p-3 rounded-xl border border-border bg-card hover:border-primary/40 transition-colors"
+                  >
+                    {still ? (
+                      <div className="w-full sm:w-32 h-20 shrink-0 rounded-lg overflow-hidden bg-surface relative">
+                        <img
+                          src={still}
+                          alt={ep.name}
+                          className="w-full h-full object-cover"
+                        />
+                        <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-black/70 text-white">
+                          E{ep.episode_number}
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="w-full sm:w-32 h-20 shrink-0 rounded-lg bg-surface flex items-center justify-center text-xs font-mono text-muted-foreground border border-border">
+                        S{activeSeasonNumber}E{ep.episode_number}
+                      </div>
+                    )}
+                    <div className="min-w-0 flex-1 flex flex-col justify-between">
+                      <div>
+                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium">
+                          <span>Episode {ep.episode_number}</span>
+                          {ep.air_date && <span>· {ep.air_date.split("-")[0]}</span>}
+                        </div>
+                        <h4 className="font-semibold text-sm text-foreground truncate mt-0.5">
+                          {ep.name || `Episode ${ep.episode_number}`}
+                        </h4>
+                        {ep.overview && (
+                          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
+                            {ep.overview}
+                          </p>
+                        )}
+                      </div>
+                      <div className="pt-2 flex items-center gap-2">
+                        <Link
+                          href={`/media/${epMediaId}`}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-primary-text hover:underline"
+                        >
+                          <span>Journal Episode &rarr;</span>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </section>
         )}
 
