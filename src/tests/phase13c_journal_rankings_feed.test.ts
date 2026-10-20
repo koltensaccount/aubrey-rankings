@@ -16,6 +16,7 @@ import { POST as addCollectionEntry, PUT as reorderCollectionEntries } from "../
 import { GET as getFeed } from "../app/api/social/feed/route";
 import { POST as createReview } from "../app/api/reviews/route";
 import { canShowReviewRating } from "../lib/review-rating";
+import { tmdb } from "../lib/tmdb";
 
 describe("Phase 13C: Journal, Rankings & Feed Integration", () => {
   const suffix = `${process.pid}_${Date.now()}`;
@@ -34,6 +35,8 @@ describe("Phase 13C: Journal, Rankings & Feed Integration", () => {
   const customRankingId = `col_custom_${suffix}`;
   const franchiseRankingId = `col_franchise_${suffix}`;
   const tvSeriesRankingId = `col_tv_${suffix}`;
+
+  const trackedCreatedMediaItemIds: string[] = [];
 
   const postEntryRequest = (
     colId: string,
@@ -165,6 +168,14 @@ describe("Phase 13C: Journal, Rankings & Feed Integration", () => {
     await db.delete(collectionEntries).where(eq(collectionEntries.collectionId, tvSeriesRankingId));
     await db.delete(ratings).where(eq(ratings.userId, ownerId));
     await db.delete(collections).where(eq(collections.userId, ownerId));
+
+    // Clean up all tracked dynamic media records created during tests
+    for (const id of trackedCreatedMediaItemIds) {
+      await db.delete(collectionEntries).where(eq(collectionEntries.mediaItemId, id));
+      await db.delete(mediaItems).where(eq(mediaItems.id, id));
+    }
+    await db.delete(mediaItems).where(eq(mediaItems.title, "Indie Short Film"));
+
     await db.delete(mediaItems).where(eq(mediaItems.id, movieMediaId));
     await db.delete(mediaItems).where(eq(mediaItems.id, episode1MediaId));
     await db.delete(mediaItems).where(eq(mediaItems.id, otherEpisodeMediaId));
@@ -422,6 +433,9 @@ describe("Phase 13C: Journal, Rankings & Feed Integration", () => {
     const customData = await customRes.json();
     assert.equal(customData.success, true);
     assert.equal(customData.entry?.mediaItem?.title, "Indie Short Film");
+    if (customData.entry?.mediaItemId) {
+      trackedCreatedMediaItemIds.push(customData.entry.mediaItemId);
+    }
 
     // 9b. Reorder entries
     const entries = await db.query.collectionEntries.findMany({
@@ -439,5 +453,115 @@ describe("Phase 13C: Journal, Rankings & Feed Integration", () => {
       { params: Promise.resolve({ id: customRankingId }) }
     );
     assert.equal(putRes.status, 200);
+  });
+
+  it("10. Adds an unsaved episode with neither episode nor parent series stored in DB (mocks TMDB, verifies parent foreign key and identity)", async () => {
+    const unsavedTvId = 887766;
+    const unsavedEpId = `tv_${unsavedTvId}_s1_e3`;
+
+    // Verify neither parent series nor episode exists in DB beforehand
+    assert.equal(
+      await db.query.mediaItems.findFirst({ where: eq(mediaItems.id, `tv_${unsavedTvId}`) }),
+      undefined
+    );
+    assert.equal(
+      await db.query.mediaItems.findFirst({ where: eq(mediaItems.id, unsavedEpId) }),
+      undefined
+    );
+
+    // Mock TMDB API methods
+    const originalGetTvDetails = tmdb.getTvDetails;
+    const originalGetTvSeason = tmdb.getTvSeason;
+
+    (tmdb as any).getTvDetails = async (id: number) => {
+      if (id === unsavedTvId) {
+        return {
+          id: unsavedTvId,
+          name: "The Unsaved Mystery Series",
+          overview: "A brand new show fetched from TMDB",
+          first_air_date: "2026-02-01",
+          vote_average: 8.9,
+          vote_count: 42,
+        };
+      }
+      return originalGetTvDetails.call(tmdb, id);
+    };
+
+    (tmdb as any).getTvSeason = async (tvId: number, seasonNumber: number) => {
+      if (tvId === unsavedTvId && seasonNumber === 1) {
+        return {
+          id: 555,
+          season_number: 1,
+          episodes: [
+            {
+              id: 998877,
+              name: "The First Discovery",
+              overview: "An unsaved episode appears.",
+              still_path: "/still_ep3.jpg",
+              air_date: "2026-02-15",
+              episode_number: 3,
+              season_number: 1,
+              vote_average: 9.2,
+            },
+          ],
+        };
+      }
+      return originalGetTvSeason.call(tmdb, tvId, seasonNumber);
+    };
+
+    try {
+      // Add unsaved episode to custom collection
+      const res = await addCollectionEntry(
+        postEntryRequest(customRankingId, { mediaItemId: unsavedEpId }, ownerCookie),
+        { params: Promise.resolve({ id: customRankingId }) }
+      );
+      assert.equal(res.status, 200);
+      const data = await res.json();
+      assert.equal(data.success, true);
+      assert.equal(data.entry?.mediaItemId, unsavedEpId);
+
+      // Verify parent TV show was automatically created in DB to satisfy foreign key
+      const parentInDb = await db.query.mediaItems.findFirst({
+        where: eq(mediaItems.id, `tv_${unsavedTvId}`),
+      });
+      assert.ok(parentInDb, "Parent TV series must be created in DB");
+      assert.equal(parentInDb.title, "The Unsaved Mystery Series");
+
+      // Verify episode record was created and correctly points to parent TV show
+      const epInDb = await db.query.mediaItems.findFirst({
+        where: eq(mediaItems.id, unsavedEpId),
+      });
+      assert.ok(epInDb, "Episode must be created in DB");
+      assert.equal(epInDb.parentMediaId, `tv_${unsavedTvId}`);
+      assert.equal(epInDb.seasonNumber, 1);
+      assert.equal(epInDb.episodeNumber, 3);
+      assert.equal(epInDb.title, "The First Discovery");
+
+      // Verify membership in collection
+      const entryInDb = await db.query.collectionEntries.findFirst({
+        where: (ce, { and, eq }) =>
+          and(eq(ce.collectionId, customRankingId), eq(ce.mediaItemId, unsavedEpId)),
+      });
+      assert.ok(entryInDb, "Collection entry must be created");
+
+      trackedCreatedMediaItemIds.push(unsavedEpId);
+      trackedCreatedMediaItemIds.push(`tv_${unsavedTvId}`);
+    } finally {
+      tmdb.getTvDetails = originalGetTvDetails;
+      tmdb.getTvSeason = originalGetTvSeason;
+    }
+  });
+
+  it("11. Handles malformed encoded media IDs gracefully (returns 404 rather than 500)", async () => {
+    // Malformed URI string (invalid escape sequence)
+    const malformedId = "movie_%ZZ_invalid";
+    const res = await addCollectionEntry(
+      postEntryRequest(customRankingId, { mediaItemId: malformedId }, ownerCookie),
+      { params: Promise.resolve({ id: customRankingId }) }
+    );
+    // Must return 404 (not found) and NOT crash with unhandled 500
+    assert.equal(res.status, 404);
+    const body = await res.json();
+    assert.match(body.error, /could not be resolved/i);
   });
 });

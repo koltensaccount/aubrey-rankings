@@ -5,6 +5,7 @@ import { collections, collectionEntries, mediaItems } from "@/db/schema";
 import { tmdb } from "@/lib/tmdb";
 import { nanoid } from "@/lib/utils";
 import { eq, and, desc } from "drizzle-orm";
+import { resolveMediaItem } from "@/lib/media-resolution";
 
 export async function POST(
   request: NextRequest,
@@ -45,134 +46,12 @@ export async function POST(
     let targetMediaItemId: string | null = null;
 
     if (mediaItemId && typeof mediaItemId === "string") {
-      const cleanMediaItemId = mediaItemId.trim();
-      let existingMedia = await db.query.mediaItems.findFirst({
-        where: (m, { eq, or }) =>
-          or(eq(m.id, cleanMediaItemId), eq(m.id, decodeURIComponent(cleanMediaItemId))),
-      });
-
-      if (!existingMedia) {
-        // Attempt to parse and resolve ephemeral or TMDB formatted IDs
-        const epMatch =
-          /^(?:tmdb[-_])?tv[-_](\d+)[-_]s(\d+)[-_]e(\d+)$/i.exec(cleanMediaItemId) ||
-          /^(?:tmdb[-_])?episode[-_](\d+)[-_](\d+)[-_](\d+)$/i.exec(cleanMediaItemId);
-        const movieMatch = /^(?:tmdb[-_])?movie[-_](\d+)$/i.exec(cleanMediaItemId);
-
-        if (epMatch) {
-          const tvId = parseInt(epMatch[1], 10);
-          const sNum = parseInt(epMatch[2], 10);
-          const eNum = parseInt(epMatch[3], 10);
-          try {
-            const seasonData = await tmdb.getTvSeason(tvId, sNum);
-            const ep = seasonData.episodes?.find((e) => e.episode_number === eNum);
-            if (ep) {
-              const canonicalId = `tv_${tvId}_s${sNum}_e${eNum}`;
-              await db
-                .insert(mediaItems)
-                .values({
-                  id: canonicalId,
-                  tmdbId: ep.id,
-                  mediaType: "episode",
-                  title: ep.name || `Episode ${eNum}`,
-                  overview: ep.overview,
-                  stillPath: ep.still_path,
-                  releaseDate: ep.air_date,
-                  seasonNumber: ep.season_number,
-                  episodeNumber: ep.episode_number,
-                  parentMediaId: `tv_${tvId}`,
-                  tmdbMetadata: {
-                    voteAverage: ep.vote_average,
-                  },
-                })
-                .onConflictDoNothing();
-              targetMediaItemId = canonicalId;
-            }
-          } catch {}
-        } else if (movieMatch) {
-          const mId = parseInt(movieMatch[1], 10);
-          try {
-            const movie = await tmdb.getMovieDetails(mId);
-            const canonicalId = `movie_${mId}`;
-            await db
-              .insert(mediaItems)
-              .values({
-                id: canonicalId,
-                tmdbId: mId,
-                mediaType: "movie",
-                title: movie.title,
-                overview: movie.overview,
-                posterPath: movie.poster_path,
-                backdropPath: movie.backdrop_path,
-                releaseDate: movie.release_date,
-                tmdbMetadata: {
-                  voteAverage: movie.vote_average,
-                  runtime: movie.runtime,
-                },
-              })
-              .onConflictDoNothing();
-            targetMediaItemId = canonicalId;
-          } catch {}
-        }
-      }
-
-      if (!targetMediaItemId && existingMedia) {
-        targetMediaItemId = existingMedia.id;
-      }
-    }
-
-    if (!targetMediaItemId && tmdbId && (mediaType === "movie" || !mediaType)) {
-      // Movie from TMDB
-      const movie = await tmdb.getMovieDetails(Number(tmdbId));
-      targetMediaItemId = `movie_${tmdbId}`;
-
-      await db
-        .insert(mediaItems)
-        .values({
-          id: targetMediaItemId,
-          tmdbId: Number(tmdbId),
-          mediaType: "movie",
-          title: movie.title,
-          overview: movie.overview,
-          posterPath: movie.poster_path,
-          backdropPath: movie.backdrop_path,
-          releaseDate: movie.release_date,
-          tmdbMetadata: {
-            voteAverage: movie.vote_average,
-            runtime: movie.runtime,
-          },
-        })
-        .onConflictDoNothing();
-    } else if (!targetMediaItemId && tmdbId && mediaType === "episode" && seasonNumber !== undefined && episodeNumber !== undefined) {
-      // TV Episode from TMDB
-      const seasonData = await tmdb.getTvSeason(Number(tmdbId), Number(seasonNumber));
-      const ep = seasonData.episodes?.find((e) => e.episode_number === Number(episodeNumber));
-
-      if (!ep) {
-        return NextResponse.json({ error: "Episode not found in season" }, { status: 404 });
-      }
-
-      targetMediaItemId = `tv_${tmdbId}_s${seasonNumber}_e${episodeNumber}`;
-
-      await db
-        .insert(mediaItems)
-        .values({
-          id: targetMediaItemId,
-          tmdbId: ep.id,
-          mediaType: "episode",
-          title: ep.name,
-          overview: ep.overview,
-          stillPath: ep.still_path,
-          releaseDate: ep.air_date,
-          seasonNumber: ep.season_number,
-          episodeNumber: ep.episode_number,
-          parentMediaId: `tv_${tmdbId}`,
-          tmdbMetadata: {
-            voteAverage: ep.vote_average,
-          },
-        })
-        .onConflictDoNothing();
-    } else if (!targetMediaItemId && customTitle && typeof customTitle === "string" && customTitle.trim()) {
-      // Custom entry without TMDB
+      targetMediaItemId = await resolveMediaItem(mediaItemId);
+    } else if (tmdbId && mediaType === "episode" && seasonNumber !== undefined && episodeNumber !== undefined) {
+      targetMediaItemId = await resolveMediaItem(`tv_${tmdbId}_s${seasonNumber}_e${episodeNumber}`);
+    } else if (tmdbId && (mediaType === "movie" || !mediaType)) {
+      targetMediaItemId = await resolveMediaItem(`movie_${tmdbId}`);
+    } else if (customTitle && typeof customTitle === "string" && customTitle.trim()) {
       targetMediaItemId = `custom_${Date.now()}_${nanoid(6)}`;
       await db.insert(mediaItems).values({
         id: targetMediaItemId,
@@ -182,11 +61,15 @@ export async function POST(
         posterPath: posterPath || null,
         stillPath: stillPath || null,
       });
-    } else if (!targetMediaItemId) {
+    } else {
       return NextResponse.json(
         { error: "Must provide either mediaItemId, tmdbId for movie/episode, or customTitle" },
         { status: 400 }
       );
+    }
+
+    if (!targetMediaItemId) {
+      return NextResponse.json({ error: "Media item could not be resolved" }, { status: 404 });
     }
 
     // Resolve media item to enforce collection type compatibility

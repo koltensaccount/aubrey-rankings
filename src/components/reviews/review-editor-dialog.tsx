@@ -499,12 +499,20 @@ export function ReviewEditorDialog({
             {visibility === "public" ? (
               <>
                 <Globe size={14} className="text-primary" />
-                <span>Public Feed Publication</span>
+                <span>
+                  {isCurrentlyPublished
+                    ? "Published Public Review"
+                    : "Public Review (When Published)"}
+                </span>
               </>
             ) : visibility === "unlisted" ? (
               <>
                 <Link2 size={14} className="text-primary" />
-                <span>Unlisted Entry (Hidden from Feeds)</span>
+                <span>
+                  {isCurrentlyPublished
+                    ? "Unlisted Review (Live by Direct Link)"
+                    : "Unlisted Entry (When Published)"}
+                </span>
               </>
             ) : (
               <>
@@ -516,17 +524,23 @@ export function ReviewEditorDialog({
           <p className="text-[11px] leading-relaxed">
             {visibility === "public" ? (
               <>
-                This entry will appear in the Community Feed, on this title&apos;s public page, and on your profile.
+                {isCurrentlyPublished
+                  ? "This published review is visible in the Community Feed, on this title's public page, and on your profile."
+                  : "When published, this review will appear in the Community Feed, on this title's public page, and on your profile. Saving as a draft will keep it private and unpublished."}
                 {(scoringMethod === "quick" ? quickScore !== null : Boolean(selectedSystem)) && (
                   <span className="block mt-0.5 font-medium text-foreground">
                     {shareRating
-                      ? "✓ Your numerical rating will be shared publicly."
+                      ? isCurrentlyPublished
+                        ? "✓ Your numerical rating is shared publicly."
+                        : "✓ Your numerical rating will be shared publicly when published."
                       : "🔒 Your numerical rating remains private and will NOT be shown."}
                   </span>
                 )}
               </>
             ) : visibility === "unlisted" ? (
-              "Accessible only to people who have the direct link. Hidden from the Community Feed and search discovery."
+              isCurrentlyPublished
+                ? "Accessible to anyone with the direct link. Hidden from the Community Feed and search discovery."
+                : "When published, this review is accessible only via direct link and hidden from the Community Feed. Saving as a draft keeps it private."
             ) : (
               "Visible exclusively to you in your personal Journal. Never published to the Community Feed or visible to other members."
             )}
