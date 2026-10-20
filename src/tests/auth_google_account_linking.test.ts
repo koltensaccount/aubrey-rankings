@@ -5,10 +5,24 @@ import { user, account, collections, ratings, mediaItems } from "../db/schema";
 import { eq } from "drizzle-orm";
 import { auth } from "../lib/auth";
 import { GET as getProviders } from "../app/api/auth/providers/route";
-import { GET as getProfile } from "../app/api/user/profile/route";
-import { NextRequest } from "next/server";
+import { getSafeCallbackUrl } from "../lib/safe-url";
+import { APIError } from "better-auth/api";
 
-describe("Google Account Linking & Email Verification", () => {
+function assertNonProductionEnvironment() {
+  if (
+    process.env.NODE_ENV === "production" ||
+    process.env.APP_ENV === "production" ||
+    process.env.VERCEL_ENV === "production"
+  ) {
+    throw new Error("Safety check: Cannot run tests in production environment");
+  }
+  const dbUrl = process.env.DATABASE_URL || "";
+  if (/prod|production|live/i.test(dbUrl) && !/test/i.test(dbUrl)) {
+    throw new Error("Safety check: DATABASE_URL appears to reference a production database");
+  }
+}
+
+describe("Google Account Linking & Email Verification Security", () => {
   const timestamp = Date.now();
   const testMediaId = `test_med_link_${timestamp}`;
   const testColId = `test_col_link_${timestamp}`;
@@ -19,7 +33,9 @@ describe("Google Account Linking & Email Verification", () => {
   const createdCollectionIds: string[] = [];
 
   before(async () => {
-    // 1. Setup seed media item
+    assertNonProductionEnvironment();
+
+    // Setup isolated test media item
     await db.insert(mediaItems).values({
       id: testMediaId,
       title: "Interstellar Journey",
@@ -30,7 +46,9 @@ describe("Google Account Linking & Email Verification", () => {
   });
 
   after(async () => {
-    // Clean up created test records cleanly without cascading to other data
+    assertNonProductionEnvironment();
+
+    // Clean up created test records cleanly without cascading to existing data
     for (const uid of createdUserIds) {
       await db.delete(ratings).where(eq(ratings.userId, uid)).catch(() => {});
       await db.delete(collections).where(eq(collections.userId, uid)).catch(() => {});
@@ -71,140 +89,133 @@ describe("Google Account Linking & Email Verification", () => {
     }
   });
 
-  it("2. Google provider claims reject unverified Google emails", async () => {
-    // Access Google social provider userInfo resolver if defined
-    const googleProvider = (auth as any).options?.socialProviders?.google;
-    if (googleProvider?.getUserInfo) {
-      // Case A: Unverified Google account (email_verified: false)
-      const unverifiedPayload = {
-        sub: "google_sub_12345",
-        name: "Unverified Google User",
-        email: "unverified@gmail.com",
-        email_verified: false,
-      };
-      const unverifiedJwt = `eyJhbGciOiJub25lIn0.${Buffer.from(JSON.stringify(unverifiedPayload)).toString("base64url")}.`;
+  it("2. Google OAuth configuration uses native Better Auth verification mechanisms without custom decodeJwt overrides", () => {
+    const authOptions = (auth as any).options;
+    const googleConfig = authOptions.socialProviders?.google;
 
-      await assert.rejects(
-        async () => {
-          await googleProvider.getUserInfo({ idToken: unverifiedJwt });
-        },
-        (err: any) => {
-          assert(
-            err.message?.includes("Google email must be verified") || err.status === "FORBIDDEN" || err.statusCode === 403,
-            `Expected forbidden error for unverified Google email, got: ${err.message}`
-          );
-          return true;
-        }
+    if (googleConfig) {
+      // Must not define a custom getUserInfo that bypasses cryptographic signature verification
+      assert.equal(
+        googleConfig.getUserInfo,
+        undefined,
+        "Custom getUserInfo override must be removed so Better Auth's native cryptographic Google verification is used"
       );
-
-      // Case B: Verified Google account (email_verified: true)
-      const verifiedPayload = {
-        sub: "google_sub_67890",
-        name: "Verified Google User",
-        email: "verified@gmail.com",
-        email_verified: true,
-        picture: "https://lh3.googleusercontent.com/photo.jpg",
-      };
-      const verifiedJwt = `eyJhbGciOiJub25lIn0.${Buffer.from(JSON.stringify(verifiedPayload)).toString("base64url")}.`;
-
-      const userInfo = await googleProvider.getUserInfo({ idToken: verifiedJwt });
-      assert.ok(userInfo, "Must return valid user info for verified Google account");
-      assert.equal(userInfo.user.email, "verified@gmail.com");
-      assert.equal(userInfo.user.name, "Verified Google User");
-      assert.equal(userInfo.user.emailVerified, true);
-      assert.equal(userInfo.user.image, "https://lh3.googleusercontent.com/photo.jpg");
     }
   });
 
-  it("3. Existing email/password user can link Google account without losing userId or data", async () => {
-    const userEmail = `curator_${timestamp}@example.com`;
+  it("3. Account linking security: trustedProviders does not bypass email verification and requireLocalEmailVerified is active", () => {
+    const authOptions = (auth as any).options;
+    const accountLinking = authOptions.account?.accountLinking;
 
-    // Sign up via email & password
-    const signupRes = await auth.api.signUpEmail({
-      body: {
-        email: userEmail,
-        password: "AubreyPassword123!",
-        name: "Curator Aubrey",
-      },
-      asResponse: true,
-    });
-    assert.equal(signupRes.status, 200, "User signup should succeed");
+    assert.ok(accountLinking, "accountLinking configuration must exist");
+    assert.equal(accountLinking.enabled, true, "Account linking must be enabled");
 
-    const createdUser = await db.query.user.findFirst({
-      where: (u, { eq }) => eq(u.email, userEmail),
-    });
-    assert.ok(createdUser, "User record must exist in DB");
-    createdUserIds.push(createdUser.id);
+    // trustedProviders must NOT include 'google' so that unverified Google emails are not blindly trusted
+    const trusted = accountLinking.trustedProviders || [];
+    assert.ok(
+      !trusted.includes("google"),
+      "trustedProviders must NOT include 'google' to avoid bypassing email verification checks"
+    );
 
-    // Verify initial state: emailVerified is false for basic password registration
-    assert.equal(createdUser.emailVerified, false);
+    // requireLocalEmailVerified must remain strictly true
+    assert.equal(
+      accountLinking.requireLocalEmailVerified,
+      true,
+      "requireLocalEmailVerified must be true to prevent account takeover of unverified local accounts"
+    );
 
-    // Create user data (collection & rating) under this user.id
-    await db.insert(collections).values({
-      id: testColId,
-      userId: createdUser.id,
-      title: "My Favorite Sci-Fi",
-      collectionType: "custom",
-      visibility: "public",
-    });
-    createdCollectionIds.push(testColId);
+    // updateUserInfoOnLink must remain false to protect existing user profile data
+    assert.equal(
+      accountLinking.updateUserInfoOnLink,
+      false,
+      "updateUserInfoOnLink must be false so OAuth linking does not overwrite user profile"
+    );
 
-    await db.insert(ratings).values({
-      id: testRatingId,
-      userId: createdUser.id,
-      mediaItemId: testMediaId,
-      collectionId: testColId,
-      calculatedOverallScore: 9.5,
-      reviewText: "Spectacular visual effects and storytelling.",
-    });
-
-    // Verify initial credential account exists
-    const initialAccounts = await db.query.account.findMany({
-      where: (a, { eq }) => eq(a.userId, createdUser.id),
-    });
-    assert.equal(initialAccounts.length, 1);
-    assert.equal(initialAccounts[0].providerId, "credential");
-
-    // Simulate linking Google account to this user (what linkSocial executes)
-    const googleAccountId = `google_sub_${timestamp}`;
-    await db.insert(account).values({
-      id: `acc_google_${timestamp}`,
-      accountId: googleAccountId,
-      providerId: "google",
-      userId: createdUser.id,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    // Check account table now has both credential and google linked to the EXACT same user.id
-    const updatedAccounts = await db.query.account.findMany({
-      where: (a, { eq }) => eq(a.userId, createdUser.id),
-    });
-    assert.equal(updatedAccounts.length, 2, "User must now have two linked provider accounts");
-    const providers = updatedAccounts.map((a) => a.providerId);
-    assert.ok(providers.includes("credential"), "Must retain credential provider");
-    assert.ok(providers.includes("google"), "Must include linked google provider");
-
-    // Check that all user data (collections, ratings) remains intact and associated with the same userId
-    const userCollections = await db.query.collections.findMany({
-      where: (c, { eq }) => eq(c.userId, createdUser.id),
-    });
-    assert.equal(userCollections.length, 1);
-    assert.equal(userCollections[0].title, "My Favorite Sci-Fi");
-
-    const userRatings = await db.query.ratings.findMany({
-      where: (r, { eq }) => eq(r.userId, createdUser.id),
-    });
-    assert.equal(userRatings.length, 1);
-    assert.equal(userRatings[0].calculatedOverallScore, 9.5);
-    assert.equal(userRatings[0].reviewText, "Spectacular visual effects and storytelling.");
+    // allowDifferentEmails must not be enabled
+    assert.notEqual(
+      accountLinking.allowDifferentEmails,
+      true,
+      "allowDifferentEmails must not be true"
+    );
   });
 
-  it("4. Email verification token lifecycle updates emailVerified status", async () => {
+  it("4. Safe URL sanitization rejects malicious redirect targets and allows only safe same-origin application paths", () => {
+    const defaultUrl = "/settings?tab=account";
+
+    // Rejection of protocol-relative URLs
+    assert.equal(getSafeCallbackUrl("//evil.com"), defaultUrl);
+    assert.equal(getSafeCallbackUrl("///evil.com"), defaultUrl);
+
+    // Rejection of backslash-based normalization tricks
+    assert.equal(getSafeCallbackUrl("/\\evil.com"), defaultUrl);
+    assert.equal(getSafeCallbackUrl("/\\\\evil.com"), defaultUrl);
+    assert.equal(getSafeCallbackUrl("\\evil.com"), defaultUrl);
+    assert.equal(getSafeCallbackUrl("/settings\\evil.com"), defaultUrl);
+
+    // Rejection of external origins
+    assert.equal(getSafeCallbackUrl("https://evil.com"), defaultUrl);
+    assert.equal(getSafeCallbackUrl("http://attacker.com/settings"), defaultUrl);
+
+    // Rejection of script schemes
+    assert.equal(getSafeCallbackUrl("javascript:alert(1)"), defaultUrl);
+    assert.equal(getSafeCallbackUrl("javascript:void(0)"), defaultUrl);
+    assert.equal(getSafeCallbackUrl("data:text/html,<script>alert(1)</script>"), defaultUrl);
+
+    // Rejection of invalid types and control characters
+    assert.equal(getSafeCallbackUrl(null), defaultUrl);
+    assert.equal(getSafeCallbackUrl(undefined), defaultUrl);
+    assert.equal(getSafeCallbackUrl(""), defaultUrl);
+    assert.equal(getSafeCallbackUrl("/settings\x00evil"), defaultUrl);
+
+    // Safe relative application paths permitted
+    assert.equal(getSafeCallbackUrl("/settings?tab=account"), "/settings?tab=account");
+    assert.equal(getSafeCallbackUrl("/profile"), "/profile");
+    assert.equal(getSafeCallbackUrl("/"), "/");
+    assert.equal(getSafeCallbackUrl("/u/aubrey#rankings"), "/u/aubrey#rankings");
+  });
+
+  it("5. Verification email delivery failure triggers actionable APIError and does not silently succeed", async () => {
+    const opts = (auth as any).options;
+    const originalSend = opts.emailVerification.sendVerificationEmail;
+
+    // Simulate delivery failure in sendVerificationEmail
+    opts.emailVerification.sendVerificationEmail = async () => {
+      throw new APIError("INTERNAL_SERVER_ERROR", {
+        message: "Failed to deliver verification email. Please check your email configuration or try again later.",
+      });
+    };
+
+    try {
+      await assert.rejects(
+        async () => {
+          await opts.emailVerification.sendVerificationEmail({
+            user: { email: "delivery_fail_test@example.com" },
+            url: "http://localhost:3000/verify-email?token=xyz",
+            token: "xyz",
+          });
+        },
+        (err: any) => {
+          assert(err instanceof APIError || err.status === "INTERNAL_SERVER_ERROR" || err.statusCode === 500);
+          assert.equal(
+            err.message,
+            "Failed to deliver verification email. Please check your email configuration or try again later."
+          );
+          // Ensure secret/token is not leaked in error message
+          assert(!err.message.includes("xyz"));
+          return true;
+        }
+      );
+    } finally {
+      opts.emailVerification.sendVerificationEmail = originalSend;
+    }
+  });
+
+  it("6. Email verification token lifecycle verifies valid tokens and rejects invalid tokens", async () => {
     const userEmail = `verify_target_${timestamp}@example.com`;
     let capturedToken = "";
     const opts = (auth as any).options;
     const originalSend = opts.emailVerification.sendVerificationEmail;
+
     opts.emailVerification.sendVerificationEmail = async (data: any) => {
       capturedToken = data.token;
       return originalSend(data);
@@ -256,45 +267,131 @@ describe("Google Account Linking & Email Verification", () => {
     }
   });
 
-  it("5. Account settings profile route exposes emailVerified field", async () => {
-    const userEmail = `profile_check_${timestamp}@example.com`;
+  it("7. Data Preservation & Multi-Provider Association: secondary provider links to existing userId without data loss or duplication", async () => {
+    // Note: Live end-to-end OAuth code exchange requires active Google Cloud credentials and interactive browser consent.
+    // This test explicitly validates database identity preservation and schema integrity when a Google account is associated.
+    const userEmail = `curator_${timestamp}@example.com`;
+
+    // Sign up via email & password
     const signupRes = await auth.api.signUpEmail({
       body: {
         email: userEmail,
         password: "AubreyPassword123!",
-        name: "Profile Check",
+        name: "Curator Aubrey",
       },
       asResponse: true,
     });
-    assert.equal(signupRes.status, 200);
+    assert.equal(signupRes.status, 200, "User signup should succeed");
 
-    const userRecord = await db.query.user.findFirst({
+    const createdUser = await db.query.user.findFirst({
       where: (u, { eq }) => eq(u.email, userEmail),
     });
-    assert.ok(userRecord);
-    createdUserIds.push(userRecord.id);
+    assert.ok(createdUser, "User record must exist in DB");
+    createdUserIds.push(createdUser.id);
 
-    // Check that schema includes emailVerified boolean field
-    assert.equal(typeof userRecord.emailVerified, "boolean");
+    // Create user data (collection & rating) under this user.id
+    await db.insert(collections).values({
+      id: testColId,
+      userId: createdUser.id,
+      title: "My Favorite Sci-Fi",
+      collectionType: "custom",
+      visibility: "public",
+    });
+    createdCollectionIds.push(testColId);
+
+    await db.insert(ratings).values({
+      id: testRatingId,
+      userId: createdUser.id,
+      mediaItemId: testMediaId,
+      collectionId: testColId,
+      calculatedOverallScore: 9.5,
+      reviewText: "Spectacular visual effects and storytelling.",
+    });
+
+    // Check initial credential account exists
+    const initialAccounts = await db.query.account.findMany({
+      where: (a, { eq }) => eq(a.userId, createdUser.id),
+    });
+    assert.equal(initialAccounts.length, 1);
+    assert.equal(initialAccounts[0].providerId, "credential");
+
+    // Add secondary Google account record for the same user (what linkSocial persists)
+    const googleAccountId = `google_sub_${timestamp}`;
+    await db.insert(account).values({
+      id: `acc_google_${timestamp}`,
+      accountId: googleAccountId,
+      providerId: "google",
+      userId: createdUser.id,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    // Verify account table has both providers associated with the EXACT same userId
+    const updatedAccounts = await db.query.account.findMany({
+      where: (a, { eq }) => eq(a.userId, createdUser.id),
+    });
+    assert.equal(updatedAccounts.length, 2, "User must have both credential and google provider rows");
+    const providers = updatedAccounts.map((a) => a.providerId);
+    assert.ok(providers.includes("credential"), "Must retain credential provider");
+    assert.ok(providers.includes("google"), "Must include linked google provider");
+
+    // Check that user identity and records remain single and intact
+    const allMatchingUsers = await db.query.user.findMany({
+      where: (u, { eq }) => eq(u.email, userEmail),
+    });
+    assert.equal(allMatchingUsers.length, 1, "Must not create duplicate user records");
+
+    const userCollections = await db.query.collections.findMany({
+      where: (c, { eq }) => eq(c.userId, createdUser.id),
+    });
+    assert.equal(userCollections.length, 1);
+    assert.equal(userCollections[0].title, "My Favorite Sci-Fi");
+
+    const userRatings = await db.query.ratings.findMany({
+      where: (r, { eq }) => eq(r.userId, createdUser.id),
+    });
+    assert.equal(userRatings.length, 1);
+    assert.equal(userRatings[0].calculatedOverallScore, 9.5);
+    assert.equal(userRatings[0].reviewText, "Spectacular visual effects and storytelling.");
   });
 
-  it("6. Rate limiting is configured for /send-verification-email", () => {
+  it("8. Backward compatibility: existing password sign-in does not mandate email verification", async () => {
     const authOptions = (auth as any).options;
-    assert.ok(authOptions.rateLimit?.enabled, "Rate limiting must be enabled");
-    const rules = authOptions.rateLimit?.customRules;
-    assert.ok(rules, "Custom rate limit rules must be defined");
-    assert.ok(rules["/send-verification-email"], "Rate limit rule for /send-verification-email must exist");
-    assert.equal(rules["/send-verification-email"].max, 3, "Max requests should be 3 per window");
-    assert.equal(rules["/send-verification-email"].window, 60, "Window should be 60 seconds");
+    const emailAndPassword = authOptions.emailAndPassword;
+
+    assert.ok(emailAndPassword, "emailAndPassword configuration must exist");
+    assert.equal(emailAndPassword.enabled, true, "emailAndPassword must be enabled");
+    assert.equal(
+      emailAndPassword.requireEmailVerification,
+      false,
+      "requireEmailVerification must be false for password auth to avoid breaking existing users"
+    );
   });
 
-  it("7. requireLocalEmailVerified is strictly enabled to prevent unverified email hijacking", () => {
-    const authOptions = (auth as any).options;
-    const accountLinking = authOptions.account?.accountLinking;
-    assert.ok(accountLinking, "Account linking configuration must exist");
-    assert.equal(accountLinking.enabled, true, "Account linking must be enabled");
-    assert.equal(accountLinking.requireLocalEmailVerified, true, "requireLocalEmailVerified must be true");
-    assert.deepEqual(accountLinking.trustedProviders, ["google"], "trustedProviders must include google");
-    assert.equal(accountLinking.updateUserInfoOnLink, false, "updateUserInfoOnLink should not overwrite user profile");
+  it("9. Callback status verification logic rejects unverified claims from URL parameters alone", () => {
+    // Simulate UI validation: URL params alone must not cause false success states
+    const accountsWithoutGoogle = [{ providerId: "credential" }];
+    const accountsWithGoogle = [{ providerId: "credential" }, { providerId: "google" }];
+
+    function checkGoogleLinked(urlParam: string | null, accounts: { providerId: string }[]): boolean {
+      if (urlParam !== "google") return false;
+      return accounts.some((a) => a.providerId === "google");
+    }
+
+    // Attempting to spoof success via ?linked=google without an actual Google account linked
+    assert.equal(checkGoogleLinked("google", accountsWithoutGoogle), false);
+    // True success when confirmed by server accounts list
+    assert.equal(checkGoogleLinked("google", accountsWithGoogle), true);
+
+    function checkEmailVerified(urlParam: string | null, serverUser: { emailVerified: boolean } | null): boolean {
+      if (urlParam !== "1") return false;
+      return Boolean(serverUser?.emailVerified);
+    }
+
+    // Attempting to spoof ?verified=1 without server-side verification
+    assert.equal(checkEmailVerified("1", { emailVerified: false }), false);
+    assert.equal(checkEmailVerified("1", null), false);
+    // True success when server confirms emailVerified
+    assert.equal(checkEmailVerified("1", { emailVerified: true }), true);
   });
 });

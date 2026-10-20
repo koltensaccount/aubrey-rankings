@@ -1,6 +1,5 @@
 import { betterAuth } from "better-auth";
 import { APIError } from "better-auth/api";
-import { decodeJwt } from "jose";
 import { sql } from "drizzle-orm";
 import { nextCookies } from "better-auth/next-js";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -62,7 +61,7 @@ export const auth = betterAuth({
   account: {
     accountLinking: {
       enabled: true,
-      trustedProviders: ["google"],
+      trustedProviders: [], // Do not bypass email verification checks; require Google to prove email ownership
       requireLocalEmailVerified: true,
       updateUserInfoOnLink: false,
     },
@@ -102,6 +101,9 @@ export const auth = betterAuth({
       });
       if (!delivery.success) {
         console.error("[Email Verification] Delivery failed for:", data.user.email);
+        throw new APIError("INTERNAL_SERVER_ERROR", {
+          message: "Failed to deliver verification email. Please check your email configuration or try again later.",
+        });
       }
     },
   },
@@ -133,59 +135,6 @@ export const auth = betterAuth({
           google: {
             clientId: process.env.GOOGLE_CLIENT_ID,
             clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-            async getUserInfo(token) {
-              let email = "";
-              let emailVerified = false;
-              let name = "";
-              let picture: string | null = null;
-              let sub = "";
-              let data: any = {};
-
-              if (token.idToken) {
-                const claims = decodeJwt(token.idToken);
-                sub = (claims.sub as string) || "";
-                name = (claims.name as string) || "";
-                email = (claims.email as string) || "";
-                picture = (claims.picture as string) || null;
-                emailVerified = Boolean(claims.email_verified);
-                data = claims;
-              } else if (token.accessToken) {
-                try {
-                  const res = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
-                    headers: { Authorization: `Bearer ${token.accessToken}` },
-                  });
-                  if (res.ok) {
-                    data = await res.json();
-                    sub = data.sub || "";
-                    name = data.name || "";
-                    email = data.email || "";
-                    picture = data.picture || null;
-                    emailVerified = Boolean(data.email_verified);
-                  }
-                } catch {}
-              }
-
-              if (!email || !sub) {
-                return null;
-              }
-
-              // Tighten provider trust: Google MUST confirm email ownership
-              if (!emailVerified) {
-                throw new APIError("FORBIDDEN", {
-                  message: "Google email must be verified to sign in or link your Aubrey account.",
-                });
-              }
-
-              return {
-                user: {
-                  name: name || "Aubrey User",
-                  email,
-                  image: picture || undefined,
-                  emailVerified: true,
-                },
-                data,
-              };
-            },
           },
         }
       : {}),

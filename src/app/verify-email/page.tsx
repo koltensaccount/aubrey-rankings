@@ -4,13 +4,14 @@ import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { authClient } from "@/lib/auth-client";
+import { getSafeCallbackUrl } from "@/lib/safe-url";
 import { Check, AlertCircle, Loader2, ArrowRight } from "lucide-react";
 
 function VerifyEmailContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token");
-  const callbackURL = searchParams.get("callbackURL") || "/settings?tab=account";
+  const callbackURL = getSafeCallbackUrl(searchParams.get("callbackURL"), "/settings?tab=account");
 
   const [status, setStatus] = useState<"verifying" | "success" | "error">(
     token ? "verifying" : "error"

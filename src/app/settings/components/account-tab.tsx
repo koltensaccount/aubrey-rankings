@@ -80,11 +80,13 @@ export function AccountTab() {
           setProfileBio(data.user.bio || "");
           setProfileImage(data.user.image || "");
           setProfileEmailVerified(Boolean(data.user.emailVerified));
+          return data.user;
         }
       }
     } catch (err) {
       console.error("[Fetch Profile Error]", err);
     }
+    return null;
   };
 
   const fetchAccounts = async () => {
@@ -93,12 +95,14 @@ export function AccountTab() {
       const res = await authClient.listAccounts();
       if (res?.data && Array.isArray(res.data)) {
         setAccounts(res.data);
+        return res.data;
       }
     } catch (err) {
       console.error("[List Accounts Error]", err);
     } finally {
       setLoadingAccounts(false);
     }
+    return null;
   };
 
   // Cooldown countdown timer for resend verification
@@ -117,10 +121,22 @@ export function AccountTab() {
     const verifiedParam = searchParams.get("verified");
 
     if (linked === "google") {
-      fetchAccounts();
-      setConnectSuccess(
-        "Google account successfully connected! You can now sign in using either Google or your email/password."
-      );
+      fetchAccounts()
+        .then((accountList) => {
+          if (accountList && accountList.some((a: any) => a.providerId === "google")) {
+            setConnectSuccess(
+              "Google account successfully connected! You can now sign in using either Google or your email/password."
+            );
+            setConnectError(null);
+          } else {
+            setConnectError("Could not confirm Google account connection. The account may not have been linked.");
+            setConnectSuccess(null);
+          }
+        })
+        .catch(() => {
+          setConnectError("Failed to verify connected accounts status. Please refresh the page.");
+          setConnectSuccess(null);
+        });
       cleanUrlParam("linked");
     } else if (errorParam) {
       if (errorParam === "account_already_linked" || errorParam === "account_already_linked_to_different_user") {
@@ -134,12 +150,28 @@ export function AccountTab() {
       } else {
         setConnectError("Google account connection could not be completed. Please try again.");
       }
+      setConnectSuccess(null);
       cleanUrlParam("error");
     }
 
     if (verifiedParam === "1") {
-      setProfileEmailVerified(true);
-      setVerificationResendSuccess("Your email address was successfully verified!");
+      fetchProfile()
+        .then((userData) => {
+          if (userData && Boolean(userData.emailVerified)) {
+            setProfileEmailVerified(true);
+            setVerificationResendSuccess("Your email address was successfully verified!");
+            setVerificationResendError(null);
+          } else {
+            setVerificationResendError(
+              "Email verification could not be confirmed. Please request a new verification email."
+            );
+            setVerificationResendSuccess(null);
+          }
+        })
+        .catch(() => {
+          setVerificationResendError("Failed to check email verification status.");
+          setVerificationResendSuccess(null);
+        });
       cleanUrlParam("verified");
     }
   }, [searchParams]);
@@ -166,7 +198,7 @@ export function AccountTab() {
     try {
       const res = await authClient.sendVerificationEmail({
         email: emailToVerify,
-        callbackURL: window.location.origin + "/settings?tab=account&verified=1",
+        callbackURL: "/settings?tab=account&verified=1",
       });
 
       if (res?.error) {
