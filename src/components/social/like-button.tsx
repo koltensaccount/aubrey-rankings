@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Heart, Loader2 } from "lucide-react";
+import { Heart } from "lucide-react";
+import { LikersDialog } from "@/components/social/likers-dialog";
 
 interface LikeButtonProps {
   collectionId?: string;
@@ -19,6 +20,7 @@ export function LikeButton({
   const [isLiked, setIsLiked] = useState(initialIsLiked);
   const [likeCount, setLikeCount] = useState(initialLikeCount);
   const [loading, setLoading] = useState(false);
+  const [listOpen, setListOpen] = useState(false);
 
   useEffect(() => {
     // Check initial like status
@@ -89,25 +91,16 @@ export function LikeButton({
     }
   };
 
-  return (
-    <button
-      onClick={handleToggleLike}
-      disabled={loading}
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-        isLiked
-          ? "bg-rose-500/15 text-rose-500 dark:text-rose-400 border border-rose-500/30"
-          : "bg-surface hover:bg-surface-elevated text-foreground border border-border"
-      }`}
-      title={isLiked ? (reviewId ? "Unlike review" : "Unlike ranking") : (reviewId ? "Like review" : "Like ranking")}
-      aria-label={reviewId ? "Like review" : "Like ranking"}
-    >
-      <Heart
-        size={14}
-        className={`transition-transform duration-200 ${
-          isLiked ? "fill-rose-500 text-rose-500 dark:fill-rose-400 dark:text-rose-400 scale-110" : "text-muted-foreground"
-        }`}
-      />
-      <span className="font-semibold text-xs">{likeCount}</span>
-    </button>
-  );
+  const label = reviewId ? "review" : "ranking";
+  return <>
+    <span className={`inline-flex items-center rounded-full text-xs font-medium border transition-all ${isLiked ? "bg-primary/15 text-primary border-primary/30" : "bg-surface text-foreground border-border"}`}>
+      <button type="button" onClick={handleToggleLike} disabled={loading} className="min-h-9 pl-3 pr-2 rounded-l-full hover:bg-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60" title={isLiked ? `Unlike ${label}` : `Like ${label}`} aria-label={isLiked ? `Unlike ${label}` : `Like ${label}`}>
+        <Heart size={14} className={`transition-transform duration-200 ${isLiked ? "fill-current scale-110" : "text-muted-foreground"}`} />
+      </button>
+      <button type="button" onClick={() => setListOpen(true)} className="min-h-9 min-w-8 pl-1 pr-3 rounded-r-full hover:bg-surface-elevated focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring font-semibold" aria-label={`View ${likeCount} ${likeCount === 1 ? "person" : "people"} who liked this ${label}`}>
+        {likeCount}
+      </button>
+    </span>
+    <LikersDialog open={listOpen} onOpenChange={setListOpen} collectionId={collectionId} reviewId={reviewId} />
+  </>;
 }

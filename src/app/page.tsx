@@ -456,7 +456,7 @@ export default async function HomePage() {
                         {review.title && review.mediaItem?.title && <p className="text-xs text-muted-foreground">on {review.mediaItem.title}</p>}
                         <SpoilerConcealedText content={isDraft ? (review.draftContent || review.content) : review.content} format={(isDraft ? review.draftContentFormat || review.contentFormat : review.contentFormat) as "plain" | "markdown"} isSpoiler={review.isSpoiler} />
                       </div>
-                      <Link href={isDraft ? `/review/${review.id}?edit=1` : `/review/${review.id}`} className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-hover">
+                      <Link href={isDraft && review.isJournal ? `/media/${review.mediaItemId}?journal=1` : isDraft ? `/review/${review.id}?edit=1` : `/review/${review.id}`} className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-hover">
                         {isDraft ? <PenLine size={14} /> : null}
                         {isDraft ? "Resume" : "Open"}
                       </Link>

@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { notifications } from "@/db/schema";
 import { eq, and, sql, desc, isNull } from "drizzle-orm";
 import { getBlockedUserIds } from "@/lib/safety";
+import { notificationLinks } from "@/lib/notification-links";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(request);
@@ -70,7 +71,7 @@ export async function GET(request: NextRequest) {
   });
 
   return NextResponse.json({
-    notifications: list,
+    notifications: list.map((item) => ({ ...item, links: notificationLinks(item) })),
     unreadCount,
   });
 }

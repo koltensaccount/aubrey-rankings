@@ -3,10 +3,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
 import { likes, collections, reviews } from "@/db/schema";
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, desc } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { createNotification } from "@/lib/notifications";
-import { isBlocked, canInteract } from "@/lib/safety";
+import { isBlocked, canInteract, getBlockedUserIds } from "@/lib/safety";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +14,9 @@ export async function GET(request: NextRequest) {
   const session = await getServerSession(request);
   const collectionId = request.nextUrl.searchParams.get("collectionId");
   const reviewId = request.nextUrl.searchParams.get("reviewId");
+  const list = request.nextUrl.searchParams.get("list") === "true";
+  const limit = Math.min(Math.max(Number(request.nextUrl.searchParams.get("limit")) || 30, 1), 40);
+  const offset = Math.min(Math.max(Number(request.nextUrl.searchParams.get("offset")) || 0, 0), 400);
 
   if (!collectionId && !reviewId) {
     return NextResponse.json({ error: "collectionId or reviewId required" }, { status: 400 });
@@ -44,6 +47,17 @@ export async function GET(request: NextRequest) {
       .from(likes)
       .where(eq(likes.reviewId, reviewId));
     const likeCount = Number(likeCountRes[0]?.count || 0);
+
+    if (list) {
+      try { requireRateLimit(`like-list:${session?.user.id || "anonymous"}`, session ? 60 : 20); } catch { return NextResponse.json({ error: "Too many requests" }, { status: 429 }); }
+      const blocked = session ? [...await getBlockedUserIds(session.user.id)] : [];
+      const rows = await db.query.likes.findMany({
+        where: (l, { and, eq, notInArray }) => and(eq(l.reviewId, reviewId), ...(blocked.length ? [notInArray(l.userId, blocked)] : [])),
+        orderBy: [desc(likes.createdAt)], offset, limit: limit + 1,
+        with: { user: { columns: { id: true, name: true, username: true, image: true } } },
+      });
+      return NextResponse.json({ users: rows.slice(0, limit).filter((row) => row.user.username).map((row) => ({ ...row.user, username: row.user.username! })), likeCount, hasMore: rows.length > limit });
+    }
 
     let isLiked = false;
     if (session) {
@@ -78,6 +92,17 @@ export async function GET(request: NextRequest) {
     .from(likes)
     .where(eq(likes.collectionId, collectionId!));
   const likeCount = Number(likeCountRes[0]?.count || 0);
+
+  if (list) {
+    try { requireRateLimit(`like-list:${session?.user.id || "anonymous"}`, session ? 60 : 20); } catch { return NextResponse.json({ error: "Too many requests" }, { status: 429 }); }
+    const blocked = session ? [...await getBlockedUserIds(session.user.id)] : [];
+    const rows = await db.query.likes.findMany({
+      where: (l, { and, eq, notInArray }) => and(eq(l.collectionId, collectionId!), ...(blocked.length ? [notInArray(l.userId, blocked)] : [])),
+      orderBy: [desc(likes.createdAt)], offset, limit: limit + 1,
+      with: { user: { columns: { id: true, name: true, username: true, image: true } } },
+    });
+    return NextResponse.json({ users: rows.slice(0, limit).filter((row) => row.user.username).map((row) => ({ ...row.user, username: row.user.username! })), likeCount, hasMore: rows.length > limit });
+  }
 
   let isLiked = false;
   if (session) {

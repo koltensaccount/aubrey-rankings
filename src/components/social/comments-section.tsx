@@ -88,6 +88,14 @@ export function CommentsSection({
   const [submittingReply, setSubmittingReply] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!loading && window.location.hash.startsWith("#comment-")) {
+      const target = document.getElementById(window.location.hash.slice(1));
+      target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      target?.focus({ preventScroll: true });
+    }
+  }, [loading, comments]);
+
   // Edit comment state (authors only)
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
@@ -491,7 +499,7 @@ export function CommentsSection({
         </div>
       ) : comments.length === 0 ? (
         <div className="py-8 text-center text-xs text-muted-foreground border border-dashed border-border rounded-comment">
-          No critical notes yet. Be the first to comment on this {reviewId ? "review" : "canon"}.
+          No comments yet. Be the first to comment on this {reviewId ? "review" : "ranking"}.
         </div>
       ) : (
         <div className="space-y-4">
@@ -518,7 +526,9 @@ export function CommentsSection({
             return (
               <div
                 key={item.id}
-                className="group relative rounded-comment border border-border-card bg-card/80 hover:bg-card p-4 transition-colors space-y-3"
+                id={`comment-${item.id}`}
+                tabIndex={-1}
+                className="group relative scroll-mt-24 rounded-comment border border-border-card bg-card/80 hover:bg-card p-4 transition-colors space-y-3 target:ring-2 target:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
               >
                 {/* Header: Author + Timestamp + Three-dot Menu */}
                 <div className="flex items-center justify-between">
@@ -861,7 +871,9 @@ export function CommentsSection({
                       return (
                         <div
                           key={reply.id}
-                          className="rounded-comment border border-border/80 bg-surface/60 p-3 space-y-2 transition-colors"
+                          id={`comment-${reply.id}`}
+                          tabIndex={-1}
+                          className="scroll-mt-24 rounded-comment border border-border/80 bg-surface/60 p-3 space-y-2 transition-colors target:ring-2 target:ring-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
                         >
                           {/* Reply Header */}
                           <div className="flex items-center justify-between">

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { Pencil, Plus } from "lucide-react";
@@ -15,6 +15,7 @@ interface WriteReviewButtonProps {
   existingReview?: ReviewEditorData | null;
   initialQuickScore?: number | null;
   initialDetailedRating?: { ratingSystemId: string; categoryScores: Array<{ categoryId: string; score: number }> } | null;
+  autoOpen?: boolean;
 }
 
 export function WriteReviewButton({
@@ -25,10 +26,13 @@ export function WriteReviewButton({
   existingReview,
   initialQuickScore,
   initialDetailedRating,
+  autoOpen = false,
 }: WriteReviewButtonProps) {
   const router = useRouter();
   const { data: session } = useSession();
   const [isOpen, setIsOpen] = useState(false);
+
+  useEffect(() => { if (autoOpen && session?.user) setIsOpen(true); }, [autoOpen, session?.user]);
 
   const handleClick = () => {
     setIsOpen(true);

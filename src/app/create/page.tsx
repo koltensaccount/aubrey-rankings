@@ -24,9 +24,11 @@ function CreateRankingContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
-  const [rankingType, setRankingType] = useState<RankingType>(
-    (searchParams.get("type") as RankingType) || "tv_show"
-  );
+  const requestedType = searchParams.get("type");
+  const sourceType = searchParams.get("sourceType");
+  const suggestedType: RankingType = requestedType === "tv_show" || requestedType === "movie_franchise" || requestedType === "custom"
+    ? requestedType : sourceType === "movie" ? "movie_franchise" : sourceType === "episode" ? "custom" : "tv_show";
+  const [rankingType, setRankingType] = useState<RankingType>(suggestedType);
   const [ratingMethod, setRatingMethod] = useState<RatingMethod>(
     (searchParams.get("method") as RatingMethod) || "numerical"
   );
@@ -38,7 +40,7 @@ function CreateRankingContent() {
   const [selectedItem, setSelectedItem] = useState<any | null>(null);
 
   // Custom collection fields
-  const [customTitle, setCustomTitle] = useState("");
+  const [customTitle, setCustomTitle] = useState(sourceType === "episode" && searchParams.get("suggest") ? `${searchParams.get("suggest")} ranking` : "");
   const [customDescription, setCustomDescription] = useState("");
 
   const [loading, setLoading] = useState(false);
@@ -132,8 +134,9 @@ function CreateRankingContent() {
           Create New Ranking
         </h1>
         <p className="text-xs text-muted-foreground mt-1">
-          Select a format to build an episode-by-episode TV ranking, franchise canon, or custom list.
+          Select a format to build an episode-by-episode TV ranking, franchise ranking, or custom list.
         </p>
+        {searchParams.get("suggest") && <p className="text-xs text-primary mt-2">Starting from “{searchParams.get("suggest")}”. Select a matching result to add its series or franchise context.</p>}
       </div>
 
       {error && (

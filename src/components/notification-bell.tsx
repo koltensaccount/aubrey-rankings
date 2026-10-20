@@ -51,6 +51,7 @@ interface NotificationItem {
     username: string | null;
     image: string | null;
   } | null;
+  links?: { actorUrl: string | null; contentUrl: string };
 }
 
 function formatRelativeTime(dateString: string): string {
@@ -114,7 +115,7 @@ export function NotificationBell() {
     }
   };
 
-  const handleNotificationClick = async (item: NotificationItem) => {
+  const handleNotificationClick = async (item: NotificationItem, destination: string) => {
     // Optimistically mark read
     if (!item.readAt) {
       setUnreadCount((prev) => Math.max(0, prev - 1));
@@ -135,8 +136,7 @@ export function NotificationBell() {
     }
 
     setOpen(false);
-    const targetUrl = item.metadata?.targetUrl || "/notifications";
-    router.push(targetUrl);
+    router.push(destination);
   };
 
   const renderIcon = (type: string) => {
@@ -233,8 +233,7 @@ export function NotificationBell() {
               return (
                 <div
                   key={item.id}
-                  onClick={() => handleNotificationClick(item)}
-                  className={`p-3 flex items-start gap-3 cursor-pointer transition-colors group ${
+                  className={`p-3 flex items-start gap-3 transition-colors group ${
                     isUnread
                       ? "bg-surface-raised/40 hover:bg-surface-raised"
                       : "hover:bg-surface/50"
@@ -270,13 +269,14 @@ export function NotificationBell() {
 
                   {/* Body */}
                   <div className="flex-1 min-w-0 text-left">
-                    <p
+                    {item.links?.actorUrl && <Link href={item.links.actorUrl} onClick={(event) => { event.preventDefault(); void handleNotificationClick(item, item.links!.actorUrl!); }} className="text-xs font-semibold text-foreground hover:underline">{item.actor?.name || meta.actorName || `@${item.actor?.username}`}</Link>}
+                    <button type="button" onClick={() => handleNotificationClick(item, item.links?.contentUrl || "/notifications")}
                       className={`text-xs line-clamp-2 leading-relaxed ${
                         isUnread ? "text-foreground font-medium" : "text-muted-foreground"
                       }`}
                     >
                       {meta.message || "New activity on your account"}
-                    </p>
+                    </button>
                     <span className="block text-[10px] text-muted-foreground/70 mt-1">
                       {formatRelativeTime(item.createdAt)}
                     </span>

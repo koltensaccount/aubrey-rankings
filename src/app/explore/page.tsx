@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Search, Film, Tv, Users, Compass, ArrowRight, Loader2, UserPlus, UserCheck } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { useSession } from "@/lib/auth-client";
 
-export default function ExplorePage() {
+function ExplorePageContent() {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { data: session } = useSession();
   const [query, setQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"all" | "media" | "people">("all");
@@ -26,6 +27,11 @@ export default function ExplorePage() {
       router.replace(`/discover${window.location.search}`);
     }
   }, [pathname, router]);
+
+  useEffect(() => {
+    const requestedTab = searchParams.get("tab");
+    if (requestedTab === "people" || requestedTab === "media" || requestedTab === "all") setActiveTab(requestedTab);
+  }, [searchParams]);
 
   const handleToggleFollow = async (e: React.MouseEvent, targetUser: any) => {
     e.preventDefault();
@@ -89,21 +95,14 @@ export default function ExplorePage() {
       setLoading(true);
       setSearchError(null);
       try {
-        const [tmdbRes, userRes] = await Promise.all([
-          fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=all`).then((r) =>
-            r.ok ? r.json() : { results: [] }
-          ),
-          fetch(`/api/user/search?q=${encodeURIComponent(query)}`).then(async (r) => {
-            if (!r.ok) {
-              const err = await r.json().catch(() => ({}));
-              throw new Error(err?.error || "Failed to search community members");
-            }
-            return r.json();
-          }),
+        const [tmdbResult, userResult] = await Promise.allSettled([
+          fetch(`/api/tmdb/search?q=${encodeURIComponent(query)}&type=all`).then(async (r) => { const data = await r.json().catch(() => ({})); if (!r.ok) throw new Error(data.error || "Title search is unavailable"); return data; }),
+          fetch(`/api/user/search?q=${encodeURIComponent(query)}`).then(async (r) => { const data = await r.json().catch(() => ({})); if (!r.ok) throw new Error(data.error || "People search is unavailable"); return data; }),
         ]);
-
-        setTmdbResults(tmdbRes.results || []);
-        setUserResults(userRes.users || []);
+        setTmdbResults(tmdbResult.status === "fulfilled" ? tmdbResult.value.results || [] : []);
+        setUserResults(userResult.status === "fulfilled" ? userResult.value.users || [] : []);
+        const errors = [tmdbResult, userResult].filter((result): result is PromiseRejectedResult => result.status === "rejected").map((result) => result.reason?.message).filter(Boolean);
+        if (errors.length) setSearchError(errors.join(" "));
       } catch (err: any) {
         console.error("Explore search failed", err);
         setSearchError(err?.message || "Search request encountered an error.");
@@ -339,7 +338,8 @@ export default function ExplorePage() {
             </section>
           )}
 
-          {userResults.length === 0 && tmdbResults.length === 0 && !loading && (
+          {searchError && !loading && <p role="alert" className="text-xs text-destructive">{searchError}</p>}
+          {userResults.length === 0 && tmdbResults.length === 0 && !loading && !searchError && (
             <div className="text-center py-20 border border-dashed border-border rounded-xl text-xs text-muted-foreground">
               No titles or curators found matching &ldquo;{query}&rdquo;.
             </div>
@@ -408,4 +408,8 @@ export default function ExplorePage() {
       )}
     </div>
   );
+}
+
+export default function ExplorePage() {
+  return <Suspense fallback={<div className="max-w-7xl mx-auto px-4 py-16 text-sm text-muted-foreground">Loading discovery…</div>}><ExplorePageContent /></Suspense>;
 }

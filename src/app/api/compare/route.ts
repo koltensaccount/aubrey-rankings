@@ -2,13 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
 import { collections, collectionEntries, ratings } from "@/db/schema";
-import { eq, asc } from "drizzle-orm";
+import { eq, asc, and, or } from "drizzle-orm";
 import { compareRankings, ComparisonItem } from "@/lib/comparison";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession();
   const leftId = request.nextUrl.searchParams.get("left");
   const rightId = request.nextUrl.searchParams.get("right");
+
+  if (request.nextUrl.searchParams.get("available") === "true") {
+    const available = await db.query.collections.findMany({
+      where: (c, { and, eq, or }) => session
+        ? or(and(eq(c.visibility, "public"), eq(c.isPublic, true)), eq(c.userId, session.user.id))
+        : and(eq(c.visibility, "public"), eq(c.isPublic, true)),
+      orderBy: (c, { desc }) => [desc(c.updatedAt)],
+      limit: 40,
+      with: { user: { columns: { id: true, name: true, username: true, image: true } }, entries: { columns: { id: true } } },
+    });
+    return NextResponse.json({ rankings: available.map((collection) => ({ id: collection.id, title: collection.title, collectionType: collection.collectionType, customCoverImage: collection.customCoverImage, backdropImage: collection.backdropImage, user: collection.user, totalEntries: collection.entries.length })) });
+  }
 
   if (!leftId || !rightId) {
     return NextResponse.json(

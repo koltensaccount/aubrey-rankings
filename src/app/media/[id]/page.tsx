@@ -18,7 +18,7 @@ export default async function MediaDetailsPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ type?: string }>;
+  searchParams?: Promise<{ type?: string; journal?: string }>;
 }) {
   const { id: rawMediaId } = await params;
   let decodedId = rawMediaId;
@@ -350,6 +350,7 @@ export default async function MediaDetailsPage({
             </div>
 
             <WriteReviewButton
+              autoOpen={resolvedSearchParams.journal === "1"}
               mediaItemId={journalMediaId}
               mediaTitle={media.title}
               posterPath={media.posterPath}
@@ -401,10 +402,10 @@ export default async function MediaDetailsPage({
                   } : null}
                 />
                 <Link
-                  href={`/create?suggest=${encodeURIComponent(media.title)}`}
+                  href={`/create?suggest=${encodeURIComponent(media.title)}&sourceType=${encodeURIComponent(media.mediaType)}`}
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-border bg-surface hover:bg-surface-raised text-foreground font-semibold text-xs transition-colors"
                 >
-                  Start a Ranking with this Title
+                  Use this title to start a ranking
                 </Link>
               </div>
             </div>

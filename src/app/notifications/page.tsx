@@ -51,6 +51,7 @@ interface NotificationItem {
     username: string | null;
     image: string | null;
   } | null;
+  links?: { actorUrl: string | null; contentUrl: string };
 }
 
 function formatFullTime(dateString: string): string {
@@ -285,7 +286,7 @@ export default function NotificationsPage() {
               const actorImage = item.actor?.image || meta.actorImage;
               const stillPath = meta.stillPath || meta.posterPath;
               const artworkUrl = stillPath ? getTmdbImageUrl(stillPath, "w300") : null;
-              const targetUrl = meta.targetUrl || "/profile";
+              const targetUrl = item.links?.contentUrl || "/notifications";
 
               return (
                 <div
@@ -328,6 +329,7 @@ export default function NotificationsPage() {
                     {/* Content Details */}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
+                        {item.links?.actorUrl && <Link href={item.links.actorUrl} onClick={isUnread ? (event) => handleMarkOneRead(item.id, event) : undefined} className="text-sm font-semibold text-foreground hover:underline shrink-0">{item.actor?.name || meta.actorName || `@${item.actor?.username}`}</Link>}
                         <p
                           className={`text-sm leading-snug ${
                             isUnread ? "text-foreground font-semibold" : "text-foreground/90 font-medium"
@@ -362,7 +364,7 @@ export default function NotificationsPage() {
                   <div className="flex items-center gap-2 sm:self-center flex-shrink-0">
                     <Link
                       href={targetUrl}
-                      onClick={() => handleMarkOneRead(item.id)}
+                      onClick={isUnread ? () => handleMarkOneRead(item.id) : undefined}
                       className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg border border-border bg-secondary hover:bg-surface-raised text-xs font-medium text-foreground transition-colors"
                     >
                       <span>View</span>

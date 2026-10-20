@@ -43,18 +43,17 @@ function ComparePageContent() {
   const [loading, setLoading] = useState(Boolean(leftId && rightId));
   const [error, setError] = useState<string | null>(null);
 
-  // Available canons for picker when parameters are missing
-  const [availableCanons, setAvailableCanons] = useState<CollectionSummary[]>([]);
+  const [availableRankings, setAvailableRankings] = useState<CollectionSummary[]>([]);
   const [selectedLeft, setSelectedLeft] = useState<string>(leftId || "");
   const [selectedRight, setSelectedRight] = useState<string>(rightId || "");
 
   useEffect(() => {
     async function loadAvailable() {
       try {
-        const res = await fetch("/api/social/feed?mode=discover&limit=30");
+        const res = await fetch("/api/compare?available=true");
         if (res.ok) {
           const data = await res.json();
-          setAvailableCanons(data.items || []);
+          setAvailableRankings(data.rankings || []);
         }
       } catch (e) {
         // Silently ignore
@@ -108,10 +107,10 @@ function ComparePageContent() {
           <header className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 border border-primary/20 text-xs font-semibold text-primary uppercase tracking-wider">
               <GitCompare size={12} />
-              <span>Canon Disagreement Engine</span>
+              <span>Ranking Comparison</span>
             </div>
             <h1 className="font-display text-4xl sm:text-5xl uppercase tracking-tight text-foreground">
-              Compare Two Critical Canons
+              Compare Two Rankings
             </h1>
             <p className="text-sm text-muted-foreground leading-relaxed">
               Select any two movie or television rankings to compute Spearman rank correlation,
@@ -123,15 +122,15 @@ function ComparePageContent() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground block">
-                  Primary Canon (Left)
+                  Primary Ranking
                 </label>
                 <select
                   value={selectedLeft}
                   onChange={(e) => setSelectedLeft(e.target.value)}
                   className="w-full rounded-lg bg-surface border border-input-border p-3 text-sm text-foreground focus:outline-none focus:border-primary"
                 >
-                  <option value="">Select a canon...</option>
-                  {availableCanons.map((c) => (
+                  <option value="">Select a ranking...</option>
+                  {availableRankings.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.title} ({c.user?.name || "Critic"})
                     </option>
@@ -148,8 +147,8 @@ function ComparePageContent() {
                   onChange={(e) => setSelectedRight(e.target.value)}
                   className="w-full rounded-lg bg-surface border border-input-border p-3 text-sm text-foreground focus:outline-none focus:border-primary"
                 >
-                  <option value="">Select a canon...</option>
-                  {availableCanons.map((c) => (
+                  <option value="">Select a ranking...</option>
+                  {availableRankings.map((c) => (
                     <option key={c.id} value={c.id}>
                       {c.title} ({c.user?.name || "Critic"})
                     </option>
@@ -202,7 +201,7 @@ function ComparePageContent() {
             className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-secondary hover:bg-surface border border-border text-xs font-semibold text-foreground transition-colors"
           >
             <ArrowLeft size={13} />
-            <span>Select different canons</span>
+            <span>Select different rankings</span>
           </Link>
         </div>
       </div>
@@ -238,7 +237,7 @@ function ComparePageContent() {
               href="/compare"
               className="hover:text-primary transition-colors font-medium"
             >
-              Change Canons
+              Change Rankings
             </Link>
           </div>
 
@@ -246,7 +245,7 @@ function ComparePageContent() {
             {/* Left Canon */}
             <div className="space-y-2 p-5 rounded-xl border border-border bg-surface">
               <span className="text-[10px] font-mono uppercase tracking-wider text-primary font-semibold">
-                Primary Canon
+                Primary Ranking
               </span>
               <h2 className="font-display text-2xl uppercase tracking-tight text-foreground">
                 {leftCollection.title}
@@ -261,7 +260,7 @@ function ComparePageContent() {
             {/* Right Canon */}
             <div className="space-y-2 p-5 rounded-xl border border-border bg-surface">
               <span className="text-[10px] font-mono uppercase tracking-wider text-primary font-semibold">
-                Comparative Canon
+                Comparison Ranking
               </span>
               <h2 className="font-display text-2xl uppercase tracking-tight text-foreground">
                 {rightCollection.title}
@@ -431,7 +430,7 @@ function ComparePageContent() {
         <section className="space-y-4">
           <div className="flex items-center justify-between border-b border-border pb-2">
             <h3 className="font-display text-2xl uppercase tracking-tight text-foreground">
-              Side-by-Side Canon Calibration
+              Side-by-Side Ranking Comparison
             </h3>
             <span className="text-xs text-muted-foreground">
               {metrics.overlappingCount} Shared Titles

@@ -6,11 +6,13 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "@/lib/auth-client";
 import { AlertCircle } from "lucide-react";
+import { safeInternalRedirect } from "@/lib/safe-navigation";
 
 function LoginFormContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlError = searchParams.get("error");
+  const returnTo = safeInternalRedirect(searchParams.get("redirect"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -48,7 +50,7 @@ function LoginFormContent() {
           if (profileRes.ok) {
             const profileData = await profileRes.json();
             if (!profileData?.user?.username) {
-              router.push("/onboarding");
+              router.push(`/onboarding?redirect=${encodeURIComponent(returnTo)}`);
               router.refresh();
               return;
             }
@@ -58,9 +60,9 @@ function LoginFormContent() {
         }
         const user = res.data?.user as any;
         if (user && !user.username) {
-          router.push("/onboarding");
+          router.push(`/onboarding?redirect=${encodeURIComponent(returnTo)}`);
         } else {
-          router.push("/");
+          router.push(returnTo);
         }
         router.refresh();
       }
@@ -93,7 +95,7 @@ function LoginFormContent() {
     try {
       const res = await signIn.social({
         provider: "google",
-        callbackURL: "/onboarding",
+        callbackURL: `/onboarding?redirect=${encodeURIComponent(returnTo)}`,
         errorCallbackURL: "/login?error=oauth_error",
       });
       if (res?.error) {

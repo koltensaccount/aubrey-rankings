@@ -94,9 +94,14 @@ export function ReviewDetailClient({
 
   const isAuthor = currentUserId === review.userId;
   const isDraftOrUnpublished = review.status !== "published";
+  const handleEdit = () => review.isJournal ? router.push(`/media/${review.mediaItem.id}?journal=1`) : setIsEditorOpen(true);
 
   useEffect(() => {
     if (isAuthor && searchParams.get("edit") === "1") {
+      if (review.isJournal) {
+        router.replace(`/media/${review.mediaItem.id}?journal=1`);
+        return;
+      }
       setIsEditorOpen(true);
       router.replace(`/review/${review.id}`, { scroll: false });
     }
@@ -205,7 +210,7 @@ export function ReviewDetailClient({
             </div>
             <button
               type="button"
-              onClick={() => setIsEditorOpen(true)}
+              onClick={handleEdit}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-bold hover:bg-primary-hover transition-colors cursor-pointer self-start sm:self-auto"
             >
               <Pencil size={13} />
@@ -331,7 +336,7 @@ export function ReviewDetailClient({
             {isAuthor ? (
               <button
                 type="button"
-                onClick={() => setIsEditorOpen(true)}
+                onClick={handleEdit}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-surface hover:bg-surface-raised text-xs font-semibold text-foreground transition-colors cursor-pointer"
               >
                 <Pencil size={13} />

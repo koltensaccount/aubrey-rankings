@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState, useEffect } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { Check, AlertCircle, ArrowRight, Sparkles, User, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import { safeInternalRedirect } from "@/lib/safe-navigation";
 
-export default function OnboardingPage() {
+function OnboardingContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const returnTo = safeInternalRedirect(searchParams.get("redirect"), "/profile");
   const { data: session, isPending } = useSession();
 
   const [username, setUsername] = useState("");
@@ -38,7 +41,7 @@ export default function OnboardingPage() {
           .then((res) => res.json())
           .then((data) => {
             if (data?.user?.username && data.user.username.trim()) {
-              router.push("/profile");
+              router.push(returnTo);
             } else if (data?.user) {
               if (data.user.name && !displayName) {
                 setDisplayName(data.user.name);
@@ -51,7 +54,7 @@ export default function OnboardingPage() {
           .catch(() => {});
       }
     }
-  }, [session, isPending, router, displayName, bio]);
+  }, [session, isPending, router, displayName, bio, returnTo]);
 
   // Debounce username availability check
   useEffect(() => {
@@ -108,7 +111,7 @@ export default function OnboardingPage() {
         throw new Error(json.error || "Failed to set username.");
       }
 
-      router.push("/profile");
+      router.push(returnTo);
       router.refresh();
     } catch (err: any) {
       setSubmitError(err?.message || "An unexpected error occurred.");
@@ -250,4 +253,8 @@ export default function OnboardingPage() {
       </div>
     </div>
   );
+}
+
+export default function OnboardingPage() {
+  return <Suspense fallback={<div className="min-h-[calc(100vh-12rem)] flex items-center justify-center text-xs text-muted-foreground">Loading profile…</div>}><OnboardingContent /></Suspense>;
 }

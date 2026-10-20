@@ -5,8 +5,6 @@ import {
   Film,
   ExternalLink,
   UploadCloud,
-  FileSpreadsheet,
-  Download,
 } from "lucide-react";
 
 export function DataTab() {
@@ -235,52 +233,6 @@ export function DataTab() {
         )}
       </div>
 
-      {/* SECTION 2: AUBREY'S BLACK MIRROR SPREADSHEET IMPORTER */}
-      <div className="p-6 rounded-card border border-border-card bg-card space-y-4 shadow-card">
-        <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-button bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-            <FileSpreadsheet size={18} />
-          </div>
-          <div>
-            <h3 className="font-display text-xl uppercase font-bold text-foreground">
-              Aubrey&apos;s Black Mirror Importer
-            </h3>
-            <p className="text-xs text-muted-foreground">
-              Import ratings and weights directly from Aubrey&apos;s Spreadsheet format.
-            </p>
-          </div>
-        </div>
-
-        <div className="p-4 rounded-card border border-dashed border-border bg-surface text-center space-y-3">
-          <p className="text-xs text-muted-foreground">
-            Paste CSV or JSON export from the original spreadsheet:
-          </p>
-          <textarea
-            rows={4}
-            placeholder="Episode, Season, Music, Acting, Cinematography, Writing, Vibes, Notes..."
-            className="w-full rounded-input border border-border-input bg-card p-3 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:border-primary font-mono resize-none"
-          />
-          <div className="flex justify-end">
-            <button className="px-4 py-2 rounded-button bg-surface-elevated hover:bg-muted text-foreground border border-border text-xs font-semibold cursor-pointer">
-              Import Spreadsheet Ratings
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* SECTION 3: EXPORT */}
-      <div className="p-6 rounded-card border border-border-card bg-card space-y-3 shadow-card">
-        <h3 className="font-display text-xl uppercase font-bold text-foreground">
-          Export Your Data
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          Download your complete library, rating histories, and reviews in JSON format.
-        </p>
-        <button className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-surface-elevated hover:bg-muted text-foreground border border-border text-xs font-semibold transition-colors cursor-pointer">
-          <Download size={14} />
-          <span>Export JSON</span>
-        </button>
-      </div>
     </div>
   );
 }

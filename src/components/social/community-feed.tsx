@@ -290,7 +290,7 @@ export function CommunityFeed({
                 No public community content found
               </h3>
               <p className="text-xs text-muted-foreground">
-                Be the first to publish a ranking canon or critical review.
+                Be the first to publish a ranking or review.
               </p>
             </div>
           )}
@@ -445,7 +445,7 @@ export function CommunityFeed({
                       href={`/collection/${rk.id}`}
                       className="inline-flex items-center gap-1 text-xs font-semibold text-primary-text hover:underline"
                     >
-                      <span>Explore Canon</span>
+                      <span>Open Ranking</span>
                       <ArrowRight size={13} />
                     </Link>
                   </div>
@@ -590,7 +590,7 @@ export function CommunityFeed({
                       </div>
                     ) : (
                       <span>
-                        from canon:{" "}
+                        from ranking:{" "}
                         <Link
                           href={`/collection/${col.id}`}
                           className="text-foreground hover:text-primary-text font-medium transition-colors"

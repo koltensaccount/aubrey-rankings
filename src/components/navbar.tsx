@@ -35,7 +35,7 @@ export function Navbar() {
   return (
     <>
       <header className="sticky top-0 z-30 w-full border-b border-border bg-background/90 backdrop-blur-md transition-colors">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           <div className="flex items-center gap-8">
             <Link href="/" className="ar-brand">
               aubrey<span>rankings</span>
@@ -76,9 +76,9 @@ export function Navbar() {
                 </button>
               </div>
             ) : (
-              <div className="flex items-center gap-3 text-xs">
-                <Link href="/login" className="text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 font-medium">Sign in</Link>
-                <Link href="/signup" className="px-4 py-2 rounded bg-primary hover:bg-primary-hover text-primary-foreground font-semibold transition-colors shadow-sm">Get started</Link>
+              <div className="flex items-center gap-1 sm:gap-3 text-xs">
+                <Link href="/login" className="text-muted-foreground hover:text-foreground transition-colors px-2 sm:px-3 py-1.5 font-medium">Sign in</Link>
+                <Link href="/signup" className="px-3 sm:px-4 py-2 rounded bg-primary hover:bg-primary-hover text-primary-foreground font-semibold transition-colors shadow-sm">Get started</Link>
               </div>
             )}
           </div>
