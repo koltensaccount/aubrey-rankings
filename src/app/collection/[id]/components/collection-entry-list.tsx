@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { Plus, Sliders, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { Plus, Sliders, Trash2, BookOpen } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { TierBoardView } from "./tier-board-view";
 
@@ -146,20 +147,30 @@ export function CollectionEntryList({
                 </div>
 
                 {isOwner && (
-                  <button
-                    onClick={() => onSelectItemForRating(media)}
-                    className={`px-3 py-1.5 rounded-button text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border ${
-                      state === "rated"
-                        ? "bg-surface hover:bg-surface-elevated text-foreground border-border"
-                        : state === "in_progress"
-                          ? "bg-primary/15 hover:bg-primary/25 text-primary-text border-primary/30"
-                          : "bg-primary hover:bg-primary-hover text-primary-foreground border-primary shadow-sm"
-                    }`}
-                  >
-                    <Sliders size={13} />
-                    <span className="hidden sm:inline">{actionLabel}</span>
-                    <span className="sm:hidden">{state === "rated" ? "Edit" : state === "in_progress" ? "Cont." : "Rate"}</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <Link
+                      href={`/media/${encodeURIComponent(media.id)}?journal=1`}
+                      className="px-2.5 py-1.5 rounded-button text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border bg-surface hover:bg-surface-elevated text-foreground border-border"
+                      title="Open personal journal entry"
+                    >
+                      <BookOpen size={13} />
+                      <span className="hidden md:inline">Journal</span>
+                    </Link>
+                    <button
+                      onClick={() => onSelectItemForRating(media)}
+                      className={`px-3 py-1.5 rounded-button text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border ${
+                        state === "rated"
+                          ? "bg-surface hover:bg-surface-elevated text-foreground border-border"
+                          : state === "in_progress"
+                            ? "bg-primary/15 hover:bg-primary/25 text-primary-text border-primary/30"
+                            : "bg-primary hover:bg-primary-hover text-primary-foreground border-primary shadow-sm"
+                      }`}
+                    >
+                      <Sliders size={13} />
+                      <span className="hidden sm:inline">{actionLabel}</span>
+                      <span className="sm:hidden">{state === "rated" ? "Edit" : state === "in_progress" ? "Cont." : "Rate"}</span>
+                    </button>
+                  </div>
                 )}
 
                 {isOwner && (
@@ -248,6 +259,14 @@ export function CollectionEntryList({
 
               {isOwner ? (
                 <div className="flex items-center gap-2 mt-2">
+                  <Link
+                    href={`/media/${encodeURIComponent(media.id)}?journal=1`}
+                    className="py-2 px-2.5 rounded-button text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer bg-surface hover:bg-surface-elevated text-foreground border border-border"
+                    title="Open personal journal entry"
+                  >
+                    <BookOpen size={13} />
+                    <span className="hidden sm:inline">Journal</span>
+                  </Link>
                   <button
                     onClick={() => onSelectItemForRating(media)}
                     className={`flex-1 py-2 rounded-button text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer ${

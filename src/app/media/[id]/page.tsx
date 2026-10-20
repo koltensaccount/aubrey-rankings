@@ -9,6 +9,7 @@ import { getServerSession } from "@/lib/server-session";
 import { getBlockedUserIds } from "@/lib/safety";
 import { ArrowLeft, Star, Film, Tv, MessageSquare, ExternalLink, EyeOff } from "lucide-react";
 import { WriteReviewButton, JournalTriggerButton } from "@/components/reviews/write-review-button";
+import { AddToRankingButton } from "@/components/collections/add-to-ranking-dialog";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
 import { canShowReviewRating, reviewScoreOnTen, tmdbAudienceRating } from "@/lib/review-rating";
 import { getCommunityAverage } from "@/lib/community-rating";
@@ -561,13 +562,23 @@ export default async function MediaDetailsPage({
                           </p>
                         )}
                       </div>
-                      <div className="pt-2 flex items-center gap-2">
+                      <div className="pt-2 flex items-center gap-3">
                         <Link
                           href={`/media/${epMediaId}`}
                           className="inline-flex items-center gap-1 text-xs font-semibold text-primary-text hover:underline"
                         >
                           <span>Journal Episode &rarr;</span>
                         </Link>
+                        <AddToRankingButton
+                          mediaItemId={epMediaId}
+                          mediaTitle={ep.name ? `${media.title}: ${ep.name}` : `Episode ${ep.episode_number}`}
+                          mediaType="episode"
+                          seasonNumber={activeSeasonNumber}
+                          episodeNumber={ep.episode_number}
+                          parentShowTmdbId={media.tmdbId}
+                          stillPath={ep.still_path}
+                          variant="minimal"
+                        />
                       </div>
                     </div>
                   </div>
@@ -579,7 +590,7 @@ export default async function MediaDetailsPage({
 
         {/* Community Reviews Section */}
         <section className="space-y-6 pt-4 border-t border-border">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <MessageSquare size={18} className="text-primary-text" />
               <h2 className="font-display text-2xl uppercase tracking-tight text-foreground">
@@ -587,28 +598,44 @@ export default async function MediaDetailsPage({
               </h2>
             </div>
 
-            <WriteReviewButton
-              autoOpen={shouldAutoOpen}
-              mediaItemId={journalMediaId}
-              mediaTitle={media.title}
-              posterPath={media.posterPath}
-              initialQuickScore={ownerGlobalRating?.calculatedOverallScore ?? null}
-              initialDetailedRating={ownerGlobalRating?.ratingSystemId ? { ratingSystemId: ownerGlobalRating.ratingSystemId, categoryScores: ownerGlobalRating.categoryScores.map((score) => ({ categoryId: score.categoryId, score: score.score })) } : null}
-              existingReview={ownerJournalReview ? {
-                id: ownerJournalReview.id,
-                title: ownerJournalReview.title,
-                content: ownerJournalReview.content,
-                draftContent: ownerJournalReview.draftContent,
-                contentFormat: ownerJournalReview.contentFormat as "plain" | "markdown",
-                draftContentFormat: ownerJournalReview.draftContentFormat as "plain" | "markdown" | null,
-                status: ownerJournalReview.status as "draft" | "published" | "unpublished",
-                visibility: ownerJournalReview.visibility as "private" | "unlisted" | "public",
-                isSpoiler: ownerJournalReview.isSpoiler,
-                ratingId: ownerJournalReview.ratingId,
-                shareRating: ownerJournalReview.shareRating,
-                isJournal: true,
-              } : null}
-            />
+            <div className="flex items-center gap-2">
+              <AddToRankingButton
+                mediaItemId={journalMediaId}
+                mediaTitle={media.title}
+                mediaType={media.mediaType}
+                seasonNumber={media.seasonNumber}
+                episodeNumber={media.episodeNumber}
+                parentShowTmdbId={
+                  media.mediaType === "episode" && media.parentMediaId
+                    ? parseInt(media.parentMediaId.replace(/^tv_/, ""), 10) || null
+                    : null
+                }
+                posterPath={media.posterPath}
+                stillPath={media.stillPath}
+              />
+              <WriteReviewButton
+                autoOpen={shouldAutoOpen}
+                mediaItemId={journalMediaId}
+                mediaTitle={media.title}
+                posterPath={media.posterPath}
+                initialQuickScore={ownerGlobalRating?.calculatedOverallScore ?? null}
+                initialDetailedRating={ownerGlobalRating?.ratingSystemId ? { ratingSystemId: ownerGlobalRating.ratingSystemId, categoryScores: ownerGlobalRating.categoryScores.map((score) => ({ categoryId: score.categoryId, score: score.score })) } : null}
+                existingReview={ownerJournalReview ? {
+                  id: ownerJournalReview.id,
+                  title: ownerJournalReview.title,
+                  content: ownerJournalReview.content,
+                  draftContent: ownerJournalReview.draftContent,
+                  contentFormat: ownerJournalReview.contentFormat as "plain" | "markdown",
+                  draftContentFormat: ownerJournalReview.draftContentFormat as "plain" | "markdown" | null,
+                  status: ownerJournalReview.status as "draft" | "published" | "unpublished",
+                  visibility: ownerJournalReview.visibility as "private" | "unlisted" | "public",
+                  isSpoiler: ownerJournalReview.isSpoiler,
+                  ratingId: ownerJournalReview.ratingId,
+                  shareRating: ownerJournalReview.shareRating,
+                  isJournal: true,
+                } : null}
+              />
+            </div>
           </div>
 
           {publicReviews.length === 0 ? (
@@ -619,6 +646,20 @@ export default async function MediaDetailsPage({
               </p>
               <div className="pt-2 flex items-center justify-center gap-3 flex-wrap">
                 <JournalTriggerButton hasEntry={Boolean(ownerJournalReview || ownerGlobalRating)} />
+                <AddToRankingButton
+                  mediaItemId={journalMediaId}
+                  mediaTitle={media.title}
+                  mediaType={media.mediaType}
+                  seasonNumber={media.seasonNumber}
+                  episodeNumber={media.episodeNumber}
+                  parentShowTmdbId={
+                    media.mediaType === "episode" && media.parentMediaId
+                      ? parseInt(media.parentMediaId.replace(/^tv_/, ""), 10) || null
+                      : null
+                  }
+                  posterPath={media.posterPath}
+                  stillPath={media.stillPath}
+                />
                 <Link
                   href={`/create?suggest=${encodeURIComponent(media.title)}`}
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border border-border bg-surface hover:bg-surface-raised text-foreground font-semibold text-xs transition-colors"

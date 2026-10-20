@@ -487,6 +487,52 @@ export function ReviewEditorDialog({
           </div>
         </div>
 
+        {/* Deliberate Sharing Clarity Banner */}
+        <div
+          className={`p-3 rounded-xl border text-xs space-y-1 transition-colors ${
+            visibility === "public"
+              ? "bg-primary/10 border-primary/20 text-foreground"
+              : "bg-surface border-border text-muted-foreground"
+          }`}
+        >
+          <div className="flex items-center gap-2 font-semibold text-foreground">
+            {visibility === "public" ? (
+              <>
+                <Globe size={14} className="text-primary" />
+                <span>Public Feed Publication</span>
+              </>
+            ) : visibility === "unlisted" ? (
+              <>
+                <Link2 size={14} className="text-primary" />
+                <span>Unlisted Entry (Hidden from Feeds)</span>
+              </>
+            ) : (
+              <>
+                <Lock size={14} className="text-foreground" />
+                <span>Private Journal Entry (Never Shared)</span>
+              </>
+            )}
+          </div>
+          <p className="text-[11px] leading-relaxed">
+            {visibility === "public" ? (
+              <>
+                This entry will appear in the Community Feed, on this title&apos;s public page, and on your profile.
+                {(scoringMethod === "quick" ? quickScore !== null : Boolean(selectedSystem)) && (
+                  <span className="block mt-0.5 font-medium text-foreground">
+                    {shareRating
+                      ? "✓ Your numerical rating will be shared publicly."
+                      : "🔒 Your numerical rating remains private and will NOT be shown."}
+                  </span>
+                )}
+              </>
+            ) : visibility === "unlisted" ? (
+              "Accessible only to people who have the direct link. Hidden from the Community Feed and search discovery."
+            ) : (
+              "Visible exclusively to you in your personal Journal. Never published to the Community Feed or visible to other members."
+            )}
+          </p>
+        </div>
+
         {/* Delete confirmation modal view */}
         {showDeleteConfirm && (
           <div className="p-4 rounded-xl bg-destructive/10 border border-destructive/30 space-y-3 mt-2">
@@ -570,7 +616,21 @@ export function ReviewEditorDialog({
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-primary text-primary-foreground text-xs font-bold hover:bg-primary-hover transition-colors cursor-pointer disabled:opacity-50"
             >
               {saving ? <Loader2 size={13} className="animate-spin" /> : null}
-              <span>{journalMode ? "Save Journal Entry" : isCurrentlyPublished ? "Save & Update" : "Publish Review"}</span>
+              <span>
+                {journalMode
+                  ? visibility === "public"
+                    ? isCurrentlyPublished
+                      ? "Update Public Review"
+                      : "Publish to Community"
+                    : visibility === "unlisted"
+                      ? "Save as Unlisted"
+                      : "Save Private Entry"
+                  : isCurrentlyPublished
+                    ? "Save & Update"
+                    : visibility === "public"
+                      ? "Publish Review"
+                      : "Save Review"}
+              </span>
             </button>
           </div>
         </DialogFooter>

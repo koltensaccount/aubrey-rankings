@@ -9,6 +9,7 @@ import { getTopRankedEntries, getRatingSummary } from "@/lib/scoring";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { reviewScoreOnTen } from "@/lib/review-rating";
+import { AddToRankingButton } from "@/components/collections/add-to-ranking-dialog";
 
 export default async function HomePage() {
   const session = await getServerSession();
@@ -531,13 +532,25 @@ export default async function HomePage() {
                         </div>
                       </div>
 
-                      <Link
-                        href={targetLink}
-                        className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-hover self-center"
-                      >
-                        {isDraft ? <PenLine size={14} /> : null}
-                        {isDraft ? "Resume" : "Open"}
-                      </Link>
+                      <div className="shrink-0 flex items-center gap-2 self-center">
+                        <AddToRankingButton
+                          mediaItemId={review.mediaItemId}
+                          mediaTitle={review.mediaItem?.title || "Media"}
+                          mediaType={review.mediaItem?.mediaType as any}
+                          seasonNumber={review.mediaItem?.seasonNumber}
+                          episodeNumber={review.mediaItem?.episodeNumber}
+                          posterPath={review.mediaItem?.posterPath}
+                          stillPath={review.mediaItem?.stillPath}
+                          variant="icon"
+                        />
+                        <Link
+                          href={targetLink}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-hover px-2.5 py-1.5 rounded-button bg-surface border border-border"
+                        >
+                          {isDraft ? <PenLine size={13} /> : null}
+                          <span>{isDraft ? "Resume" : "Open"}</span>
+                        </Link>
+                      </div>
                     </div>
                   </article>
                 );
@@ -564,35 +577,51 @@ export default async function HomePage() {
                 const normalizedScore = reviewScoreOnTen(rating);
 
                 return (
-                  <Link
+                  <div
                     key={rating.id}
-                    href={`/media/${rating.mediaItemId}?journal=1`}
-                    className="rounded-card border border-border bg-card p-4 flex items-center gap-3 hover:border-primary/40 transition-colors"
+                    className="rounded-card border border-border bg-card p-4 flex items-center justify-between gap-3 hover:border-primary/40 transition-colors"
                   >
-                    <CinematicMediaCard
-                      posterPath={rating.mediaItem?.posterPath || rating.mediaItem?.stillPath}
-                      title={rating.mediaItem?.title || "Media"}
-                      aspect={isEpisode ? "video" : "poster"}
-                      className={isEpisode ? "w-20 shrink-0" : "w-12 shrink-0"}
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5 text-[10px] uppercase font-semibold text-muted-foreground">
-                        <span>Private</span>
-                        <span>·</span>
-                        <span>Rating only</span>
-                        {epLabel && (
-                          <>
-                            <span>·</span>
-                            <span className="font-mono text-[9px] font-bold text-foreground">{epLabel}</span>
-                          </>
-                        )}
+                    <Link
+                      href={`/media/${rating.mediaItemId}?journal=1`}
+                      className="min-w-0 flex-1 flex items-center gap-3"
+                    >
+                      <CinematicMediaCard
+                        posterPath={rating.mediaItem?.posterPath || rating.mediaItem?.stillPath}
+                        title={rating.mediaItem?.title || "Media"}
+                        aspect={isEpisode ? "video" : "poster"}
+                        className={isEpisode ? "w-20 shrink-0" : "w-12 shrink-0"}
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 text-[10px] uppercase font-semibold text-muted-foreground">
+                          <span>Private</span>
+                          <span>·</span>
+                          <span>Rating only</span>
+                          {epLabel && (
+                            <>
+                              <span>·</span>
+                              <span className="font-mono text-[9px] font-bold text-foreground">{epLabel}</span>
+                            </>
+                          )}
+                        </div>
+                        <h3 className="font-semibold text-sm text-foreground truncate mt-0.5">{rating.mediaItem?.title}</h3>
+                        <p className="text-xs text-primary font-bold mt-1">
+                          {normalizedScore !== null ? `★ ${normalizedScore.toFixed(1)} / 10` : "Unrated"}
+                        </p>
                       </div>
-                      <h3 className="font-semibold text-sm text-foreground truncate mt-0.5">{rating.mediaItem?.title}</h3>
-                      <p className="text-xs text-primary font-bold mt-1">
-                        {normalizedScore !== null ? `★ ${normalizedScore.toFixed(1)} / 10` : "Unrated"}
-                      </p>
+                    </Link>
+                    <div className="shrink-0 flex items-center gap-2">
+                      <AddToRankingButton
+                        mediaItemId={rating.mediaItemId}
+                        mediaTitle={rating.mediaItem?.title || "Media"}
+                        mediaType={rating.mediaItem?.mediaType as any}
+                        seasonNumber={rating.mediaItem?.seasonNumber}
+                        episodeNumber={rating.mediaItem?.episodeNumber}
+                        posterPath={rating.mediaItem?.posterPath}
+                        stillPath={rating.mediaItem?.stillPath}
+                        variant="icon"
+                      />
                     </div>
-                  </Link>
+                  </div>
                 );
               })}
             </div>
