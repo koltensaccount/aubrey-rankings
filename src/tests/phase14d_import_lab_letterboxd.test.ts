@@ -357,6 +357,16 @@ describe("Phase 14D: Import Lab & Letterboxd Reliability", () => {
       sourceService: null, // native Aubrey viewing
     });
 
+    // Create Letterboxd unresolved import item (must be REMOVED)
+    await db.insert(unresolvedImportItems).values({
+      id: `unres_test_${runId}`,
+      userId: realUserId,
+      sourceService: "letterboxd",
+      sourceType: "unsupported",
+      sourceData: { filename: "test.csv" },
+      reason: "unsupported_file",
+    });
+
     // Calculate cleanup preview
     const preview = await calculateCleanupPreview(realUserId);
 
@@ -368,6 +378,7 @@ describe("Phase 14D: Import Lab & Letterboxd Reliability", () => {
     assert.ok(preview.toRemove.letterboxdDiaryEntries >= 1);
     assert.ok(preview.toRemove.letterboxdGlobalRatings >= 1);
     assert.ok(preview.toRemove.letterboxdCustomLists >= 1);
+    assert.ok(preview.toRemove.letterboxdUnresolvedImportItems >= 1);
 
     // Check items permanently preserved
     assert.ok(preview.toPreserve.nativeAubreyDiaryEntries >= 1);
@@ -380,6 +391,7 @@ describe("Phase 14D: Import Lab & Letterboxd Reliability", () => {
     const dryRunResult = await executeCleanup(realUserId, preview.token, { dryRun: true });
     assert.equal(dryRunResult.success, true);
     assert.equal(dryRunResult.dryRun, true);
+    assert.ok(dryRunResult.deleted.unresolvedImportItems >= 1);
 
     // Verify nothing was actually deleted (transaction rolled back)
     const preservedDiary = await db.query.diaryEntries.findFirst({
@@ -387,13 +399,19 @@ describe("Phase 14D: Import Lab & Letterboxd Reliability", () => {
     });
     assert.ok(preservedDiary, "Dry run must rollback and preserve diary entry");
 
+    const preservedUnresolved = await db.query.unresolvedImportItems.findFirst({
+      where: eq(unresolvedImportItems.id, `unres_test_${runId}`),
+    });
+    assert.ok(preservedUnresolved, "Dry run must rollback and preserve unresolved item");
+
     const preservedRanking = await db.query.collections.findFirst({
       where: eq(collections.id, aubreyRanking.id),
     });
     assert.ok(preservedRanking, "Aubrey ranking must remain intact");
 
-    // Clean up test native diary entry
+    // Clean up test native diary entry and unresolved item
     await db.delete(diaryEntries).where(eq(diaryEntries.id, `diary_native_${runId}`));
+    await db.delete(unresolvedImportItems).where(eq(unresolvedImportItems.id, `unres_test_${runId}`));
   });
 
   it("7. enforces fail-closed cleanup signing secret when secret is unconfigured", () => {

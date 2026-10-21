@@ -1004,6 +1004,10 @@ export default function AdminImportLabPage() {
                         <span>Letterboxd Custom Lists</span>
                         <strong className="font-mono">{cleanupPreview.toRemove.letterboxdCustomLists}</strong>
                       </li>
+                      <li className="flex justify-between py-1.5">
+                        <span>Unresolved Import Logs</span>
+                        <strong className="font-mono">{cleanupPreview.toRemove.letterboxdUnresolvedImportItems || 0}</strong>
+                      </li>
                     </ul>
                   </div>
 

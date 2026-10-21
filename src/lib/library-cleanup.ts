@@ -7,6 +7,7 @@ import {
   collections,
   collectionEntries,
   ratingSystems,
+  unresolvedImportItems,
 } from "@/db/schema";
 import { eq, and, or, isNull, isNotNull, ne, sql, inArray } from "drizzle-orm";
 import { randomBytes, createHmac } from "crypto";
@@ -101,6 +102,7 @@ export interface CleanupPreview {
     letterboxdGlobalRatings: number;
     letterboxdCustomLists: number;
     letterboxdListEntries: number;
+    letterboxdUnresolvedImportItems: number;
     totalRemovable: number;
   };
   toPreserve: {
@@ -152,6 +154,7 @@ export async function calculateCleanupPreview(userId: string): Promise<CleanupPr
     aubreyLists,
     collectionRatingsCount,
     rubricsCount,
+    letterboxdUnresolvedCount,
     backupCheck,
   ] = await Promise.all([
     // To remove: Letterboxd-only diary entries
@@ -240,6 +243,16 @@ export async function calculateCleanupPreview(userId: string): Promise<CleanupPr
       .select({ count: sql<number>`count(*)::int` })
       .from(ratingSystems)
       .where(eq(ratingSystems.userId, userId)),
+    // To remove: Letterboxd unresolved import items
+    db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(unresolvedImportItems)
+      .where(
+        and(
+          eq(unresolvedImportItems.userId, userId),
+          eq(unresolvedImportItems.sourceService, "letterboxd")
+        )
+      ),
     // Backup readiness
     verifyBackupReadiness(),
   ]);
@@ -273,13 +286,15 @@ export async function calculateCleanupPreview(userId: string): Promise<CleanupPr
     letterboxdGlobalRatings: letterboxdGlobalRatingsCount[0]?.count || 0,
     letterboxdCustomLists: letterboxdLists.length,
     letterboxdListEntries: letterboxdListEntriesCount,
+    letterboxdUnresolvedImportItems: letterboxdUnresolvedCount[0]?.count || 0,
     totalRemovable:
       (letterboxdDiaryCount[0]?.count || 0) +
       (letterboxdReviewsCount[0]?.count || 0) +
       (watchlistCount[0]?.count || 0) +
       (letterboxdGlobalRatingsCount[0]?.count || 0) +
       letterboxdLists.length +
-      letterboxdListEntriesCount,
+      letterboxdListEntriesCount +
+      (letterboxdUnresolvedCount[0]?.count || 0),
   };
 
   const toPreserve = {
@@ -404,6 +419,17 @@ export async function executeCleanup(
         await tx.delete(collections).where(inArray(collections.id, colIds));
       }
 
+      // 6. Delete Letterboxd unresolved import items (quarantined import records)
+      const unresolvedDeleted = await tx
+        .delete(unresolvedImportItems)
+        .where(
+          and(
+            eq(unresolvedImportItems.userId, userId),
+            eq(unresolvedImportItems.sourceService, "letterboxd")
+          )
+        )
+        .returning({ id: unresolvedImportItems.id });
+
       dryRunDeleted = {
         diaryEntries: diaryDeleted.length,
         reviews: reviewsDeleted.length,
@@ -411,6 +437,15 @@ export async function executeCleanup(
         watchlistItems: watchlistDeleted.length,
         customLists: colIds.length,
         customListEntries: listEntriesDeletedCount,
+        unresolvedImportItems: unresolvedDeleted.length,
+        totalRemovable:
+          diaryDeleted.length +
+          reviewsDeleted.length +
+          ratingsDeleted.length +
+          watchlistDeleted.length +
+          colIds.length +
+          listEntriesDeletedCount +
+          unresolvedDeleted.length,
       };
 
       if (isDryRun) {
