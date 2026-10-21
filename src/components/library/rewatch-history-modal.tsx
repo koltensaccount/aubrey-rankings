@@ -1,34 +1,35 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Calendar, Star, History, Plus, Film, Tv, Trash2, Edit2 } from "lucide-react";
+import { X, Calendar, Star, Trash2, Edit2, Plus, History } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
-import { reviewScoreOnTen } from "@/lib/review-rating";
 
 export interface DiaryViewingEvent {
   id: string;
-  userId: string;
   mediaItemId: string;
-  watchedDate: string | null;
-  loggedDate: string | Date | null;
+  watchedDate?: string | null;
+  loggedDate?: string | Date | null;
   isRewatch: boolean;
-  ratingValue: number | null;
-  notes: string | null;
+  ratingValue?: number | null;
+  notes?: string | null;
   tags?: string[] | null;
-  reviewId?: string | null;
-  ratingId?: string | null;
-  review?: {
-    id: string;
-    content: string;
-    isSpoiler: boolean;
-    visibility: string;
-    status: string;
-  } | null;
   rating?: {
     id: string;
     calculatedOverallScore?: number | null;
     sourceRating?: number | null;
+    sourceScale?: number | null;
+    sourceService?: string | null;
+    ratingSystem?: { scale: number; type: string } | null;
+    categoryScores?: readonly unknown[];
+  } | null;
+  review?: {
+    id: string;
+    content?: string | null;
+    draftContent?: string | null;
+    status: string;
+    visibility: string;
+    isSpoiler: boolean;
   } | null;
 }
 
@@ -40,13 +41,33 @@ interface RewatchHistoryModalProps {
     title: string;
     year?: number | null;
     mediaType?: string | null;
+    seasonNumber?: number | null;
+    episodeNumber?: number | null;
     posterPath?: string | null;
     stillPath?: string | null;
   };
   initialEntries?: DiaryViewingEvent[];
-  onLogNewViewing?: () => void;
+  onLogNewViewing: (mediaItem: any) => void;
   onEditEntry?: (entry: DiaryViewingEvent) => void;
-  onEntryDeleted?: (id: string) => void;
+  onEntryDeleted?: (entryId: string) => void;
+}
+
+function getEventScoreOnTen(event: DiaryViewingEvent): number | null {
+  if (typeof event.ratingValue === "number" && Number.isFinite(event.ratingValue)) {
+    return event.ratingValue;
+  }
+  if (event.rating) {
+    const r = event.rating as any;
+    if (typeof r.calculatedOverallScore === "number" && Number.isFinite(r.calculatedOverallScore)) {
+      const scale = r.ratingSystem?.scale || 10;
+      return (r.calculatedOverallScore / scale) * 10;
+    }
+    if (typeof r.sourceRating === "number" && Number.isFinite(r.sourceRating)) {
+      const scale = typeof r.sourceScale === "number" && r.sourceScale > 0 ? r.sourceScale : 10;
+      return (r.sourceRating / scale) * 10;
+    }
+  }
+  return null;
 }
 
 export function RewatchHistoryModal({
@@ -83,17 +104,21 @@ export function RewatchHistoryModal({
 
   if (!isOpen) return null;
 
+  const isEpisode =
+    mediaItem.mediaType === "episode" ||
+    Boolean(mediaItem.seasonNumber && mediaItem.episodeNumber);
+
   // Sort chronologically ascending to compute ordinals and chart
   const sortedAscending = [...entries].sort((a, b) => {
-    const dateA = a.watchedDate || (a.loggedDate ? new Date(a.loggedDate).toISOString().slice(0, 10) : "");
-    const dateB = b.watchedDate || (b.loggedDate ? new Date(b.loggedDate).toISOString().slice(0, 10) : "");
+    const dateA = a.watchedDate || "";
+    const dateB = b.watchedDate || "";
     return dateA.localeCompare(dateB);
   });
 
   // Extract ratings for score evolution graphic
-  const ratedEvents = sortedAscending.filter(
-    (e) => typeof e.ratingValue === "number" && !isNaN(e.ratingValue)
-  );
+  const ratedEvents = sortedAscending
+    .map((e) => ({ ...e, normalizedScore: getEventScoreOnTen(e) }))
+    .filter((e) => typeof e.normalizedScore === "number");
 
   const handleDelete = async (entryId: string) => {
     if (!confirm("Are you sure you want to delete this viewing log?")) return;
@@ -115,23 +140,21 @@ export function RewatchHistoryModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-xs animate-in fade-in duration-200"
       role="dialog"
       aria-modal="true"
       aria-labelledby="history-modal-title"
     >
-      <div
-        className="w-full max-w-2xl max-h-[90vh] flex flex-col bg-card border border-border rounded-dialog shadow-dialog overflow-hidden"
-      >
+      <div className="w-full max-w-2xl max-h-[90vh] flex flex-col bg-card border border-border rounded-dialog shadow-dialog overflow-hidden">
         {/* Header */}
         <div className="flex items-start justify-between p-5 border-b border-border bg-surface/50">
           <div className="flex items-center gap-4 min-w-0">
-            <div className="w-14 sm:w-16 shrink-0">
+            <div className={`shrink-0 ${isEpisode ? "w-20 aspect-video" : "w-14 sm:w-16 aspect-[2/3]"}`}>
               <CinematicMediaCard
                 title={mediaItem.title}
-                posterPath={mediaItem.posterPath}
+                posterPath={isEpisode ? mediaItem.stillPath || mediaItem.posterPath : mediaItem.posterPath}
                 stillPath={mediaItem.stillPath}
-                aspect={mediaItem.mediaType === "tv_episode" ? "video" : "poster"}
+                aspect={isEpisode ? "video" : "poster"}
               />
             </div>
             <div className="min-w-0">
@@ -154,8 +177,14 @@ export function RewatchHistoryModal({
                 {mediaItem.mediaType && (
                   <>
                     <span>·</span>
-                    <span className="uppercase text-[10px] tracking-wide">
-                      {mediaItem.mediaType === "tv_episode" ? "Episode" : "Film"}
+                    <span className="uppercase text-[10px] tracking-wide font-bold text-primary">
+                      {isEpisode
+                        ? mediaItem.seasonNumber && mediaItem.episodeNumber
+                          ? `S${mediaItem.seasonNumber} · E${mediaItem.episodeNumber}`
+                          : "Episode"
+                        : mediaItem.mediaType === "tv"
+                        ? "TV Series"
+                        : "Film"}
                     </span>
                   </>
                 )}
@@ -219,59 +248,68 @@ export function RewatchHistoryModal({
                   {/* Connect points with a polyline */}
                   {(() => {
                     const width = Math.max(260, ratedEvents.length * 80);
-                    const step = (width - 60) / Math.max(1, ratedEvents.length - 1);
-                    const points = ratedEvents.map((evt, idx) => {
-                      const x = 30 + idx * step;
-                      // 0 score => y = 55; 10 score => y = 10
-                      const score = Math.min(10, Math.max(0, evt.ratingValue || 0));
-                      const y = 55 - (score / 10) * 45;
-                      return { x, y, score, date: evt.watchedDate };
-                    });
+                    const padding = 30;
+                    const step =
+                      ratedEvents.length > 1
+                        ? (width - padding * 2) / (ratedEvents.length - 1)
+                        : 0;
 
-                    const polylinePoints = points.map((p) => `${p.x},${p.y}`).join(" ");
+                    const points = ratedEvents
+                      .map((evt, idx) => {
+                        const score = Math.min(10, Math.max(0, evt.normalizedScore || 0));
+                        // 10 -> y:10, 0 -> y:60
+                        const y = 60 - (score / 10) * 50;
+                        const x = padding + idx * step;
+                        return `${x},${y}`;
+                      })
+                      .join(" ");
 
                     return (
-                      <>
-                        <polyline
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          className="text-primary"
-                          points={polylinePoints}
-                        />
-                        {points.map((pt, i) => (
-                          <g key={i}>
-                            <circle
-                              cx={pt.x}
-                              cy={pt.y}
-                              r="4.5"
-                              className="fill-background stroke-primary stroke-[2.5]"
-                            />
-                            <text
-                              x={pt.x}
-                              y={Math.max(8, pt.y - 7)}
-                              textAnchor="middle"
-                              className="text-[10px] font-bold fill-foreground"
-                            >
-                              {pt.score.toFixed(1)}
-                            </text>
-                            {pt.date && (
-                              <text
-                                x={pt.x}
-                                y="66"
-                                textAnchor="middle"
-                                className="text-[9px] fill-muted-foreground"
-                              >
-                                {pt.date.slice(5)}
-                              </text>
-                            )}
-                          </g>
-                        ))}
-                      </>
+                      <polyline
+                        fill="none"
+                        stroke="var(--color-primary, #0d9488)"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        points={points}
+                      />
                     );
                   })()}
+
+                  {/* Data Points */}
+                  {ratedEvents.map((evt, idx) => {
+                    const width = Math.max(260, ratedEvents.length * 80);
+                    const padding = 30;
+                    const step =
+                      ratedEvents.length > 1
+                        ? (width - padding * 2) / (ratedEvents.length - 1)
+                        : 0;
+                    const score = Math.min(10, Math.max(0, evt.normalizedScore || 0));
+                    const y = 60 - (score / 10) * 50;
+                    const x = padding + idx * step;
+
+                    return (
+                      <g key={evt.id}>
+                        <circle
+                          cx={x}
+                          cy={y}
+                          r="4"
+                          fill="var(--color-primary, #0d9488)"
+                          stroke="var(--color-card, #121212)"
+                          strokeWidth="2"
+                        />
+                        <text
+                          x={x}
+                          y={y - 8}
+                          textAnchor="middle"
+                          fill="currentColor"
+                          className="text-[10px] font-bold fill-foreground"
+                        >
+                          {score.toFixed(1)}
+                        </text>
+                      </g>
+                    );
+                  })}
                 </svg>
               </div>
             </div>
@@ -293,11 +331,10 @@ export function RewatchHistoryModal({
               </div>
             ) : (
               <div className="space-y-3">
-                {/* Map sorted entries descending for display, but calculating ordinals from ascending order */}
                 {[...sortedAscending].reverse().map((entry) => {
                   const ascIndex = sortedAscending.findIndex((e) => e.id === entry.id);
                   const viewingNumber = ascIndex + 1;
-                  const isRewatch = entry.isRewatch || viewingNumber > 1;
+                  const isRewatch = Boolean(entry.isRewatch || viewingNumber > 1);
 
                   const ordinalSuffix =
                     viewingNumber === 1
@@ -308,19 +345,24 @@ export function RewatchHistoryModal({
                       ? "3rd"
                       : `${viewingNumber}th`;
 
+                  let badgeLabel = "1st logged viewing";
+                  if (isRewatch) {
+                    if (entries.length > 1 && viewingNumber > 1) {
+                      badgeLabel = `Rewatch · ${ordinalSuffix} logged viewing`;
+                    } else {
+                      badgeLabel = "Rewatch";
+                    }
+                  }
+
                   const formattedDate = entry.watchedDate
                     ? new Date(`${entry.watchedDate}T12:00:00Z`).toLocaleDateString(undefined, {
                         year: "numeric",
                         month: "short",
                         day: "numeric",
                       })
-                    : entry.loggedDate
-                    ? new Date(entry.loggedDate).toLocaleDateString(undefined, {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric",
-                      })
                     : "Undated";
+
+                  const scoreOnTen = getEventScoreOnTen(entry);
 
                   return (
                     <div
@@ -336,16 +378,16 @@ export function RewatchHistoryModal({
                                 : "bg-muted text-muted-foreground"
                             }`}
                           >
-                            {isRewatch ? `Rewatch · ${ordinalSuffix} logged viewing` : "1st logged viewing"}
+                            {badgeLabel}
                           </span>
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
                             <Calendar size={12} />
                             <span>{formattedDate}</span>
                           </span>
-                          {entry.ratingValue !== null && entry.ratingValue !== undefined && (
+                          {scoreOnTen !== null && (
                             <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary">
                               <Star size={12} className="fill-primary" />
-                              <span>{entry.ratingValue.toFixed(1)} / 10</span>
+                              <span>{scoreOnTen.toFixed(1)} / 10</span>
                             </span>
                           )}
                         </div>
@@ -363,26 +405,27 @@ export function RewatchHistoryModal({
 
                         {/* Tags */}
                         {Array.isArray(entry.tags) && entry.tags.length > 0 && (
-                          <div className="flex flex-wrap gap-1 mt-1.5">
-                            {entry.tags.map((tag, tIdx) => (
+                          <div className="flex flex-wrap gap-1 pt-1">
+                            {entry.tags.map((t, idx) => (
                               <span
-                                key={tIdx}
-                                className="px-1.5 py-0.5 rounded text-[10px] bg-card text-muted-foreground border border-border"
+                                key={idx}
+                                className="px-1.5 py-0.2 rounded text-[9px] bg-card border border-border text-muted-foreground"
                               >
-                                #{tag}
+                                #{t}
                               </span>
                             ))}
                           </div>
                         )}
                       </div>
 
-                      <div className="flex items-center gap-1 shrink-0">
+                      {/* Item Actions: Edit & Delete */}
+                      <div className="flex items-center gap-1 shrink-0 pt-0.5">
                         {onEditEntry && (
                           <button
                             type="button"
                             onClick={() => onEditEntry(entry)}
                             className="p-1.5 rounded-button text-muted-foreground hover:text-foreground hover:bg-card transition-colors cursor-pointer"
-                            title="Edit this viewing log"
+                            title="Edit viewing log"
                           >
                             <Edit2 size={13} />
                           </button>
@@ -391,8 +434,8 @@ export function RewatchHistoryModal({
                           type="button"
                           onClick={() => handleDelete(entry.id)}
                           disabled={deletingId === entry.id}
-                          className="p-1.5 rounded-button text-muted-foreground hover:text-destructive hover:bg-card transition-colors cursor-pointer"
-                          title="Delete this viewing log"
+                          className="p-1.5 rounded-button text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors cursor-pointer disabled:opacity-50"
+                          title="Delete viewing log"
                         >
                           <Trash2 size={13} />
                         </button>
@@ -405,7 +448,7 @@ export function RewatchHistoryModal({
           </div>
         </div>
 
-        {/* Footer */}
+        {/* Modal Footer */}
         <div className="p-4 border-t border-border bg-surface/50 flex items-center justify-between gap-3">
           <button
             type="button"
@@ -414,19 +457,17 @@ export function RewatchHistoryModal({
           >
             Close
           </button>
-          {onLogNewViewing && (
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onLogNewViewing();
-              }}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold transition-colors cursor-pointer shadow-sm"
-            >
-              <Plus size={14} />
-              <span>Log another viewing</span>
-            </button>
-          )}
+          <button
+            type="button"
+            onClick={() => {
+              onClose();
+              onLogNewViewing(mediaItem);
+            }}
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold transition-colors cursor-pointer shadow-xs"
+          >
+            <Plus size={14} />
+            <span>Log Another Viewing</span>
+          </button>
         </div>
       </div>
     </div>

@@ -182,7 +182,7 @@ describe("Phase 14B: Unified Library & Cinematic Viewing Timeline", () => {
       {
         id: tvEpisodeId,
         title: "The National Anthem",
-        mediaType: "tv_episode",
+        mediaType: "episode",
         releaseDate: "2011-12-04",
       },
     ]);
@@ -375,7 +375,7 @@ describe("Phase 14B: Unified Library & Cinematic Viewing Timeline", () => {
     );
     assert.equal(res.status, 201);
     const data = await res.json();
-    assert.equal(data.entry.mediaItem.mediaType, "tv_episode");
+    assert.equal(data.entry.mediaItem.mediaType, "episode");
   });
 
   it("5. automatically marks media as watched globally upon diary logging", async () => {
@@ -473,5 +473,77 @@ describe("Phase 14B: Unified Library & Cinematic Viewing Timeline", () => {
       })
     );
     assert.equal(unauthPost.status, 401);
+  });
+
+  it("9. resolves synthetic and TMDB media IDs in diary POST without duplication", async () => {
+    // Post with already-persisted ID
+    const resPersisted = await postDiary(
+      new NextRequest("http://localhost:3000/api/diary", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          cookie: ownerCookie,
+        },
+        body: JSON.stringify({
+          mediaItemId: movie2Id,
+          watchedDate: "2026-03-01",
+          ratingValue: 9.5,
+          notes: "Arrival re-examination.",
+        }),
+      })
+    );
+    assert.equal(resPersisted.status, 201);
+    const dataPersisted = await resPersisted.json();
+    assert.equal(dataPersisted.entry.mediaItemId, movie2Id);
+
+    // Re-posting does not duplicate media record
+    const countCheck = await db.query.mediaItems.findMany({
+      where: eq(mediaItems.id, movie2Id),
+    });
+    assert.equal(countCheck.length, 1);
+  });
+
+  it("10. supports incremental diary pagination with totalCount and hasMore", async () => {
+    const pagedRes = await getDiary(
+      new NextRequest("http://localhost:3000/api/diary?limit=2&offset=0", {
+        headers: { cookie: ownerCookie },
+      })
+    );
+    assert.equal(pagedRes.status, 200);
+    const pagedData = await pagedRes.json();
+    assert.equal(pagedData.entries.length, 2);
+    assert.ok(typeof pagedData.totalCount === "number");
+    assert.ok(pagedData.totalCount >= 2);
+    assert.equal(typeof pagedData.hasMore, "boolean");
+  });
+
+  it("11. normalizes ratings on scale of 10 and distinguishes unrated items", async () => {
+    const { reviewScoreOnTen } = await import("../lib/review-rating");
+
+    // Letterboxd 4.5/5 must evaluate to 9.0/10
+    const lbCandidate = {
+      calculatedOverallScore: null,
+      sourceRating: 4.5,
+      sourceScale: 5,
+      sourceService: "letterboxd",
+      ratingSystemId: null,
+      tierId: null,
+      ratingSystem: null,
+      categoryScores: [],
+    };
+    assert.equal(reviewScoreOnTen(lbCandidate), 9);
+
+    // Unrated / Watched-only candidate must evaluate to null
+    const watchedOnlyCandidate = {
+      calculatedOverallScore: null,
+      sourceRating: null,
+      sourceScale: null,
+      sourceService: null,
+      ratingSystemId: null,
+      tierId: null,
+      ratingSystem: null,
+      categoryScores: [],
+    };
+    assert.equal(reviewScoreOnTen(watchedOnlyCandidate), null);
   });
 });

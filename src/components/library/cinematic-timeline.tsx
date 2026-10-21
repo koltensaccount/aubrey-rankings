@@ -1,11 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Film, Tv, History, Filter, List, Calendar, Plus, Sparkles } from "lucide-react";
+import { useState, useMemo, useEffect } from "react";
+import { Calendar, List, Plus, Sparkles, Filter, Loader2 } from "lucide-react";
 import { TimelineEntryCard } from "./timeline-entry-card";
 import { CompactDiaryList } from "./compact-diary-list";
-import { RewatchHistoryModal, type DiaryViewingEvent } from "./rewatch-history-modal";
 import { LogViewingDialog } from "./log-viewing-dialog";
+import { RewatchHistoryModal, type DiaryViewingEvent } from "./rewatch-history-modal";
+
+export type FilterType = "all" | "films" | "tv" | "rewatches";
+export type ViewMode = "timeline" | "list";
 
 export interface TimelineEntry extends DiaryViewingEvent {
   mediaItem: {
@@ -14,13 +17,17 @@ export interface TimelineEntry extends DiaryViewingEvent {
     year?: number | null;
     releaseDate?: string | null;
     mediaType?: string | null;
+    seasonNumber?: number | null;
+    episodeNumber?: number | null;
     posterPath?: string | null;
     stillPath?: string | null;
   };
 }
 
 interface CinematicTimelineProps {
-  entries: TimelineEntry[];
+  initialEntries: TimelineEntry[];
+  totalDiaryCount?: number;
+  hasMoreInitial?: boolean;
   undatedEntries?: Array<{
     id: string;
     mediaItem: {
@@ -28,6 +35,8 @@ interface CinematicTimelineProps {
       title: string;
       year?: number | null;
       mediaType?: string | null;
+      seasonNumber?: number | null;
+      episodeNumber?: number | null;
       posterPath?: string | null;
       stillPath?: string | null;
     };
@@ -35,20 +44,25 @@ interface CinematicTimelineProps {
     status?: string;
     content?: string;
   }>;
-  onEntrySaved?: (entry: any) => void;
-  onEntryDeleted?: (id: string) => void;
+  onViewingLogged?: (entry: any) => void;
+  onEntryUpdated?: (entry: any) => void;
+  onEntryDeleted?: (entryId: string) => void;
 }
 
-type FilterType = "all" | "films" | "tv" | "rewatches";
-type ViewMode = "timeline" | "list";
-
 export function CinematicTimeline({
-  entries: initialEntries,
+  initialEntries,
+  totalDiaryCount,
+  hasMoreInitial = false,
   undatedEntries = [],
-  onEntrySaved,
+  onViewingLogged,
+  onEntryUpdated,
   onEntryDeleted,
 }: CinematicTimelineProps) {
   const [entries, setEntries] = useState<TimelineEntry[]>(initialEntries);
+  const [hasMore, setHasMore] = useState<boolean>(
+    hasMoreInitial || (typeof totalDiaryCount === "number" && initialEntries.length < totalDiaryCount)
+  );
+  const [loadingMore, setLoadingMore] = useState(false);
   const [filter, setFilter] = useState<FilterType>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("timeline");
 
@@ -58,12 +72,37 @@ export function CinematicTimeline({
   const [isLogDialogOpen, setIsLogDialogOpen] = useState(false);
   const [logDialogMediaItem, setLogDialogMediaItem] = useState<any | null>(null);
 
-  // Synchronize entries if initialEntries changes
-  useMemo(() => {
+  // Synchronize entries cleanly when initialEntries updates
+  useEffect(() => {
     setEntries(initialEntries);
   }, [initialEntries]);
 
+  // Load earlier viewings incrementally
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const res = await fetch(`/api/diary?offset=${entries.length}&limit=50`);
+      if (res.ok) {
+        const data = await res.json();
+        if (Array.isArray(data.entries)) {
+          setEntries((prev) => {
+            const existingIds = new Set(prev.map((e) => e.id));
+            const fresh = data.entries.filter((e: any) => !existingIds.has(e.id));
+            return [...prev, ...fresh];
+          });
+          setHasMore(Boolean(data.hasMore));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load earlier viewings:", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
+
   // Compute total viewings and chronological ordinals per media item
+  // Ordinals strictly reflect known logged events in ascending order
   const { mediaOrdinalsMap, mediaTotalCountMap } = useMemo(() => {
     const ordinalsMap = new Map<string, number>(); // entry.id -> ordinal (1, 2, 3...)
     const totalCountMap = new Map<string, number>(); // mediaItemId -> total count
@@ -76,13 +115,13 @@ export function CinematicTimeline({
       byMedia.set(e.mediaItemId, list);
     });
 
-    // For each media item, sort chronologically ascending to assign 1st, 2nd, 3rd viewing
+    // For each media item, sort chronologically ascending to assign ordinals
     byMedia.forEach((mediaEntries, mediaId) => {
       totalCountMap.set(mediaId, mediaEntries.length);
 
       const sortedAsc = [...mediaEntries].sort((a, b) => {
-        const dateA = a.watchedDate || (a.loggedDate ? new Date(a.loggedDate).toISOString().slice(0, 10) : "");
-        const dateB = b.watchedDate || (b.loggedDate ? new Date(b.loggedDate).toISOString().slice(0, 10) : "");
+        const dateA = a.watchedDate || "";
+        const dateB = b.watchedDate || "";
         return dateA.localeCompare(dateB);
       });
 
@@ -97,28 +136,40 @@ export function CinematicTimeline({
   // Filter entries
   const filteredEntries = useMemo(() => {
     return entries.filter((e) => {
+      const isEpisode =
+        e.mediaItem.mediaType === "episode" ||
+        Boolean(e.mediaItem.seasonNumber && e.mediaItem.episodeNumber);
+
       if (filter === "films") {
-        return e.mediaItem.mediaType !== "tv_episode" && e.mediaItem.mediaType !== "tv_show";
+        return e.mediaItem.mediaType === "movie" || (!isEpisode && e.mediaItem.mediaType !== "tv");
       }
       if (filter === "tv") {
-        return e.mediaItem.mediaType === "tv_episode" || e.mediaItem.mediaType === "tv_show";
+        return isEpisode || e.mediaItem.mediaType === "tv";
       }
       if (filter === "rewatches") {
         const ordinal = mediaOrdinalsMap.get(e.id) || 1;
-        return e.isRewatch || ordinal > 1;
+        return Boolean(e.isRewatch || ordinal > 1);
       }
       return true;
     });
   }, [entries, filter, mediaOrdinalsMap]);
 
-  // Group filtered entries chronologically by Year, then Month
-  const groupedChronology = useMemo(() => {
-    // Sort descending by genuine viewing date (never DB modification timestamps)
-    const sorted = [...filteredEntries].sort((a, b) => {
-      const dateA = a.watchedDate || (a.loggedDate ? new Date(a.loggedDate).toISOString().slice(0, 10) : "0000-00-00");
-      const dateB = b.watchedDate || (b.loggedDate ? new Date(b.loggedDate).toISOString().slice(0, 10) : "0000-00-00");
-      return dateB.localeCompare(dateA);
+  // Partition confirmed dated entries from undated entries
+  // NEVER fabricate a viewing date from a database modification or activity timestamp
+  const { groupedChronology, undatedTimelineEntries } = useMemo(() => {
+    const dated: TimelineEntry[] = [];
+    const undated: TimelineEntry[] = [];
+
+    filteredEntries.forEach((e) => {
+      if (e.watchedDate && /^\d{4}-\d{2}-\d{2}$/.test(e.watchedDate.trim())) {
+        dated.push(e);
+      } else {
+        undated.push(e);
+      }
     });
+
+    // Sort dated entries strictly descending by genuine viewing date
+    dated.sort((a, b) => (b.watchedDate || "").localeCompare(a.watchedDate || ""));
 
     // Map: Year -> MonthName -> entries[]
     const groups: Array<{
@@ -134,23 +185,11 @@ export function CinematicTimeline({
       "JULY", "AUGUST", "SEPTEMBER", "OCTOBER", "NOVEMBER", "DECEMBER",
     ];
 
-    sorted.forEach((entry) => {
-      let year = "UNKNOWN YEAR";
-      let monthIndex = -1;
-
-      if (entry.watchedDate) {
-        const parts = entry.watchedDate.split("-");
-        if (parts.length >= 2) {
-          year = parts[0];
-          monthIndex = parseInt(parts[1], 10) - 1;
-        }
-      } else if (entry.loggedDate) {
-        const d = new Date(entry.loggedDate);
-        year = String(d.getFullYear());
-        monthIndex = d.getMonth();
-      }
-
-      const monthName = monthNames[monthIndex] || "OTHER";
+    dated.forEach((entry) => {
+      const dateParts = entry.watchedDate!.split("-");
+      const year = dateParts[0];
+      const monthIdx = parseInt(dateParts[1], 10) - 1;
+      const monthName = monthNames[monthIdx] || "VIEWINGS";
 
       let yearGroup = groups.find((g) => g.year === year);
       if (!yearGroup) {
@@ -167,7 +206,7 @@ export function CinematicTimeline({
       monthGroup.entries.push(entry);
     });
 
-    return groups;
+    return { groupedChronology: groups, undatedTimelineEntries: undated };
   }, [filteredEntries]);
 
   const handleOpenHistory = (mediaItem: any) => {
@@ -186,17 +225,22 @@ export function CinematicTimeline({
     setIsLogDialogOpen(true);
   };
 
-  const handleLogSaved = (saved: any) => {
+  const handleLogSaved = (savedEntry: any) => {
     setEntries((prev) => {
-      const idx = prev.findIndex((e) => e.id === saved.id);
+      const idx = prev.findIndex((e) => e.id === savedEntry.id);
       if (idx >= 0) {
-        const next = [...prev];
-        next[idx] = saved;
-        return next;
+        const copy = [...prev];
+        copy[idx] = { ...copy[idx], ...savedEntry };
+        return copy;
       }
-      return [saved, ...prev];
+      return [savedEntry, ...prev];
     });
-    if (onEntrySaved) onEntrySaved(saved);
+
+    if (editingEntry) {
+      if (onEntryUpdated) onEntryUpdated(savedEntry);
+    } else {
+      if (onViewingLogged) onViewingLogged(savedEntry);
+    }
   };
 
   const handleEntryDeleted = (deletedId: string) => {
@@ -227,7 +271,7 @@ export function CinematicTimeline({
               onClick={() => setViewMode("timeline")}
               className={`px-3 py-1.5 rounded-button text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
                 viewMode === "timeline"
-                  ? "bg-primary text-primary-foreground shadow-sm"
+                  ? "bg-primary text-primary-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -239,7 +283,7 @@ export function CinematicTimeline({
               onClick={() => setViewMode("list")}
               className={`px-3 py-1.5 rounded-button text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer ${
                 viewMode === "list"
-                  ? "bg-primary text-primary-foreground shadow-sm"
+                  ? "bg-primary text-primary-foreground shadow-xs"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -264,7 +308,7 @@ export function CinematicTimeline({
                 onClick={() => setFilter(f.id)}
                 className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
                   filter === f.id
-                    ? "bg-card text-foreground shadow-sm border border-border"
+                    ? "bg-card text-foreground shadow-xs border border-border"
                     : "text-muted-foreground hover:text-foreground"
                 }`}
               >
@@ -277,7 +321,7 @@ export function CinematicTimeline({
           <button
             type="button"
             onClick={handleNewLog}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold transition-colors cursor-pointer shadow-sm"
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold transition-colors cursor-pointer shadow-xs"
           >
             <Plus size={14} />
             <span>Add Viewing</span>
@@ -330,9 +374,9 @@ export function CinematicTimeline({
         />
       ) : (
         /* Signature Cinematic Viewing Timeline */
-        <div className="max-w-3xl mx-auto">
+        <div className="max-w-3xl mx-auto space-y-12">
           {groupedChronology.map((yearGroup) => (
-            <div key={yearGroup.year} className="mb-12 last:mb-0">
+            <div key={yearGroup.year} className="last:mb-0">
               {/* Year Heading (Large Barlow Condensed) */}
               <div className="flex items-center gap-4 mb-6 select-none">
                 <span className="font-display text-4xl sm:text-5xl font-bold tracking-tight text-foreground uppercase">
@@ -382,6 +426,55 @@ export function CinematicTimeline({
               ))}
             </div>
           ))}
+
+          {/* Undated viewing entries (distinct from confirmed dates) */}
+          {undatedTimelineEntries.length > 0 && (
+            <div className="pt-6 border-t border-border/80">
+              <div className="flex items-center gap-4 mb-4 select-none">
+                <span className="font-display text-2xl font-bold tracking-tight text-muted-foreground uppercase">
+                  Undated Viewings ({undatedTimelineEntries.length})
+                </span>
+                <div className="flex-1 h-px bg-border/60" />
+              </div>
+              <div className="space-y-2">
+                {undatedTimelineEntries.map((entry) => {
+                  const ordinal = mediaOrdinalsMap.get(entry.id) || 1;
+                  const totalLogs = mediaTotalCountMap.get(entry.mediaItemId) || 1;
+                  return (
+                    <TimelineEntryCard
+                      key={entry.id}
+                      entry={entry}
+                      ordinalIndex={ordinal}
+                      totalViewingsForMedia={totalLogs}
+                      onOpenHistory={handleOpenHistory}
+                      onEditEntry={handleEditEntry}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Incremental Loading Trigger */}
+          {hasMore && (
+            <div className="pt-6 pb-2 text-center">
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-button bg-surface hover:bg-surface-elevated border border-border text-xs font-semibold text-foreground transition-all cursor-pointer shadow-xs disabled:opacity-50"
+              >
+                {loadingMore ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin text-primary" />
+                    <span>Loading earlier viewings...</span>
+                  </>
+                ) : (
+                  <span>Load earlier viewings</span>
+                )}
+              </button>
+            </div>
+          )}
         </div>
       )}
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Star, History, Lock, Globe, Link2, Edit2, Calendar } from "lucide-react";
+import { Star, History, Lock, Globe, Link2, Edit2 } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
 import type { DiaryViewingEvent } from "./rewatch-history-modal";
@@ -14,6 +14,8 @@ interface TimelineEntryCardProps {
       year?: number | null;
       releaseDate?: string | null;
       mediaType?: string | null;
+      seasonNumber?: number | null;
+      episodeNumber?: number | null;
       posterPath?: string | null;
       stillPath?: string | null;
     };
@@ -32,7 +34,12 @@ export function TimelineEntryCard({
   onEditEntry,
 }: TimelineEntryCardProps) {
   const { mediaItem } = entry;
-  const isRewatch = entry.isRewatch || ordinalIndex > 1;
+  const isEpisode =
+    mediaItem.mediaType === "episode" ||
+    Boolean(mediaItem.seasonNumber && mediaItem.episodeNumber);
+
+  // Rewatch ordinal calculation strictly reflecting known logged events
+  const isRewatch = Boolean(entry.isRewatch || ordinalIndex > 1);
 
   const ordinalSuffix =
     ordinalIndex === 1
@@ -43,7 +50,16 @@ export function TimelineEntryCard({
       ? "3rd"
       : `${ordinalIndex}th`;
 
-  // Parse date into Day and Month
+  let badgeLabel = "1st Logged Viewing";
+  if (isRewatch) {
+    if (totalViewingsForMedia > 1 && ordinalIndex > 1) {
+      badgeLabel = `Rewatch · ${ordinalSuffix} Logged Viewing`;
+    } else {
+      badgeLabel = "Rewatch";
+    }
+  }
+
+  // Parse date into Day and Month (strictly genuine viewing date, never DB timestamps)
   let day = "";
   let month = "";
   if (entry.watchedDate) {
@@ -54,22 +70,22 @@ export function TimelineEntryCard({
       const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
       month = months[monthNum - 1] || "";
     }
-  } else if (entry.loggedDate) {
-    const d = new Date(entry.loggedDate);
-    day = String(d.getDate()).padStart(2, "0");
-    const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
-    month = months[d.getMonth()] || "";
   }
 
-  // Display rating
-  const ratingScore =
-    typeof entry.ratingValue === "number"
-      ? entry.ratingValue
-      : typeof entry.rating?.calculatedOverallScore === "number"
-      ? entry.rating.calculatedOverallScore
-      : typeof entry.rating?.sourceRating === "number"
-      ? entry.rating.sourceRating
-      : null;
+  // Display rating: strictly independent per-viewing score on /10 scale
+  let ratingScore: number | null = null;
+  if (typeof entry.ratingValue === "number" && Number.isFinite(entry.ratingValue)) {
+    ratingScore = entry.ratingValue;
+  } else if (entry.rating) {
+    const r = entry.rating as any;
+    if (typeof r.calculatedOverallScore === "number" && Number.isFinite(r.calculatedOverallScore)) {
+      const scale = r.ratingSystem?.scale || 10;
+      ratingScore = (r.calculatedOverallScore / scale) * 10;
+    } else if (typeof r.sourceRating === "number" && Number.isFinite(r.sourceRating)) {
+      const scale = typeof r.sourceScale === "number" && r.sourceScale > 0 ? r.sourceScale : 10;
+      ratingScore = (r.sourceRating / scale) * 10;
+    }
+  }
 
   // Visibility indicator
   const visibility = entry.review?.visibility || "private";
@@ -82,7 +98,7 @@ export function TimelineEntryCard({
           {day || "—"}
         </span>
         <span className="block text-[10px] sm:text-[11px] font-bold text-muted-foreground tracking-wider uppercase mt-0.5">
-          {month}
+          {month || "UNDATED"}
         </span>
       </div>
 
@@ -105,14 +121,14 @@ export function TimelineEntryCard({
             {/* Artwork Poster or Episode Still */}
             <Link
               href={`/media/${encodeURIComponent(mediaItem.id)}`}
-              className="shrink-0 w-16 sm:w-20 hover:opacity-90 transition-opacity"
+              className={`shrink-0 ${isEpisode ? "w-24 sm:w-28 aspect-video" : "w-14 sm:w-16 aspect-[2/3]"} hover:opacity-90 transition-opacity`}
             >
               <CinematicMediaCard
                 title={mediaItem.title}
-                posterPath={mediaItem.posterPath}
+                posterPath={isEpisode ? mediaItem.stillPath || mediaItem.posterPath : mediaItem.posterPath}
                 stillPath={mediaItem.stillPath}
-                aspect={mediaItem.mediaType === "tv_episode" ? "video" : "poster"}
-                className="rounded shadow-sm"
+                aspect={isEpisode ? "video" : "poster"}
+                className="rounded shadow-xs"
               />
             </Link>
 
@@ -126,8 +142,14 @@ export function TimelineEntryCard({
                 {mediaItem.mediaType && (
                   <>
                     <span className="text-muted-foreground/60">·</span>
-                    <span className="uppercase text-[9px] font-bold tracking-wider">
-                      {mediaItem.mediaType === "tv_episode" ? "Episode" : "Film"}
+                    <span className="uppercase text-[9px] font-bold tracking-wider text-primary">
+                      {isEpisode
+                        ? mediaItem.seasonNumber && mediaItem.episodeNumber
+                          ? `S${mediaItem.seasonNumber} · E${mediaItem.episodeNumber}`
+                          : "Episode"
+                        : mediaItem.mediaType === "tv"
+                        ? "TV Series"
+                        : "Film"}
                     </span>
                   </>
                 )}
@@ -140,7 +162,7 @@ export function TimelineEntryCard({
                       : "bg-surface-raised text-muted-foreground border border-border"
                   }`}
                 >
-                  {isRewatch ? `Rewatch · ${ordinalSuffix} Logged Viewing` : "1st Logged Viewing"}
+                  {badgeLabel}
                 </span>
               </div>
 
@@ -154,7 +176,7 @@ export function TimelineEntryCard({
                 </Link>
               </h3>
 
-              {/* Rating Display */}
+              {/* Rating Display (strictly on scale of 10) */}
               {ratingScore !== null && (
                 <div className="flex items-center gap-1.5 pt-0.5">
                   <div className="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-primary">

@@ -9,8 +9,9 @@ import {
   diaryEntries,
   watchlistItems,
 } from "@/db/schema";
-import { desc, eq, and, isNull, inArray } from "drizzle-orm";
+import { desc, eq, and, isNull, inArray, count } from "drizzle-orm";
 import { getRatingSummary } from "@/lib/scoring";
+import { reviewScoreOnTen } from "@/lib/review-rating";
 import { LibraryView, type LibraryTab } from "@/components/library/library-view";
 import type { TimelineEntry } from "@/components/library/cinematic-timeline";
 import type { WatchedItem } from "@/components/library/watched-grid";
@@ -19,7 +20,7 @@ import type { WatchlistGridItem } from "@/components/library/watchlist-grid";
 export default async function HomePage({
   searchParams,
 }: {
-  searchParams?: Promise<{ tab?: string }>;
+  searchParams?: Promise<{ tab?: string; filter?: string }>;
 }) {
   const session = await getServerSession();
 
@@ -132,53 +133,79 @@ export default async function HomePage({
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const requestedTab = (resolvedSearchParams.tab?.toLowerCase() as LibraryTab) || "journal";
 
-  // 1. Fetch User Diary Entries (The signature viewing timeline)
-  const rawDiaryEntries = await db.query.diaryEntries.findMany({
-    where: eq(diaryEntries.userId, session.user.id),
-    orderBy: [desc(diaryEntries.watchedDate), desc(diaryEntries.createdAt)],
-    with: {
-      mediaItem: true,
-      rating: true,
-      review: true,
-    },
-  });
+  // 1. Fetch User Diary Entries (Paginated initial batch with total count)
+  const [rawDiaryEntries, diaryTotalCountRows] = await Promise.all([
+    db.query.diaryEntries.findMany({
+      where: eq(diaryEntries.userId, session.user.id),
+      orderBy: [desc(diaryEntries.watchedDate), desc(diaryEntries.createdAt)],
+      limit: 50,
+      with: {
+        mediaItem: true,
+        rating: {
+          with: {
+            ratingSystem: { columns: { scale: true, type: true } },
+            categoryScores: true,
+          },
+        },
+        review: true,
+      },
+    }),
+    db.select({ count: count() }).from(diaryEntries).where(eq(diaryEntries.userId, session.user.id)),
+  ]);
 
   const userDiaryEntries = rawDiaryEntries as TimelineEntry[];
+  const totalDiaryCount = diaryTotalCountRows[0]?.count ?? 0;
 
-  // 2. Fetch User Reviews & Standalone Ratings for Undated Entries
+  // 2. Fetch User Reviews & Standalone Ratings
   const userReviews = await db.query.reviews.findMany({
     where: eq(reviews.userId, session.user.id),
     orderBy: [desc(reviews.updatedAt)],
     with: {
       mediaItem: true,
-      rating: true,
+      rating: {
+        with: {
+          ratingSystem: { columns: { scale: true, type: true } },
+          categoryScores: true,
+        },
+      },
     },
   });
 
+  // Fetch standalone ratings and watched-only records
+  const linkedRatingIds = new Set(userReviews.map((r) => r.ratingId).filter(Boolean));
+  const userRatings = await db.query.ratings.findMany({
+    where: and(eq(ratings.userId, session.user.id), isNull(ratings.collectionId)),
+    orderBy: [desc(ratings.updatedAt)],
+    with: {
+      mediaItem: true,
+      ratingSystem: { columns: { scale: true, type: true } },
+      categoryScores: true,
+    },
+  });
+
+  const standaloneRatings = userRatings.filter((r) => !linkedRatingIds.has(r.id));
+  const ratedStandalone = standaloneRatings.filter((r) => reviewScoreOnTen(r) !== null);
+  const watchedOnlyStandalone = standaloneRatings.filter(
+    (r) => reviewScoreOnTen(r) === null && r.isWatched
+  );
+
   // Filter out reviews that already have an associated diary entry
-  const diaryReviewIds = new Set(userDiaryEntries.map((e) => e.reviewId).filter(Boolean));
-  const diaryRatingIds = new Set(userDiaryEntries.map((e) => e.ratingId).filter(Boolean));
+  const diaryReviewIds = new Set(
+    userDiaryEntries.map((e) => (e as any).reviewId || e.review?.id).filter(Boolean),
+  );
 
   const undatedReviews = userReviews
     .filter((r) => !diaryReviewIds.has(r.id) && !r.watchedDate)
     .map((r) => ({
       id: r.id,
       mediaItem: r.mediaItem,
-      ratingValue: r.rating?.calculatedOverallScore ?? r.rating?.sourceRating ?? null,
+      ratingValue: r.rating ? reviewScoreOnTen(r.rating) : null,
       status: r.status,
       content: r.draftContent || r.content,
     }));
 
   // 3. Fetch Watched Titles
   // A title is watched if marked in ratings (isWatched = true) or has a diary entry
-  const userRatings = await db.query.ratings.findMany({
-    where: and(eq(ratings.userId, session.user.id), isNull(ratings.collectionId)),
-    with: {
-      mediaItem: true,
-      ratingSystem: { columns: { scale: true } },
-    },
-  });
-
   // Map of unique watched items
   const watchedMap = new Map<string, WatchedItem>();
 
@@ -186,16 +213,25 @@ export default async function HomePage({
   userDiaryEntries.forEach((entry) => {
     const m = entry.mediaItem;
     const year = m.releaseDate ? parseInt(m.releaseDate.slice(0, 4), 10) : null;
+    const entryScore =
+      typeof entry.ratingValue === "number"
+        ? entry.ratingValue
+        : entry.rating
+        ? reviewScoreOnTen(entry.rating as any)
+        : null;
+
     if (!watchedMap.has(m.id)) {
       watchedMap.set(m.id, {
         id: m.id,
         title: m.title,
         year,
         mediaType: m.mediaType,
+        seasonNumber: m.seasonNumber,
+        episodeNumber: m.episodeNumber,
         posterPath: m.posterPath,
         stillPath: m.stillPath,
         viewingCount: 0,
-        userRating: entry.ratingValue ?? null,
+        userRating: entryScore,
         lastWatchedDate: entry.watchedDate,
       });
     }
@@ -211,22 +247,26 @@ export default async function HomePage({
     if (!rating.mediaItem) return;
     const m = rating.mediaItem;
     const year = m.releaseDate ? parseInt(m.releaseDate.slice(0, 4), 10) : null;
+    const normalizedScore = reviewScoreOnTen(rating);
+
     if (!watchedMap.has(m.id) && rating.isWatched) {
       watchedMap.set(m.id, {
         id: m.id,
         title: m.title,
         year,
         mediaType: m.mediaType,
+        seasonNumber: m.seasonNumber,
+        episodeNumber: m.episodeNumber,
         posterPath: m.posterPath,
         stillPath: m.stillPath,
         viewingCount: 1,
-        userRating: rating.calculatedOverallScore ?? rating.sourceRating ?? null,
+        userRating: normalizedScore,
         lastWatchedDate: rating.watchDate ? rating.watchDate.toISOString().slice(0, 10) : null,
       });
     } else if (watchedMap.has(m.id)) {
       const item = watchedMap.get(m.id)!;
       if (item.userRating === null || item.userRating === undefined) {
-        item.userRating = rating.calculatedOverallScore ?? rating.sourceRating ?? null;
+        item.userRating = normalizedScore;
       }
     }
   });
@@ -308,7 +348,12 @@ export default async function HomePage({
     <div className="ar-homeContent ar-communityHome">
       <LibraryView
         initialTab={requestedTab}
+        initialFilter={resolvedSearchParams.filter}
         diaryEntries={userDiaryEntries}
+        totalDiaryCount={totalDiaryCount}
+        userReviews={userReviews}
+        standaloneRatings={ratedStandalone}
+        watchedOnlyRecords={watchedOnlyStandalone}
         undatedEntries={undatedReviews}
         watchedItems={watchedItems}
         watchlistItems={userWatchlist}

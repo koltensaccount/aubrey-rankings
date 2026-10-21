@@ -1,17 +1,21 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { X, Calendar, Star, Film, Tv, Check, Search } from "lucide-react";
+import { X, Calendar, Star, Film, Tv, Check, Search, ChevronRight } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
+import { CinematicSlider } from "@/components/cinematic-slider";
 
 interface LogViewingDialogProps {
   isOpen: boolean;
   onClose: () => void;
   mediaItem?: {
     id: string;
+    tmdbId?: number | null;
     title: string;
     year?: number | null;
     mediaType?: string | null;
+    seasonNumber?: number | null;
+    episodeNumber?: number | null;
     posterPath?: string | null;
     stillPath?: string | null;
   } | null;
@@ -39,6 +43,13 @@ export function LogViewingDialog({
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [searching, setSearching] = useState(false);
 
+  // TV Episode sub-targeting
+  const [isTvShowEpisode, setIsTvShowEpisode] = useState(
+    initialMediaItem?.mediaType === "episode" || Boolean(initialMediaItem?.seasonNumber)
+  );
+  const [tvSeason, setTvSeason] = useState<number>(initialMediaItem?.seasonNumber || 1);
+  const [tvEpisode, setTvEpisode] = useState<number>(initialMediaItem?.episodeNumber || 1);
+
   const [watchedDate, setWatchedDate] = useState(
     existingEntry?.watchedDate || new Date().toISOString().slice(0, 10)
   );
@@ -56,6 +67,11 @@ export function LogViewingDialog({
   useEffect(() => {
     if (initialMediaItem) {
       setSelectedMedia(initialMediaItem);
+      setIsTvShowEpisode(
+        initialMediaItem.mediaType === "episode" || Boolean(initialMediaItem.seasonNumber)
+      );
+      if (initialMediaItem.seasonNumber) setTvSeason(initialMediaItem.seasonNumber);
+      if (initialMediaItem.episodeNumber) setTvEpisode(initialMediaItem.episodeNumber);
     }
   }, [initialMediaItem]);
 
@@ -77,39 +93,61 @@ export function LogViewingDialog({
     setSearching(true);
     setError(null);
     try {
-      const res = await fetch(`/api/tmdb/search?query=${encodeURIComponent(searchQuery.trim())}`);
+      const res = await fetch(`/api/tmdb/search?q=${encodeURIComponent(searchQuery.trim())}`);
       if (res.ok) {
         const data = await res.json();
         setSearchResults(data.results || []);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setError(data.error || "Search request failed");
       }
     } catch (err: any) {
       console.error("TMDB search failed:", err);
+      setError("Unable to search TMDB titles");
     } finally {
       setSearching(false);
     }
   };
 
   const handleSelectMedia = (item: any) => {
-    // Standardize to mediaItem structure
     const isTv = item.media_type === "tv" || Boolean(item.first_air_date);
-    const mediaId = `tmdb-${isTv ? "tv" : "movie"}-${item.id}`;
     const year = item.release_date
       ? parseInt(item.release_date.slice(0, 4), 10)
       : item.first_air_date
       ? parseInt(item.first_air_date.slice(0, 4), 10)
       : null;
 
-    setSelectedMedia({
-      id: mediaId,
-      title: item.title || item.name || "Untitled",
-      year,
-      mediaType: isTv ? "tv_show" : "movie",
-      posterPath: item.poster_path,
-      stillPath: item.backdrop_path,
-    });
+    if (isTv) {
+      setSelectedMedia({
+        id: `tv_${item.id}`,
+        tmdbId: item.id,
+        title: item.name || item.title || "Untitled Series",
+        year,
+        mediaType: "tv",
+        posterPath: item.poster_path,
+        stillPath: item.backdrop_path,
+      });
+      setIsTvShowEpisode(false);
+    } else {
+      setSelectedMedia({
+        id: `movie_${item.id}`,
+        tmdbId: item.id,
+        title: item.title || item.name || "Untitled Film",
+        year,
+        mediaType: "movie",
+        posterPath: item.poster_path,
+        stillPath: item.backdrop_path,
+      });
+      setIsTvShowEpisode(false);
+    }
     setSearchResults([]);
     setSearchQuery("");
   };
+
+  const isEpisode =
+    selectedMedia?.mediaType === "episode" ||
+    isTvShowEpisode ||
+    Boolean(selectedMedia?.seasonNumber && selectedMedia?.episodeNumber);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -130,12 +168,28 @@ export function LogViewingDialog({
       const url = existingEntry?.id ? `/api/diary/${encodeURIComponent(existingEntry.id)}` : "/api/diary";
       const method = existingEntry?.id ? "PATCH" : "POST";
 
+      let finalMediaId = selectedMedia.id;
+      let finalMediaType = selectedMedia.mediaType || "movie";
+
+      // If targeted to a TV episode
+      if ((selectedMedia.mediaType === "tv" || isTvShowEpisode) && tvSeason && tvEpisode) {
+        const rawTvId =
+          selectedMedia.tmdbId ||
+          selectedMedia.id.replace(/^(?:tv_|tmdb[-_]tv[-_])/i, "");
+        finalMediaId = `tv_${rawTvId}_s${tvSeason}_e${tvEpisode}`;
+        finalMediaType = "episode";
+      }
+
       const res = await fetch(url, {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          mediaItemId: selectedMedia.id,
-          watchedDate,
+          mediaItemId: finalMediaId,
+          tmdbId: selectedMedia.tmdbId,
+          mediaType: finalMediaType,
+          seasonNumber: finalMediaType === "episode" ? tvSeason : undefined,
+          episodeNumber: finalMediaType === "episode" ? tvEpisode : undefined,
+          watchedDate: watchedDate || null,
           isRewatch,
           ratingValue,
           notes: notes.trim() || null,
@@ -159,7 +213,7 @@ export function LogViewingDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-background/80 backdrop-blur-xs animate-in fade-in duration-200"
       role="dialog"
       aria-modal="true"
     >
@@ -194,7 +248,7 @@ export function LogViewingDialog({
           {!selectedMedia ? (
             <div className="space-y-3">
               <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">
-                Find Film or Episode to Log
+                Find Film or Television Title
               </label>
               <div className="flex gap-2">
                 <input
@@ -240,7 +294,9 @@ export function LogViewingDialog({
                         </div>
                         <div className="text-[10px] text-muted-foreground">
                           {item.release_date?.slice(0, 4) || item.first_air_date?.slice(0, 4) || "Unknown year"} ·{" "}
-                          <span className="uppercase">{item.media_type || "Film"}</span>
+                          <span className="uppercase font-semibold text-primary">
+                            {item.media_type === "tv" ? "TV Series" : "Film"}
+                          </span>
                         </div>
                       </div>
                     </button>
@@ -249,38 +305,105 @@ export function LogViewingDialog({
               )}
             </div>
           ) : (
-            <div className="p-3 rounded-card bg-surface border border-border flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 aspect-[2/3] shrink-0 rounded overflow-hidden border border-border">
-                  <CinematicMediaCard
-                    title={selectedMedia.title}
-                    posterPath={selectedMedia.posterPath}
-                    stillPath={selectedMedia.stillPath}
-                    aspect={selectedMedia.mediaType === "tv_episode" ? "video" : "poster"}
-                  />
-                </div>
-                <div className="min-w-0">
-                  <h3 className="text-sm font-semibold text-foreground truncate">
-                    {selectedMedia.title}
-                  </h3>
-                  <div className="text-[11px] text-muted-foreground">
-                    {selectedMedia.year && <span>{selectedMedia.year}</span>}
-                    {selectedMedia.mediaType && (
-                      <span className="ml-1 uppercase text-[9px] tracking-wider">
-                        · {selectedMedia.mediaType === "tv_episode" ? "Episode" : "Film"}
+            <div className="space-y-3">
+              <div className="p-3 rounded-card bg-surface border border-border flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`shrink-0 rounded overflow-hidden border border-border ${isEpisode ? "w-20 aspect-video" : "w-10 aspect-[2/3]"}`}>
+                    <CinematicMediaCard
+                      title={selectedMedia.title}
+                      posterPath={isEpisode ? selectedMedia.stillPath || selectedMedia.posterPath : selectedMedia.posterPath}
+                      stillPath={selectedMedia.stillPath}
+                      aspect={isEpisode ? "video" : "poster"}
+                    />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-foreground truncate">
+                      {selectedMedia.title}
+                    </h3>
+                    <div className="text-[11px] text-muted-foreground">
+                      {selectedMedia.year && <span>{selectedMedia.year}</span>}
+                      <span className="ml-1 uppercase text-[9px] font-bold text-primary tracking-wider">
+                        · {isEpisode ? (tvSeason && tvEpisode ? `S${tvSeason} · E${tvEpisode}` : "Episode") : selectedMedia.mediaType === "tv" ? "TV Series" : "Film"}
                       </span>
-                    )}
+                    </div>
                   </div>
                 </div>
+                {!existingEntry && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedMedia(null);
+                      setIsTvShowEpisode(false);
+                    }}
+                    className="text-xs text-muted-foreground hover:text-foreground underline cursor-pointer"
+                  >
+                    Change
+                  </button>
+                )}
               </div>
-              {!existingEntry && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedMedia(null)}
-                  className="text-xs text-muted-foreground hover:text-foreground underline cursor-pointer"
-                >
-                  Change
-                </button>
+
+              {/* TV Series Options: Entire show vs Specific episode */}
+              {(selectedMedia.mediaType === "tv" || isTvShowEpisode) && !existingEntry && (
+                <div className="p-3 rounded-lg bg-surface/70 border border-border space-y-2">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground block">
+                    Television Logging Mode
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsTvShowEpisode(false)}
+                      className={`px-3 py-1.5 rounded-button text-xs font-semibold cursor-pointer transition-colors ${
+                        !isTvShowEpisode
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-surface border border-border text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Entire Series
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsTvShowEpisode(true)}
+                      className={`px-3 py-1.5 rounded-button text-xs font-semibold cursor-pointer transition-colors ${
+                        isTvShowEpisode
+                          ? "bg-primary text-primary-foreground"
+                          : "bg-surface border border-border text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      Specific Episode
+                    </button>
+                  </div>
+
+                  {isTvShowEpisode && (
+                    <div className="grid grid-cols-2 gap-2 pt-1 animate-in fade-in duration-150">
+                      <div>
+                        <label className="text-[10px] uppercase font-bold text-muted-foreground block mb-1">
+                          Season #
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="99"
+                          value={tvSeason}
+                          onChange={(e) => setTvSeason(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                          className="w-full px-2.5 py-1.5 rounded-input bg-surface border border-border text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[10px] uppercase font-bold text-muted-foreground block mb-1">
+                          Episode #
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="999"
+                          value={tvEpisode}
+                          onChange={(e) => setTvEpisode(Math.max(1, parseInt(e.target.value, 10) || 1))}
+                          className="w-full px-2.5 py-1.5 rounded-input bg-surface border border-border text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           )}
@@ -316,36 +439,46 @@ export function LogViewingDialog({
             </div>
           </div>
 
-          {/* Rating */}
-          <div className="space-y-1.5">
+          {/* Rating (CinematicSlider with genuine unrated state) */}
+          <div className="space-y-2 pt-1">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
                 Rating
               </label>
-              {ratingValue !== null && (
+              {ratingValue !== null ? (
                 <span className="text-xs font-bold text-primary flex items-center gap-1">
                   <Star size={13} className="fill-primary" />
                   <span>{ratingValue.toFixed(1)} / 10</span>
                 </span>
+              ) : (
+                <span className="text-xs text-muted-foreground italic">Unrated</span>
               )}
             </div>
-            <div className="flex items-center gap-3">
-              <input
-                type="range"
-                min="0"
-                max="10"
-                step="0.5"
-                value={ratingValue ?? 0}
-                onChange={(e) => setRatingValue(parseFloat(e.target.value))}
-                className="flex-1 accent-primary cursor-pointer"
+
+            <div className="pt-1">
+              <CinematicSlider
+                value={ratingValue}
+                min={0.5}
+                max={10}
+                step={0.5}
+                allowUnset={true}
+                showValue={false}
+                ariaLabel="Viewing rating out of 10"
+                onChange={(val) => setRatingValue(val)}
               />
+            </div>
+
+            <div className="flex justify-between items-center text-[10px] text-muted-foreground pt-0.5">
+              <span>0.5</span>
+              <span>5.0</span>
+              <span>10.0</span>
               {ratingValue !== null && (
                 <button
                   type="button"
                   onClick={() => setRatingValue(null)}
                   className="text-[11px] text-muted-foreground hover:text-foreground underline cursor-pointer"
                 >
-                  Clear
+                  Clear Rating
                 </button>
               )}
             </div>
@@ -393,7 +526,7 @@ export function LogViewingDialog({
             type="button"
             onClick={handleSubmit}
             disabled={saving || !selectedMedia}
-            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold transition-colors cursor-pointer shadow-sm disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-5 py-2 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold transition-colors cursor-pointer shadow-xs disabled:opacity-50"
           >
             <Check size={14} />
             <span>{saving ? "Saving..." : existingEntry ? "Update Viewing" : "Save Viewing Log"}</span>

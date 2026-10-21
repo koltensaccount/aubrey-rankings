@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
 import { diaryEntries, ratings, mediaItems } from "@/db/schema";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull, count } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
+import { resolveMediaItem } from "@/lib/media-resolution";
 
 export async function GET(req: NextRequest) {
   try {
@@ -22,22 +23,29 @@ export async function GET(req: NextRequest) {
       conditions.push(eq(diaryEntries.mediaItemId, mediaItemId));
     }
 
-    const entries = await db.query.diaryEntries.findMany({
-      where: and(...conditions),
-      orderBy: [desc(diaryEntries.watchedDate), desc(diaryEntries.createdAt)],
-      limit,
-      offset,
-      with: {
-        mediaItem: true,
-        rating: true,
-        review: true,
-      },
-    });
+    const [entries, totalRows] = await Promise.all([
+      db.query.diaryEntries.findMany({
+        where: and(...conditions),
+        orderBy: [desc(diaryEntries.watchedDate), desc(diaryEntries.createdAt)],
+        limit,
+        offset,
+        with: {
+          mediaItem: true,
+          rating: true,
+          review: true,
+        },
+      }),
+      db.select({ count: count() }).from(diaryEntries).where(and(...conditions)),
+    ]);
+
+    const totalCount = totalRows[0]?.count ?? 0;
 
     return NextResponse.json({
       success: true,
       entries,
       count: entries.length,
+      totalCount,
+      hasMore: offset + entries.length < totalCount,
     });
   } catch (error: any) {
     console.error("[Diary GET Error]", error);
@@ -65,11 +73,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Verify media item exists
-    const media = await db.query.mediaItems.findFirst({
-      where: eq(mediaItems.id, mediaItemId),
-    });
-    if (!media) {
+    // Resolve media item (reuses existing resolveMediaItem flow to fetch TMDB and persist without duplicates)
+    let resolvedMediaId = await resolveMediaItem(mediaItemId);
+    if (
+      !resolvedMediaId &&
+      body.tmdbId &&
+      body.mediaType === "episode" &&
+      body.seasonNumber !== undefined &&
+      body.episodeNumber !== undefined
+    ) {
+      resolvedMediaId = await resolveMediaItem(
+        `tv_${body.tmdbId}_s${body.seasonNumber}_e${body.episodeNumber}`,
+      );
+    } else if (
+      !resolvedMediaId &&
+      body.tmdbId &&
+      (body.mediaType === "movie" || body.mediaType === "film")
+    ) {
+      resolvedMediaId = await resolveMediaItem(`movie_${body.tmdbId}`);
+    } else if (!resolvedMediaId && body.tmdbId && body.mediaType === "tv") {
+      resolvedMediaId = await resolveMediaItem(`tv_${body.tmdbId}`);
+    }
+
+    if (!resolvedMediaId) {
       return NextResponse.json(
         { error: "Media item not found" },
         { status: 404 },
@@ -82,7 +108,7 @@ export async function POST(req: NextRequest) {
       const existingEntries = await db.query.diaryEntries.findFirst({
         where: and(
           eq(diaryEntries.userId, session.user.id),
-          eq(diaryEntries.mediaItemId, mediaItemId),
+          eq(diaryEntries.mediaItemId, resolvedMediaId),
         ),
       });
       if (existingEntries) {
@@ -105,7 +131,7 @@ export async function POST(req: NextRequest) {
     await db.insert(diaryEntries).values({
       id: entryId,
       userId: session.user.id,
-      mediaItemId,
+      mediaItemId: resolvedMediaId,
       watchedDate: formattedWatchedDate,
       loggedDate: new Date(),
       isRewatch: finalIsRewatch,
@@ -118,7 +144,7 @@ export async function POST(req: NextRequest) {
     const existingRating = await db.query.ratings.findFirst({
       where: and(
         eq(ratings.userId, session.user.id),
-        eq(ratings.mediaItemId, mediaItemId),
+        eq(ratings.mediaItemId, resolvedMediaId),
         isNull(ratings.collectionId),
       ),
     });
@@ -134,7 +160,7 @@ export async function POST(req: NextRequest) {
       await db.insert(ratings).values({
         id: randomUUID(),
         userId: session.user.id,
-        mediaItemId,
+        mediaItemId: resolvedMediaId,
         isWatched: true,
         sourceRating: parsedRating,
         sourceScale: parsedRating !== null ? 10 : null,

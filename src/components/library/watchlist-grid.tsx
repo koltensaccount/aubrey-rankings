@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { Bookmark, Search, Trash2, Plus, Film, BookmarkX } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
@@ -16,6 +16,8 @@ export interface WatchlistGridItem {
     title: string;
     year?: number | null;
     mediaType?: string | null;
+    seasonNumber?: number | null;
+    episodeNumber?: number | null;
     posterPath?: string | null;
     stillPath?: string | null;
   };
@@ -34,7 +36,7 @@ export function WatchlistGrid({ items: initialItems, onItemRemoved, onItemLogged
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [loggingMediaItem, setLoggingMediaItem] = useState<any | null>(null);
 
-  useMemo(() => {
+  useEffect(() => {
     setItems(initialItems);
   }, [initialItems]);
 
@@ -147,46 +149,57 @@ export function WatchlistGrid({ items: initialItems, onItemRemoved, onItemLogged
         </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-          {filteredAndSortedItems.map((item) => (
-            <div
-              key={item.id}
-              className="group rounded-card border border-border bg-card overflow-hidden shadow-card hover:border-primary/40 transition-all flex flex-col justify-between"
-            >
-              {/* Poster Artwork */}
-              <div className="relative">
-                <Link href={`/media/${encodeURIComponent(item.mediaItem.id)}`}>
-                  <CinematicMediaCard
-                    title={item.mediaItem.title}
-                    posterPath={item.mediaItem.posterPath}
-                    stillPath={item.mediaItem.stillPath}
-                    aspect={item.mediaItem.mediaType === "tv_episode" ? "video" : "poster"}
-                    className="transition-transform duration-200 group-hover:scale-[1.02]"
-                  />
-                </Link>
+          {filteredAndSortedItems.map((item) => {
+            const isEpisode =
+              item.mediaItem.mediaType === "episode" ||
+              Boolean(item.mediaItem.seasonNumber && item.mediaItem.episodeNumber);
 
-                <div className="absolute top-2 right-2 pointer-events-none">
-                  <span className="p-1 rounded-full bg-background/90 backdrop-blur-md border border-border text-primary inline-flex">
-                    <Bookmark size={11} className="fill-primary" />
-                  </span>
-                </div>
-              </div>
-
-              {/* Title & Info */}
-              <div className="p-3 space-y-1">
-                <h4 className="font-display text-base uppercase tracking-tight text-foreground truncate">
-                  <Link
-                    href={`/media/${encodeURIComponent(item.mediaItem.id)}`}
-                    className="hover:text-primary transition-colors"
-                  >
-                    {item.mediaItem.title}
+            return (
+              <div
+                key={item.id}
+                className="group rounded-card border border-border bg-card overflow-hidden shadow-card hover:border-primary/40 transition-all flex flex-col justify-between"
+              >
+                {/* Poster Artwork */}
+                <div className="relative">
+                  <Link href={`/media/${encodeURIComponent(item.mediaItem.id)}`}>
+                    <CinematicMediaCard
+                      title={item.mediaItem.title}
+                      posterPath={isEpisode ? item.mediaItem.stillPath || item.mediaItem.posterPath : item.mediaItem.posterPath}
+                      stillPath={item.mediaItem.stillPath}
+                      aspect={isEpisode ? "video" : "poster"}
+                      className="transition-transform duration-200 group-hover:scale-[1.02]"
+                    />
                   </Link>
-                </h4>
-                <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span>{item.mediaItem.year || "—"}</span>
-                  <span className="uppercase text-[9px] font-semibold">
-                    {item.mediaItem.mediaType === "tv_episode" ? "Episode" : "Film"}
-                  </span>
+
+                  <div className="absolute top-2 right-2 pointer-events-none">
+                    <span className="p-1 rounded-full bg-background/90 backdrop-blur-md border border-border text-primary inline-flex">
+                      <Bookmark size={11} className="fill-primary" />
+                    </span>
+                  </div>
                 </div>
+
+                {/* Title & Info */}
+                <div className="p-3 space-y-1">
+                  <h4 className="font-display text-base uppercase tracking-tight text-foreground truncate">
+                    <Link
+                      href={`/media/${encodeURIComponent(item.mediaItem.id)}`}
+                      className="hover:text-primary transition-colors"
+                    >
+                      {item.mediaItem.title}
+                    </Link>
+                  </h4>
+                  <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                    <span>{item.mediaItem.year || "—"}</span>
+                    <span className="uppercase text-[9px] font-semibold text-primary">
+                      {isEpisode
+                        ? item.mediaItem.seasonNumber && item.mediaItem.episodeNumber
+                          ? `S${item.mediaItem.seasonNumber} · E${item.mediaItem.episodeNumber}`
+                          : "Episode"
+                        : item.mediaItem.mediaType === "tv"
+                        ? "TV Series"
+                        : "Film"}
+                    </span>
+                  </div>
 
                 {/* Actions */}
                 <div className="pt-2 border-t border-border/60 flex items-center justify-between gap-2 text-xs">
@@ -211,8 +224,9 @@ export function WatchlistGrid({ items: initialItems, onItemRemoved, onItemLogged
                 </div>
               </div>
             </div>
-          ))}
-        </div>
+          );
+        })}
+      </div>
       )}
 
       {/* Log Viewing Dialog */}
