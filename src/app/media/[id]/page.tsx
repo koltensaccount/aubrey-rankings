@@ -284,6 +284,14 @@ export default async function MediaDetailsPage({
           eq(rv.userId, session.user.id),
           eq(rv.mediaItemId, journalMediaId)
         ),
+        with: {
+          rating: {
+            with: {
+              tier: true,
+              ratingSystem: true,
+            },
+          },
+        },
         orderBy: [desc(reviews.updatedAt)],
       })
     : [];
@@ -545,22 +553,39 @@ export default async function MediaDetailsPage({
       }
     : null;
 
-  const personalReviewsProp: PersonalReviewData[] = ownerReviews.map((r) => ({
-    id: r.id,
-    title: r.title,
-    content: r.content,
-    draftContent: r.draftContent,
-    contentFormat: r.contentFormat,
-    draftContentFormat: r.draftContentFormat,
-    status: r.status,
-    visibility: r.visibility,
-    isSpoiler: r.isSpoiler,
-    isJournal: Boolean(r.isJournal),
-    shareRating: Boolean(r.shareRating),
-    publishedAt: r.publishedAt,
-    updatedAt: r.updatedAt,
-    createdAt: r.createdAt,
-  }));
+  const personalReviewsProp: PersonalReviewData[] = ownerReviews.map((r) => {
+    const reviewScore = r.rating ? reviewScoreOnTen({
+      calculatedOverallScore: r.rating.calculatedOverallScore,
+      sourceRating: r.rating.sourceRating,
+      sourceScale: r.rating.sourceScale,
+      sourceService: r.rating.sourceService,
+      ratingSystemId: r.rating.ratingSystemId,
+      tierId: r.rating.tierId,
+      ratingSystem: r.rating.ratingSystem ? { scale: r.rating.ratingSystem.scale, type: r.rating.ratingSystem.type } : null,
+      categoryScores: [],
+    }) ?? r.rating.calculatedOverallScore : null;
+
+    return {
+      id: r.id,
+      title: r.title,
+      content: r.content,
+      draftContent: r.draftContent,
+      contentFormat: r.contentFormat,
+      draftContentFormat: r.draftContentFormat,
+      status: r.status,
+      visibility: r.visibility,
+      isSpoiler: r.isSpoiler,
+      isJournal: Boolean(r.isJournal),
+      shareRating: Boolean(r.shareRating),
+      ratingId: r.ratingId ?? null,
+      score: reviewScore,
+      tierName: r.rating?.tier?.name ?? null,
+      tierColor: r.rating?.tier?.color ?? null,
+      publishedAt: r.publishedAt,
+      updatedAt: r.updatedAt,
+      createdAt: r.createdAt,
+    };
+  });
 
   const personalJournalReviewProp: PersonalReviewData | null = ownerJournalReview
     ? {
@@ -575,6 +600,19 @@ export default async function MediaDetailsPage({
         isSpoiler: ownerJournalReview.isSpoiler,
         isJournal: Boolean(ownerJournalReview.isJournal),
         shareRating: Boolean(ownerJournalReview.shareRating),
+        ratingId: ownerJournalReview.ratingId ?? null,
+        score: ownerJournalReview.rating ? reviewScoreOnTen({
+          calculatedOverallScore: ownerJournalReview.rating.calculatedOverallScore,
+          sourceRating: ownerJournalReview.rating.sourceRating,
+          sourceScale: ownerJournalReview.rating.sourceScale,
+          sourceService: ownerJournalReview.rating.sourceService,
+          ratingSystemId: ownerJournalReview.rating.ratingSystemId,
+          tierId: ownerJournalReview.rating.tierId,
+          ratingSystem: ownerJournalReview.rating.ratingSystem ? { scale: ownerJournalReview.rating.ratingSystem.scale, type: ownerJournalReview.rating.ratingSystem.type } : null,
+          categoryScores: [],
+        }) ?? ownerJournalReview.rating.calculatedOverallScore : null,
+        tierName: ownerJournalReview.rating?.tier?.name ?? null,
+        tierColor: ownerJournalReview.rating?.tier?.color ?? null,
         publishedAt: ownerJournalReview.publishedAt,
         updatedAt: ownerJournalReview.updatedAt,
         createdAt: ownerJournalReview.createdAt,

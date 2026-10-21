@@ -568,6 +568,171 @@ describe("Phase 15A: Unified Media Pages & Navigation Architecture", () => {
       });
       assert.equal(independentCheck?.content, "Independent review second revision.");
     });
+
+    it("preserves exact review-to-rating associations and null associations when editing", async () => {
+      // Create a dedicated media item for testing multiple review rating associations
+      const assocMediaId = `med_assoc_${suffix}`;
+      const globalRatingId = `rat_assoc_glob_${suffix}`;
+      const collRatingId = `rat_assoc_coll_${suffix}`;
+      const testColId = `col_assoc_${suffix}`;
+      const reviewWithGlobalRatId = `rev_w_globrat_${suffix}`;
+      const reviewWithNoRatingId = `rev_no_rat_${suffix}`;
+      const reviewWithCollRatId = `rev_w_collrat_${suffix}`;
+
+      await db.insert(mediaItems).values({
+        id: assocMediaId,
+        title: "Rating Association Test Movie",
+        mediaType: "movie",
+      });
+
+      await db.insert(collections).values({
+        id: testColId,
+        userId: testUser1Id,
+        title: "Association Test Collection",
+        collectionType: "standard",
+      });
+
+      // Insert one global rating (collectionId is null) and one collection-scoped rating
+      await db.insert(ratings).values([
+        {
+          id: globalRatingId,
+          userId: testUser1Id,
+          mediaItemId: assocMediaId,
+          collectionId: null,
+          calculatedOverallScore: 8.5,
+        },
+        {
+          id: collRatingId,
+          userId: testUser1Id,
+          mediaItemId: assocMediaId,
+          collectionId: testColId,
+          calculatedOverallScore: 9.5,
+        },
+      ]);
+
+      // Insert three reviews on the same title:
+      // Review 1 linked to globalRatingId
+      // Review 2 unrated (ratingId: null)
+      // Review 3 linked to collRatingId
+      await db.insert(reviews).values([
+        {
+          id: reviewWithGlobalRatId,
+          userId: testUser1Id,
+          mediaItemId: assocMediaId,
+          title: "Review Attached to Global Rating",
+          content: "Global rating content.",
+          ratingId: globalRatingId,
+          status: "published",
+          visibility: "public",
+          isJournal: true,
+          shareRating: true,
+        },
+        {
+          id: reviewWithNoRatingId,
+          userId: testUser1Id,
+          mediaItemId: assocMediaId,
+          title: "Independent Review Without Rating",
+          content: "Unrated essay content.",
+          ratingId: null,
+          status: "published",
+          visibility: "public",
+          isJournal: false,
+          shareRating: false,
+        },
+        {
+          id: reviewWithCollRatId,
+          userId: testUser1Id,
+          mediaItemId: assocMediaId,
+          title: "Review Attached to Collection Rating",
+          content: "Collection rating content.",
+          ratingId: collRatingId,
+          status: "published",
+          visibility: "private",
+          isJournal: false,
+          shareRating: false,
+        },
+      ]);
+
+      // Query loaded personal review data as done in MediaDetailsPage
+      const loadedReviews = await db.query.reviews.findMany({
+        where: and(
+          eq(reviews.userId, testUser1Id),
+          eq(reviews.mediaItemId, assocMediaId)
+        ),
+        with: {
+          rating: {
+            with: { tier: true, ratingSystem: true },
+          },
+        },
+      });
+
+      const r1 = loadedReviews.find((r) => r.id === reviewWithGlobalRatId);
+      const r2 = loadedReviews.find((r) => r.id === reviewWithNoRatingId);
+      const r3 = loadedReviews.find((r) => r.id === reviewWithCollRatId);
+
+      assert.ok(r1 && r2 && r3);
+      assert.equal(r1.ratingId, globalRatingId, "Review 1 must preserve globalRatingId");
+      assert.equal(r2.ratingId, null, "Review 2 must preserve null ratingId");
+      assert.equal(r3.ratingId, collRatingId, "Review 3 must preserve collRatingId");
+
+      // Verify that editing Review 2 (the unrated review) retains ratingId === null
+      // and does NOT inadvertently inherit the global rating ID or any other rating
+      await db.update(reviews)
+        .set({
+          content: "Updated unrated essay content.",
+          // ratingId should NOT be modified unless explicitly changed
+          ratingId: r2.ratingId ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(reviews.id, reviewWithNoRatingId));
+
+      const r2After = await db.query.reviews.findFirst({
+        where: eq(reviews.id, reviewWithNoRatingId),
+      });
+      assert.equal(r2After?.content, "Updated unrated essay content.");
+      assert.equal(r2After?.ratingId, null, "Unrated review must retain ratingId === null");
+
+      // Verify that editing Review 1 preserves its original globalRatingId and isJournal=true
+      await db.update(reviews)
+        .set({
+          title: "Revised Review 1 Title",
+          ratingId: r1.ratingId ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(reviews.id, reviewWithGlobalRatId));
+
+      const r1After = await db.query.reviews.findFirst({
+        where: eq(reviews.id, reviewWithGlobalRatId),
+      });
+      assert.equal(r1After?.title, "Revised Review 1 Title");
+      assert.equal(r1After?.ratingId, globalRatingId, "Review 1 must retain globalRatingId");
+      assert.equal(r1After?.isJournal, true, "Review 1 must retain isJournal=true");
+
+      // Verify that editing Review 3 preserves its original collRatingId and isJournal=false
+      await db.update(reviews)
+        .set({
+          content: "Updated collection review text.",
+          ratingId: r3.ratingId ?? null,
+          updatedAt: new Date(),
+        })
+        .where(eq(reviews.id, reviewWithCollRatId));
+
+      const r3After = await db.query.reviews.findFirst({
+        where: eq(reviews.id, reviewWithCollRatId),
+      });
+      assert.equal(r3After?.content, "Updated collection review text.");
+      assert.equal(r3After?.ratingId, collRatingId, "Review 3 must retain collRatingId");
+      assert.equal(r3After?.isJournal, false, "Review 3 must retain isJournal=false");
+
+      // Clean up test ratings, reviews, collection, and media
+      await db.delete(reviews).where(eq(reviews.id, reviewWithGlobalRatId));
+      await db.delete(reviews).where(eq(reviews.id, reviewWithNoRatingId));
+      await db.delete(reviews).where(eq(reviews.id, reviewWithCollRatId));
+      await db.delete(ratings).where(eq(ratings.id, globalRatingId));
+      await db.delete(ratings).where(eq(ratings.id, collRatingId));
+      await db.delete(collections).where(eq(collections.id, testColId));
+      await db.delete(mediaItems).where(eq(mediaItems.id, assocMediaId));
+    });
   });
 
   describe("Part 7: Preventing Overlapping Review Dialogs & Canonical Auto-open", () => {

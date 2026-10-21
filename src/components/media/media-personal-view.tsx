@@ -63,6 +63,10 @@ export interface PersonalReviewData {
   isSpoiler: boolean;
   isJournal: boolean;
   shareRating: boolean;
+  ratingId?: string | null;
+  score?: number | null;
+  tierName?: string | null;
+  tierColor?: string | null;
   publishedAt: Date | string | null;
   updatedAt: Date | string | null;
   createdAt: Date | string | null;
@@ -204,7 +208,10 @@ export function MediaPersonalView({
                       status: ownerJournalReview.status as "draft" | "published" | "unpublished",
                       visibility: ownerJournalReview.visibility as "private" | "unlisted" | "public",
                       isSpoiler: ownerJournalReview.isSpoiler,
-                      ratingId: ownerRating?.id || null,
+                      ratingId: ownerJournalReview.ratingId ?? (ownerRating?.id || null),
+                      score: ownerJournalReview.score ?? ownerRating?.calculatedOverallScore ?? null,
+                      tierName: ownerJournalReview.tierName ?? ownerRating?.tier?.name ?? null,
+                      tierColor: ownerJournalReview.tierColor ?? ownerRating?.tier?.color ?? null,
                       shareRating: ownerJournalReview.shareRating,
                       isJournal: true,
                     }
@@ -647,7 +654,10 @@ export function MediaPersonalView({
             status: editingReview.status as any,
             visibility: editingReview.visibility as any,
             isSpoiler: editingReview.isSpoiler,
-            ratingId: ownerRating?.id || null,
+            ratingId: editingReview.ratingId ?? null,
+            score: editingReview.score ?? null,
+            tierName: editingReview.tierName ?? null,
+            tierColor: editingReview.tierColor ?? null,
             shareRating: editingReview.shareRating,
             isJournal: editingReview.isJournal,
           }}
