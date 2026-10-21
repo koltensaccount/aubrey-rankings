@@ -30,6 +30,7 @@ export const user = pgTable(
     commentPermission: text("comment_permission").notNull().default("everyone"),
     defaultReviewVisibility: text("default_review_visibility").notNull().default("private"),
     defaultReviewSpoiler: boolean("default_review_spoiler").notNull().default(false),
+    isTestWorkspace: boolean("is_test_workspace").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -437,6 +438,8 @@ export const diaryEntries = pgTable(
     loggedDate: timestamp("logged_date"),
     isRewatch: boolean("is_rewatch").notNull().default(false),
     ratingValue: real("rating_value"),
+    sourceRating: real("source_rating"),
+    sourceScale: real("source_scale"),
     tags: jsonb("tags"),
     notes: text("notes"),
     sourceService: text("source_service"),
@@ -473,6 +476,36 @@ export const unresolvedImportItems = pgTable(
   },
   (table) => [
     index("idx_unresolved_user").on(table.userId, table.createdAt),
+  ]
+);
+
+export const importSourceMappings = pgTable(
+  "import_source_mappings",
+  {
+    id: text("id").primaryKey(),
+    sourceService: text("source_service").notNull(),
+    sourceUri: text("source_uri"),
+    sourceTitle: text("source_title").notNull(),
+    sourceYear: integer("source_year"),
+    sourceMediaType: text("source_media_type").notNull().default("movie"),
+    mediaItemId: text("media_item_id")
+      .notNull()
+      .references(() => mediaItems.id, { onDelete: "cascade" }),
+    confidence: text("confidence").notNull().default("tmdb_verified"),
+    metadata: jsonb("metadata"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uniq_import_mapping_uri")
+      .on(table.sourceService, table.sourceUri)
+      .where(sql`"source_uri" IS NOT NULL`),
+    index("idx_import_mapping_title_year").on(
+      table.sourceService,
+      table.sourceTitle,
+      table.sourceYear
+    ),
+    index("idx_import_mapping_media").on(table.mediaItemId),
   ]
 );
 
@@ -1143,6 +1176,18 @@ export const unresolvedImportItemsRelations = relations(
   })
 );
 
+export const importSourceMappingsRelations = relations(
+  importSourceMappings,
+  ({ one }) => ({
+    mediaItem: one(mediaItems, {
+      fields: [importSourceMappings.mediaItemId],
+      references: [mediaItems.id],
+    }),
+  })
+);
+
+export type MediaItem = typeof mediaItems.$inferSelect;
+export type NewMediaItem = typeof mediaItems.$inferInsert;
 export type Review = typeof reviews.$inferSelect;
 export type NewReview = typeof reviews.$inferInsert;
 export type WatchlistItem = typeof watchlistItems.$inferSelect;
@@ -1151,6 +1196,8 @@ export type DiaryEntry = typeof diaryEntries.$inferSelect;
 export type NewDiaryEntry = typeof diaryEntries.$inferInsert;
 export type UnresolvedImportItem = typeof unresolvedImportItems.$inferSelect;
 export type NewUnresolvedImportItem = typeof unresolvedImportItems.$inferInsert;
+export type ImportSourceMapping = typeof importSourceMappings.$inferSelect;
+export type NewImportSourceMapping = typeof importSourceMappings.$inferInsert;
 
 
 

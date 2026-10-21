@@ -22,6 +22,11 @@ export function createEmailSender(
   fromEmail = from,
 ) {
   return async (message: Message) => {
+    // Isolated test workspace accounts never trigger real external emails
+    if (message.to.includes("test-workspace") || message.to.endsWith(".local")) {
+      return { success: true, simulated: true, isTestWorkspace: true };
+    }
+
     if (!transport) {
       if (production)
         return { success: false, error: "Email delivery is not configured" };

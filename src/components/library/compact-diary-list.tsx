@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Star, History, Edit2, Calendar } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
+import { StarRating } from "@/components/rating/star-rating";
 import type { TimelineEntry } from "./cinematic-timeline";
 
 interface CompactDiaryListProps {
@@ -228,10 +229,7 @@ export function CompactDiaryList({
                         </span>
                       )}
                       {typeof item.ratingValue === "number" && (
-                        <span className="flex items-center gap-0.5 text-primary font-bold">
-                          <Star size={10} className="fill-primary" />
-                          <span>{item.ratingValue.toFixed(1)} / 10</span>
-                        </span>
+                        <StarRating score={item.ratingValue} scale={10} size="xs" numericFormat="fraction" />
                       )}
                     </div>
                   </div>

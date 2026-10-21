@@ -8,6 +8,7 @@ import {
   collections,
   collectionEntries,
   unresolvedImportItems,
+  importSourceMappings,
 } from "@/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -17,6 +18,11 @@ import {
   type LetterboxdExportSummary,
   type ParsedLetterboxdFilm,
 } from "./letterboxd";
+import {
+  batchResolveIdentities,
+  resolveLetterboxdMediaIdentity,
+  type SourceFilmCandidate,
+} from "./letterboxd-matching";
 
 export function filmIdentity(film: { title: string; year: number | null }) {
   return `${film.title.trim().toLowerCase()}::${film.year ?? ""}`;
@@ -64,8 +70,26 @@ function normalizeSummary(input: LetterboxdImportInput): LetterboxdExportSummary
 export async function previewLetterboxdImport(
   userId: string,
   input: LetterboxdImportInput,
+  options?: { allowSyntheticPlaceholders?: boolean }
 ) {
   const summary = normalizeSummary(input);
+
+  // Pre-resolve candidates to guarantee preview and execution use identical resolution logic
+  const candidateMap = new Map<string, SourceFilmCandidate>();
+  for (const f of summary.films) {
+    const k = canonicalFilmKey(f);
+    if (!candidateMap.has(k)) candidateMap.set(k, { title: f.title, year: f.year, letterboxdUri: f.letterboxdUri });
+  }
+  for (const d of summary.diaryEntries) {
+    const k = canonicalFilmKey(d);
+    if (!candidateMap.has(k)) candidateMap.set(k, { title: d.title, year: d.year, letterboxdUri: d.letterboxdUri });
+  }
+
+  const { resolvedMap, quarantineMap, stats: preResolveStats } = await batchResolveIdentities(
+    Array.from(candidateMap.values()),
+    5,
+    options
+  );
 
   // 1. Existing global ratings
   const existingRatings = await db.query.ratings.findMany({
@@ -258,8 +282,31 @@ export async function previewLetterboxdImport(
 export async function executeLetterboxdImport(
   userId: string,
   input: LetterboxdImportInput,
+  options?: { allowSyntheticPlaceholders?: boolean }
 ) {
   const summary = normalizeSummary(input);
+
+  // 1. Pre-resolve identities outside of database write transaction
+  const candidateMap = new Map<string, SourceFilmCandidate>();
+  const addCandidate = (c: { title: string; year: number | null; letterboxdUri?: string | null }) => {
+    const k = filmIdentity(c);
+    if (!candidateMap.has(k)) {
+      candidateMap.set(k, { title: c.title, year: c.year, letterboxdUri: c.letterboxdUri });
+    }
+  };
+  for (const f of summary.films) addCandidate(f);
+  for (const d of summary.diaryEntries) addCandidate(d);
+  for (const r of summary.reviews) addCandidate(r);
+  for (const w of summary.watchlist) addCandidate(w);
+  for (const l of summary.customLists) {
+    for (const e of l.entries) addCandidate(e);
+  }
+
+  const { resolvedMap, quarantineMap, stats: preResolveStats } = await batchResolveIdentities(
+    Array.from(candidateMap.values()),
+    5,
+    options
+  );
 
   return db.transaction(async (tx) => {
     // 1. Acquire transaction-scoped advisory lock to serialize imports
@@ -303,9 +350,8 @@ export async function executeLetterboxdImport(
     const ambiguousIdentities = new Set<string>();
 
     /**
-     * Resolves or creates a media item with verified identity matching.
-     * If multiple matches exist and cannot be distinguished, it returns null
-     * and quarantines the record to prevent arbitrary assignment.
+     * Resolves media item using pre-resolved verified identity matching.
+     * Prevents empty unverified placeholder records from being created.
      */
     const resolveOrCreateMedia = async (
       title: string,
@@ -314,25 +360,56 @@ export async function executeLetterboxdImport(
     ) => {
       const cleanTitle = title.trim();
       const identityKey = filmIdentity({ title: cleanTitle, year });
+      const canonKey = canonicalFilmKey({ title: cleanTitle, year, letterboxdUri: uri });
+      const uriKey = uri?.trim().toLowerCase() || null;
 
-      if (ambiguousIdentities.has(identityKey)) return null;
+      if (
+        ambiguousIdentities.has(identityKey) ||
+        ambiguousIdentities.has(canonKey) ||
+        (uriKey && ambiguousIdentities.has(uriKey))
+      ) {
+        return null;
+      }
       if (mediaCache.has(identityKey)) return mediaCache.get(identityKey);
+      if (mediaCache.has(canonKey)) return mediaCache.get(canonKey);
+      if (uriKey && mediaCache.has(uriKey)) return mediaCache.get(uriKey);
 
-      // 1. Verified source identity matching: if URI is provided and an existing rating has it
-      if (uri?.trim()) {
-        const verifiedRating = await tx.query.ratings.findFirst({
-          where: (r, { and, eq, isNotNull }) =>
-            and(eq(r.letterboxdUri, uri.trim()), isNotNull(r.letterboxdUri)),
-          with: { mediaItem: true },
-        });
-        if (verifiedRating?.mediaItem) {
-          mediaCache.set(identityKey, verifiedRating.mediaItem);
-          resolvedMediaMap.set(identityKey, verifiedRating.mediaItem.id);
-          return verifiedRating.mediaItem;
-        }
+      // Check pre-resolved identities
+      const preResolved =
+        resolvedMap.get(identityKey) ||
+        resolvedMap.get(canonKey) ||
+        (uriKey ? resolvedMap.get(uriKey) : null);
+      if (preResolved?.mediaItem) {
+        mediaCache.set(identityKey, preResolved.mediaItem);
+        mediaCache.set(canonKey, preResolved.mediaItem);
+        if (uriKey) mediaCache.set(uriKey, preResolved.mediaItem);
+        resolvedMediaMap.set(identityKey, preResolved.mediaItem.id);
+        return preResolved.mediaItem;
       }
 
-      // 2. Direct match by user's known rating
+      // Check pre-resolved quarantines
+      const preQuarantined =
+        quarantineMap.get(identityKey) ||
+        quarantineMap.get(canonKey) ||
+        (uriKey ? quarantineMap.get(uriKey) : null);
+      if (preQuarantined) {
+        ambiguousIdentities.add(identityKey);
+        ambiguousIdentities.add(canonKey);
+        if (uriKey) ambiguousIdentities.add(uriKey);
+        await tx.insert(unresolvedImportItems).values({
+          id: `unres_${randomUUID()}`,
+          userId,
+          sourceService: "letterboxd",
+          sourceType: "film",
+          sourceData: { title: cleanTitle, year, uri: uri || null, candidates: preQuarantined.candidates },
+          reason: preQuarantined.reason,
+          details: preQuarantined.details,
+        });
+        quarantinedCount++;
+        return null;
+      }
+
+      // Direct match by user's known rating
       const knownRating = ratingByIdentity.get(identityKey);
       if (knownRating?.mediaItem) {
         mediaCache.set(identityKey, knownRating.mediaItem);
@@ -340,11 +417,32 @@ export async function executeLetterboxdImport(
         return knownRating.mediaItem;
       }
 
-      // 3. Query DB by title and release year
+      // Check DB by title
+      const allMatchingTitle = await tx.query.mediaItems.findMany({
+        where: (m) => sql`lower(trim(${m.title})) = lower(${cleanTitle})`,
+      });
+
+      if (allMatchingTitle.length > 1 && !year) {
+        ambiguousIdentities.add(identityKey);
+        ambiguousIdentities.add(canonKey);
+        if (uriKey) ambiguousIdentities.add(uriKey);
+        await tx.insert(unresolvedImportItems).values({
+          id: `unres_${randomUUID()}`,
+          userId,
+          sourceService: "letterboxd",
+          sourceType: "film",
+          sourceData: { title: cleanTitle, year: null, uri: uri || null },
+          reason: "ambiguous_media",
+          details: `Multiple (${allMatchingTitle.length}) database media records found with identical title "${cleanTitle}" but no year provided in export. Quarantined without assignment.`,
+        });
+        quarantinedCount++;
+        return null;
+      }
+
+      // Check DB by title and year
       const matchingMedia = await tx.query.mediaItems.findMany({
         where: (m, { and, eq, isNull }) =>
           and(
-            eq(m.mediaType, "movie"),
             sql`lower(trim(${m.title})) = lower(${cleanTitle})`,
             year
               ? sql`substring(${m.releaseDate}, 1, 4) = ${String(year)}`
@@ -352,9 +450,16 @@ export async function executeLetterboxdImport(
           ),
       });
 
-      // Guard: Ambiguous match with multiple identical title & year records
+      if (matchingMedia.length === 1) {
+        mediaCache.set(identityKey, matchingMedia[0]);
+        resolvedMediaMap.set(identityKey, matchingMedia[0].id);
+        return matchingMedia[0];
+      }
+
       if (matchingMedia.length > 1) {
         ambiguousIdentities.add(identityKey);
+        ambiguousIdentities.add(canonKey);
+        if (uriKey) ambiguousIdentities.add(uriKey);
         await tx.insert(unresolvedImportItems).values({
           id: `unres_${randomUUID()}`,
           userId,
@@ -364,59 +469,41 @@ export async function executeLetterboxdImport(
           reason: "ambiguous_media",
           details: `Multiple (${matchingMedia.length}) database media records found with identical title "${cleanTitle}" and year ${year}. Quarantined without assignment.`,
         });
+        quarantinedCount++;
         return null;
       }
 
-      // Guard: Year was omitted in export row, but database has multiple movies with this title
-      if (!year) {
-        const anyYearMatches = await tx.query.mediaItems.findMany({
-          where: (m, { and, eq }) =>
-            and(
-              eq(m.mediaType, "movie"),
-              sql`lower(trim(${m.title})) = lower(${cleanTitle})`,
-            ),
-        });
-        if (anyYearMatches.length > 1) {
-          ambiguousIdentities.add(identityKey);
-          await tx.insert(unresolvedImportItems).values({
-            id: `unres_${randomUUID()}`,
-            userId,
-            sourceService: "letterboxd",
-            sourceType: "film",
-            sourceData: { title: cleanTitle, year: null, uri: uri || null },
-            reason: "ambiguous_media",
-            details: `Title "${cleanTitle}" matches multiple existing films with different years (${anyYearMatches.map((m) => m.releaseDate ? m.releaseDate.slice(0, 4) : 'unknown').join(', ')}) but export row specified no year. Quarantined without assignment.`,
-          });
-          return null;
-        }
-        if (anyYearMatches.length === 1) {
-          mediaCache.set(identityKey, anyYearMatches[0]);
-          resolvedMediaMap.set(identityKey, anyYearMatches[0].id);
-          return anyYearMatches[0];
-        }
+      // If synthetic placeholders are explicitly allowed (e.g. synthetic test suites):
+      const allowSynthetic = options?.allowSyntheticPlaceholders ?? (process.env.AUBREY_ALLOW_SYNTHETIC_MEDIA === "1");
+      if (allowSynthetic) {
+        const releaseDate = year ? `${year}-01-01` : null;
+        const [newMedia] = await tx
+          .insert(mediaItems)
+          .values({
+            id: `media_${randomUUID()}`,
+            mediaType: "movie",
+            title: cleanTitle,
+            releaseDate,
+          })
+          .returning();
+
+        mediaCache.set(identityKey, newMedia);
+        resolvedMediaMap.set(identityKey, newMedia.id);
+        return newMedia;
       }
 
-      if (matchingMedia.length === 1) {
-        mediaCache.set(identityKey, matchingMedia[0]);
-        resolvedMediaMap.set(identityKey, matchingMedia[0].id);
-        return matchingMedia[0];
-      }
-
-      // 4. Create new media item record
-      const releaseDate = year ? `${year}-01-01` : null;
-      const [newMedia] = await tx
-        .insert(mediaItems)
-        .values({
-          id: `media_${randomUUID()}`,
-          mediaType: "movie",
-          title: cleanTitle,
-          releaseDate,
-        })
-        .returning();
-
-      mediaCache.set(identityKey, newMedia);
-      resolvedMediaMap.set(identityKey, newMedia.id);
-      return newMedia;
+      // Otherwise, refuse to create incomplete placeholder records and quarantine cleanly
+      ambiguousIdentities.add(identityKey);
+      await tx.insert(unresolvedImportItems).values({
+        id: `unres_${randomUUID()}`,
+        userId,
+        sourceService: "letterboxd",
+        sourceType: "film",
+        sourceData: { title: cleanTitle, year, uri: uri || null },
+        reason: "unmatched_media",
+        details: `No verified TMDB movie or TV identity established for "${cleanTitle}" (${year ?? "no year"}). Placeholder creation prevented.`,
+      });
+      return null;
     };
 
     let newCount = 0;
@@ -713,7 +800,9 @@ export async function executeLetterboxdImport(
           watchedDate: d.watchedDate,
           loggedDate: d.loggedDate ? new Date(d.loggedDate) : null,
           isRewatch: d.isRewatch,
-          ratingValue: d.rating ?? null,
+          ratingValue: typeof d.rating === "number" ? d.rating * 2 : null,
+          sourceRating: d.rating ?? null,
+          sourceScale: typeof d.rating === "number" ? 5 : null,
           tags: d.tags && d.tags.length > 0 ? d.tags : null,
           sourceService: "letterboxd",
           sourceUri: d.letterboxdUri || null, // preserve film URI for provenance
@@ -724,7 +813,10 @@ export async function executeLetterboxdImport(
         newDiaryCount++;
       } else {
         // Legitimate reimport or update: check if rating or tags changed in Letterboxd
-        const ratingChanged = (d.rating ?? null) !== existingDiary.ratingValue;
+        const expectedScore = typeof d.rating === "number" ? d.rating * 2 : null;
+        const ratingChanged =
+          expectedScore !== existingDiary.ratingValue ||
+          (d.rating ?? null) !== existingDiary.sourceRating;
         const currentTags = (existingDiary.tags as string[]) || [];
         const newTags = d.tags || [];
         const tagsChanged =
@@ -734,7 +826,9 @@ export async function executeLetterboxdImport(
           await tx
             .update(diaryEntries)
             .set({
-              ratingValue: d.rating ?? existingDiary.ratingValue,
+              ratingValue: typeof d.rating === "number" ? d.rating * 2 : existingDiary.ratingValue,
+              sourceRating: d.rating ?? existingDiary.sourceRating,
+              sourceScale: typeof d.rating === "number" ? 5 : existingDiary.sourceScale,
               tags: newTags.length > 0 ? newTags : null,
               updatedAt: new Date(),
             })

@@ -127,6 +127,11 @@ export const auth = betterAuth({
         type: "string",
         required: false,
       },
+      isTestWorkspace: {
+        type: "boolean",
+        required: false,
+        input: false,
+      },
     },
   },
   socialProviders: {

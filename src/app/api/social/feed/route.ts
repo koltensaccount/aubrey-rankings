@@ -63,6 +63,7 @@ export async function GET(request: NextRequest) {
             name: true,
             username: true,
             image: true,
+            isTestWorkspace: true,
           },
         },
         entries: {
@@ -81,7 +82,12 @@ export async function GET(request: NextRequest) {
     });
 
     const rawCollections = rawCollectionsData
-      .filter((col) => !blockedUserIds.has(col.userId))
+      .filter(
+        (col) =>
+          !blockedUserIds.has(col.userId) &&
+          col.userId !== "usr_test_import_workspace" &&
+          !col.user?.isTestWorkspace
+      )
       .slice(0, limit);
 
     const colIds = rawCollections.map((c) => c.id);
@@ -227,6 +233,7 @@ export async function GET(request: NextRequest) {
             name: true,
             username: true,
             image: true,
+            isTestWorkspace: true,
           },
         },
         mediaItem: true,
@@ -256,7 +263,12 @@ export async function GET(request: NextRequest) {
     });
 
     const filteredFirstClass = rawFirstClassReviews
-      .filter((r) => !blockedUserIds.has(r.userId))
+      .filter(
+        (r) =>
+          !blockedUserIds.has(r.userId) &&
+          r.userId !== "usr_test_import_workspace" &&
+          !r.user?.isTestWorkspace
+      )
       .slice(0, limit);
 
     const firstClassIds = filteredFirstClass.map((r) => r.id);

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Star, History, Lock, Globe, Link2, Edit2 } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
+import { StarRating } from "@/components/rating/star-rating";
 import type { DiaryViewingEvent } from "./rewatch-history-modal";
 
 interface TimelineEntryCardProps {
@@ -176,13 +177,10 @@ export function TimelineEntryCard({
                 </Link>
               </h3>
 
-              {/* Rating Display (strictly on scale of 10) */}
+              {/* Rating Display (Aubrey 5-star half-star representation) */}
               {ratingScore !== null && (
                 <div className="flex items-center gap-1.5 pt-0.5">
-                  <div className="inline-flex items-center gap-1 text-xs sm:text-sm font-bold text-primary">
-                    <Star size={13} className="fill-primary text-primary" />
-                    <span>{ratingScore.toFixed(1)} / 10</span>
-                  </div>
+                  <StarRating score={ratingScore} scale={10} size="sm" numericFormat="fraction" />
                 </div>
               )}
             </div>

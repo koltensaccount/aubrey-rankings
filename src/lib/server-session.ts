@@ -7,6 +7,11 @@ export async function getServerSession(req?: Request) {
     const session = await auth.api.getSession({
       headers: headerObj,
     });
+    if (session?.user) {
+      (session.user as any).isTestWorkspace = Boolean(
+        (session.user as any).isTestWorkspace || session.user.id === "usr_test_import_workspace"
+      );
+    }
     return session;
   } catch (error) {
     return null;

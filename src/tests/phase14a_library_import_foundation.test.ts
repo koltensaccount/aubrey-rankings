@@ -789,7 +789,8 @@ Position,Name,Year,URL,Description
     const canonicalEntriesRating = userDiaryUpdatedRating.filter((d) => d.mediaItem.title.includes("Canonical Boxd Film"));
     assert.equal(canonicalEntriesRating.length, 3);
     const entryWatchedJan1 = canonicalEntriesRating.find((d) => d.watchedDate === "2026-01-01");
-    assert.equal(entryWatchedJan1?.ratingValue, 3.5);
+    assert.equal(entryWatchedJan1?.sourceRating, 3.5);
+    assert.equal(entryWatchedJan1?.ratingValue, 7.0);
 
     // 4. Re-import after tags change in Letterboxd
     const zipWithTagChange = new AdmZip();

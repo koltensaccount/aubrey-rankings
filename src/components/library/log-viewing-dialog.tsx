@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { X, Calendar, Star, Film, Tv, Check, Search, ChevronRight } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { CinematicSlider } from "@/components/cinematic-slider";
+import { StarRating } from "@/components/rating/star-rating";
 
 interface LogViewingDialogProps {
   isOpen: boolean;
@@ -446,10 +447,7 @@ export function LogViewingDialog({
                 Rating
               </label>
               {ratingValue !== null ? (
-                <span className="text-xs font-bold text-primary flex items-center gap-1">
-                  <Star size={13} className="fill-primary" />
-                  <span>{ratingValue.toFixed(1)} / 10</span>
-                </span>
+                <StarRating score={ratingValue} scale={10} size="sm" numericFormat="fraction" />
               ) : (
                 <span className="text-xs text-muted-foreground italic">Unrated</span>
               )}
@@ -463,15 +461,15 @@ export function LogViewingDialog({
                 step={0.5}
                 allowUnset={true}
                 showValue={false}
-                ariaLabel="Viewing rating out of 10"
+                ariaLabel="Viewing rating out of 5 stars"
                 onChange={(val) => setRatingValue(val)}
               />
             </div>
 
             <div className="flex justify-between items-center text-[10px] text-muted-foreground pt-0.5">
-              <span>0.5</span>
-              <span>5.0</span>
-              <span>10.0</span>
+              <span>0.5 ★</span>
+              <span>2.5 ★</span>
+              <span>5.0 ★</span>
               {ratingValue !== null && (
                 <button
                   type="button"
