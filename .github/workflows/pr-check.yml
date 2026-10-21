@@ -63,3 +63,24 @@ jobs:
           BETTER_AUTH_SECRET: 9c58715c7f3f67ff199150b1a4b2a3b25804c43657b0fd945f997ce752797c2e
           BETTER_AUTH_URL: http://localhost:3000
         run: npm test
+
+      # Production build for responsive browser smoke test
+      - name: Build Next.js
+        env:
+          DATABASE_URL: postgresql://koltenbendickson:password@localhost:5432/aubrey_rankings_test
+          BETTER_AUTH_SECRET: 9c58715c7f3f67ff199150b1a4b2a3b25804c43657b0fd945f997ce752797c2e
+          BETTER_AUTH_URL: http://127.0.0.1:3016
+        run: npm run build
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      # Responsive Layout, Floating Element Overlap & Geometry Smoke Test
+      - name: Responsive Layout & Geometry Smoke Test
+        env:
+          DATABASE_URL: postgresql://koltenbendickson:password@localhost:5432/aubrey_rankings_test
+          AUBREY_TEST_MODE: "1"
+          BETTER_AUTH_SECRET: 9c58715c7f3f67ff199150b1a4b2a3b25804c43657b0fd945f997ce752797c2e
+          BETTER_AUTH_URL: http://127.0.0.1:3016
+          RESPONSIVE_SMOKE_MODE: "1"
+        run: npx tsx scripts/verify-phase14c-responsive.ts

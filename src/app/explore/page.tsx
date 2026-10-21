@@ -208,10 +208,10 @@ export default function ExplorePage() {
           </div>
 
           {/* Tabs */}
-          <div className="flex items-center gap-2 border-b border-border pb-px text-xs">
+          <div className="flex items-center gap-2 border-b border-border pb-px text-xs overflow-x-auto scrollbar-none select-none">
             <button
               onClick={() => setActiveTab("all")}
-              className={`px-3 py-2 border-b-2 font-semibold transition-colors cursor-pointer ${
+              className={`px-3 py-2 border-b-2 font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === "all" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -219,7 +219,7 @@ export default function ExplorePage() {
             </button>
             <button
               onClick={() => setActiveTab("media")}
-              className={`px-3 py-2 border-b-2 font-semibold transition-colors cursor-pointer ${
+              className={`px-3 py-2 border-b-2 font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === "media" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -227,7 +227,7 @@ export default function ExplorePage() {
             </button>
             <button
               onClick={() => setActiveTab("people")}
-              className={`px-3 py-2 border-b-2 font-semibold transition-colors cursor-pointer ${
+              className={`px-3 py-2 border-b-2 font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                 activeTab === "people" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
             >

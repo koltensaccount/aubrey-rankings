@@ -102,12 +102,12 @@ export function BugReportButton() {
 
   return (
     <>
-      {/* Floating Trigger Button */}
+      {/* Floating Trigger Button: Safely positioned above mobile bottom nav on <md, bottom-4 on md+ */}
       <button
         type="button"
         onClick={() => setIsOpen(true)}
         aria-label="Report an issue"
-        className="fixed bottom-4 right-4 z-40 px-3 py-2 rounded-full bg-card/90 hover:bg-surface text-muted-foreground hover:text-primary border border-border hover:border-primary/40 shadow-xl backdrop-blur-md text-xs font-semibold flex items-center gap-2 transition-all cursor-pointer group"
+        className="fixed bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:bottom-4 right-3 sm:right-4 z-30 px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-full bg-card/90 hover:bg-surface text-muted-foreground hover:text-primary border border-border hover:border-primary/40 shadow-card backdrop-blur-md text-xs font-semibold flex items-center gap-1.5 sm:gap-2 transition-all cursor-pointer group select-none"
       >
         <Bug size={14} className="text-primary group-hover:scale-110 transition-transform" />
         <span className="hidden sm:inline">Report Issue</span>
