@@ -184,6 +184,7 @@ export async function GET(req: NextRequest) {
         isJournal: rev.isJournal,
         shareRating: rev.shareRating,
         watchedDate: rev.watchedDate,
+        tags: rev.tags,
         media: {
           title: rev.mediaItem?.title,
           releaseDate: rev.mediaItem?.releaseDate,
@@ -267,6 +268,7 @@ export async function GET(req: NextRequest) {
         shareSlug: col.shareSlug,
         sourceService: col.sourceService,
         sourceUri: col.sourceUri,
+        tags: col.tags,
         createdAt: col.createdAt,
         updatedAt: col.updatedAt,
         entries: col.entries.map((e) => ({

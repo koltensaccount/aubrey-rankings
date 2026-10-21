@@ -54,11 +54,18 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (summary.totalUniqueFilms === 0) {
+    const hasImportableData =
+      summary.totalUniqueFilms > 0 ||
+      summary.totalWatchlistItems > 0 ||
+      summary.totalCustomLists > 0 ||
+      summary.totalDiaryEntries > 0 ||
+      summary.totalReviews > 0;
+
+    if (!hasImportableData) {
       return NextResponse.json(
         {
           error:
-            "No valid film records, ratings, or watch history found in the ZIP archive.",
+            "No importable records found in the archive. The ZIP does not contain ratings, reviews, diary logs, a watchlist, or custom lists.",
         },
         { status: 400 },
       );

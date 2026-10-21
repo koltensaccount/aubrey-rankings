@@ -666,6 +666,55 @@ Position,Name,Year,URL,Description
     });
     const canonicalEntriesAfter = userDiaryAfter.filter((d) => d.mediaItem.title.includes("Canonical Boxd Film"));
     assert.equal(canonicalEntriesAfter.length, 3);
+
+    // 3. Re-import after a rating changes in Letterboxd
+    const zipWithRatingChange = new AdmZip();
+    const diaryContentRatingChange = `Date,Name,Year,Letterboxd URI,Rating,Rewatch,Tags,Watched Date
+2026-01-01,Canonical Boxd Film ${suffix},2021,https://boxd.it/canonical_film,3.5,No,"fest",2026-01-01
+2026-02-15,Canonical Boxd Film ${suffix},2021,https://boxd.it/canonical_film,4.5,Yes,"rewatch 1",2026-02-15
+2026-03-30,Canonical Boxd Film ${suffix},2021,https://boxd.it/canonical_film,5.0,Yes,"rewatch 2",2026-03-30
+`;
+    zipWithRatingChange.addFile("diary.csv", Buffer.from(diaryContentRatingChange, "utf8"));
+    const summaryRatingChange = parseLetterboxdZip(zipWithRatingChange.toBuffer());
+    const res3 = await executeLetterboxdImport(ownerId, summaryRatingChange);
+    assert.equal(res3.newDiaryCount, 0); // No duplicate viewing created
+    assert.equal(res3.updatedDiaryCount, 1); // Mutated rating was updated
+
+    const userDiaryUpdatedRating = await db.query.diaryEntries.findMany({
+      where: eq(diaryEntries.userId, ownerId),
+      with: { mediaItem: true },
+    });
+    const canonicalEntriesRating = userDiaryUpdatedRating.filter((d) => d.mediaItem.title.includes("Canonical Boxd Film"));
+    assert.equal(canonicalEntriesRating.length, 3);
+    const entryWatchedJan1 = canonicalEntriesRating.find((d) => d.watchedDate === "2026-01-01");
+    assert.equal(entryWatchedJan1?.ratingValue, 3.5);
+
+    // 4. Re-import after tags change in Letterboxd
+    const zipWithTagChange = new AdmZip();
+    const diaryContentTagChange = `Date,Name,Year,Letterboxd URI,Rating,Rewatch,Tags,Watched Date
+2026-01-01,Canonical Boxd Film ${suffix},2021,https://boxd.it/canonical_film,3.5,No,"fest, director-qa",2026-01-01
+2026-02-15,Canonical Boxd Film ${suffix},2021,https://boxd.it/canonical_film,4.5,Yes,"rewatch 1",2026-02-15
+2026-03-30,Canonical Boxd Film ${suffix},2021,https://boxd.it/canonical_film,5.0,Yes,"rewatch 2",2026-03-30
+`;
+    zipWithTagChange.addFile("diary.csv", Buffer.from(diaryContentTagChange, "utf8"));
+    const summaryTagChange = parseLetterboxdZip(zipWithTagChange.toBuffer());
+    const res4 = await executeLetterboxdImport(ownerId, summaryTagChange);
+    assert.equal(res4.newDiaryCount, 0);
+    assert.equal(res4.updatedDiaryCount, 1);
+
+    const userDiaryUpdatedTags = await db.query.diaryEntries.findMany({
+      where: eq(diaryEntries.userId, ownerId),
+      with: { mediaItem: true },
+    });
+    const canonicalEntriesTags = userDiaryUpdatedTags.filter((d) => d.mediaItem.title.includes("Canonical Boxd Film"));
+    assert.equal(canonicalEntriesTags.length, 3);
+    const entryWatchedJan1Tags = canonicalEntriesTags.find((d) => d.watchedDate === "2026-01-01");
+    assert.deepEqual(entryWatchedJan1Tags?.tags, ["fest", "director-qa"]);
+
+    // 5. Verify reconciliation matches database records exactly
+    assert.equal(res4.reconciliation.diary.total, 3);
+    assert.equal(res4.reconciliation.diary.created, 0);
+    assert.equal(res4.reconciliation.diary.updated + res4.reconciliation.diary.preserved, 3);
   });
 
   it("17. enforces watched-state semantics (likes do not mark watched; watched.csv does not fabricate watchDate)", async () => {
@@ -850,5 +899,104 @@ Position,Name,Year,URL,Description
     assert.equal(exportedCol.visibility, "unlisted");
     assert.equal(exportedCol.isPinned, true);
     assert.equal(exportedCol.allowComments, false);
+  });
+
+  it("20. supports valid partial archives and rejects genuinely empty archives with accurate explanation", async () => {
+    // 1. Partial archive containing ONLY watchlist.csv (no ratings or watched history)
+    const wlZip = new AdmZip();
+    const wlContent = `Date,Name,Year,Letterboxd URI
+2026-04-01,Partial Watchlist Only Movie ${suffix},2024,https://boxd.it/partial_wl
+`;
+    wlZip.addFile("watchlist.csv", Buffer.from(wlContent, "utf8"));
+    const wlSummary = parseLetterboxdZip(wlZip.toBuffer());
+    assert.equal(wlSummary.totalUniqueFilms, 0);
+    assert.equal(wlSummary.totalWatchlistItems, 1);
+
+    const wlPreview = await previewLetterboxdImport(ownerId, wlSummary);
+    assert.ok("breakdown" in wlPreview && wlPreview.breakdown);
+    assert.equal(wlPreview.breakdown.watchlist.new, 1);
+
+    const wlResult = await executeLetterboxdImport(ownerId, wlSummary);
+    assert.equal(wlResult.newWatchlistCount, 1);
+
+    const userWl = await db.query.watchlistItems.findMany({
+      where: eq(watchlistItems.userId, ownerId),
+      with: { mediaItem: true },
+    });
+    const targetWl = userWl.find((w) => w.mediaItem.title.includes("Partial Watchlist Only Movie"));
+    assert.ok(targetWl);
+    if (targetWl) trackedMediaIds.push(targetWl.mediaItemId);
+
+    // 2. Genuinely empty / invalid archive
+    const emptyZip = new AdmZip();
+    emptyZip.addFile("unrelated.txt", Buffer.from("just random text\n", "utf8"));
+    const emptySummary = parseLetterboxdZip(emptyZip.toBuffer());
+    const hasData =
+      emptySummary.films.length > 0 ||
+      emptySummary.watchlist.length > 0 ||
+      emptySummary.customLists.length > 0 ||
+      emptySummary.diaryEntries.length > 0 ||
+      emptySummary.reviews.length > 0;
+    assert.equal(hasData, false);
+  });
+
+  it("21. preserves empty custom lists and their descriptions without dropping them", async () => {
+    const zip = new AdmZip();
+    const listContent = `Date,Name,Tags,URL,Description
+2026-01-01,Future Planned Marathon ${suffix},"marathon, planned",https://letterboxd.com/curator/list/future-marathon/,"Films queued for next summer marathon"
+
+Position,Name,Year,URL,Description
+`;
+    zip.addFile(`lists/future-marathon-${suffix}.csv`, Buffer.from(listContent, "utf8"));
+    const summary = parseLetterboxdZip(zip.toBuffer());
+
+    assert.equal(summary.totalCustomLists, 1);
+    assert.equal(summary.totalCustomListEntries, 0);
+
+    const result = await executeLetterboxdImport(ownerId, summary);
+    assert.equal(result.newListsCount, 1);
+    assert.equal(result.listEntriesCount, 0);
+
+    const userCol = await db.query.collections.findFirst({
+      where: and(eq(collections.userId, ownerId), eq(collections.title, `Future Planned Marathon ${suffix}`)),
+      with: { entries: true },
+    });
+
+    assert.ok(userCol);
+    assert.equal(userCol.description, "Films queued for next summer marathon");
+    assert.deepEqual(userCol.tags, ["marathon", "planned"]);
+    assert.equal(userCol.entries.length, 0);
+  });
+
+  it("22. persists review tags and custom list tags into native columns and exports them", async () => {
+    const zip = new AdmZip();
+    const reviewsContent = `Date,Name,Year,Letterboxd URI,Rating,Rewatch,Review,Tags,Watched Date
+2026-02-10,Tagged Review Film ${suffix},2023,https://boxd.it/tagged_rev,4.5,No,"Brilliant pacing and score.","noir, 35mm, festival",2026-02-10
+`;
+    zip.addFile("reviews.csv", Buffer.from(reviewsContent, "utf8"));
+    const summary = parseLetterboxdZip(zip.toBuffer());
+
+    await executeLetterboxdImport(ownerId, summary);
+
+    const userRevs = await db.query.reviews.findMany({
+      where: and(eq(reviews.userId, ownerId), eq(reviews.sourceService, "letterboxd")),
+      with: { mediaItem: true },
+    });
+    const savedRev = userRevs.find((r) => r.mediaItem.title.includes("Tagged Review Film"));
+    assert.ok(savedRev);
+    assert.deepEqual(savedRev.tags, ["noir", "35mm", "festival"]);
+    trackedMediaIds.push(savedRev.mediaItemId);
+
+    // Verify /api/data/export returns tags
+    const exportReq = new NextRequest("http://localhost:3000/api/data/export", {
+      headers: { cookie: ownerCookie },
+    });
+    const res = await exportData(exportReq);
+    assert.equal(res.status, 200);
+    const json = await res.json();
+
+    const exportedRev = json.reviews.find((r: any) => r.id === savedRev?.id);
+    assert.ok(exportedRev);
+    assert.deepEqual(exportedRev.tags, ["noir", "35mm", "festival"]);
   });
 });

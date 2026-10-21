@@ -59,10 +59,12 @@ CREATE INDEX IF NOT EXISTS "idx_unresolved_user" ON "unresolved_import_items" ("
 ALTER TABLE "reviews" ADD COLUMN IF NOT EXISTS "source_service" text;
 ALTER TABLE "reviews" ADD COLUMN IF NOT EXISTS "source_uri" text;
 ALTER TABLE "reviews" ADD COLUMN IF NOT EXISTS "watched_date" text;
+ALTER TABLE "reviews" ADD COLUMN IF NOT EXISTS "tags" jsonb;
 CREATE UNIQUE INDEX IF NOT EXISTS "uniq_reviews_source_uri" ON "reviews" ("user_id", "source_service", "source_uri") WHERE "source_uri" IS NOT NULL;
 
 -- 5. Collections additions for imported custom lists
 ALTER TABLE "collections" ADD COLUMN IF NOT EXISTS "source_service" text;
 ALTER TABLE "collections" ADD COLUMN IF NOT EXISTS "source_uri" text;
 ALTER TABLE "collections" ADD COLUMN IF NOT EXISTS "is_ranked" boolean DEFAULT true NOT NULL;
+ALTER TABLE "collections" ADD COLUMN IF NOT EXISTS "tags" jsonb;
 CREATE UNIQUE INDEX IF NOT EXISTS "uniq_collections_source_uri" ON "collections" ("user_id", "source_service", "source_uri") WHERE "source_uri" IS NOT NULL;

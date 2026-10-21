@@ -142,7 +142,7 @@ export function DataTab() {
                 Import from Letterboxd
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Full-fidelity migration of diary entries, watch history, ratings, private reviews, watchlists, and custom lists.
+                Migration of viewing diary, watch history, ratings, private reviews, watchlists, and custom lists.
               </p>
             </div>
           </div>
@@ -215,17 +215,29 @@ export function DataTab() {
               </div>
             </div>
 
-            <div className="p-3 rounded-card bg-card border border-border text-[11px] text-muted-foreground space-y-1">
+            <div className="p-3 rounded-card bg-card border border-border text-[11px] text-muted-foreground space-y-1.5">
               <p>
                 • <strong>Privacy Preserved:</strong> All imported reviews and custom lists are stored with <em>Private</em> visibility. They are not visible to other users until deliberately shared.
               </p>
               <p>
                 • <strong>Aubrey Data Integrity:</strong> Any pre-existing Aubrey custom rubrics, weights, or scores were preserved and not overwritten.
               </p>
-              {lbReconciliation.unresolved?.length > 0 && (
+              {(lbReconciliation.unresolvedCount ?? lbReconciliation.unresolved?.length ?? 0) > 0 && (
                 <p className="text-muted-foreground">
-                  • <strong>Unresolved Items:</strong> {lbReconciliation.unresolved.length} entries with missing titles or ambiguous matches were archived in your unresolved import log for safe review.
+                  • <strong>Quarantined Records:</strong> {lbReconciliation.unresolvedCount ?? lbReconciliation.unresolved?.length} entries with missing titles or ambiguous matches were quarantined in your unresolved import log for safe review.
                 </p>
+              )}
+              {lbReconciliation.unsupportedItems?.length > 0 && (
+                <div className="pt-1 space-y-0.5 border-t border-border mt-1">
+                  <p className="font-semibold text-foreground">
+                    External / Unsupported Content (Reported, not imported into library):
+                  </p>
+                  {lbReconciliation.unsupportedItems.map((item: any, idx: number) => (
+                    <p key={idx}>
+                      • <strong>{item.filename}:</strong> {item.details}
+                    </p>
+                  ))}
+                </div>
               )}
             </div>
           </div>

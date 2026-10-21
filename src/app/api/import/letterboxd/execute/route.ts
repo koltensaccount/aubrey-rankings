@@ -46,9 +46,19 @@ export async function POST(req: NextRequest) {
         { status: 400 },
       );
     }
-    if (summary.films.length === 0) {
+    const hasImportableData =
+      summary.films.length > 0 ||
+      summary.watchlist.length > 0 ||
+      summary.customLists.length > 0 ||
+      summary.diaryEntries.length > 0 ||
+      summary.reviews.length > 0;
+
+    if (!hasImportableData) {
       return NextResponse.json(
-        { error: "No films found in archive." },
+        {
+          error:
+            "No importable records found in the archive. The ZIP does not contain ratings, reviews, diary logs, a watchlist, or custom lists.",
+        },
         { status: 400 },
       );
     }

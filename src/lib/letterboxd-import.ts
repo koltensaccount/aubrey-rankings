@@ -11,9 +11,11 @@ import {
 } from "@/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import type {
-  LetterboxdExportSummary,
-  ParsedLetterboxdFilm,
+import {
+  buildDiaryEventKey,
+  canonicalFilmKey,
+  type LetterboxdExportSummary,
+  type ParsedLetterboxdFilm,
 } from "./letterboxd";
 
 export function filmIdentity(film: { title: string; year: number | null }) {
@@ -109,8 +111,20 @@ export async function previewLetterboxdImport(
   // 3. Existing watchlist
   const existingWatchlist = await db.query.watchlistItems.findMany({
     where: (w, { eq }) => eq(w.userId, userId),
-    columns: { id: true, mediaItemId: true },
+    with: { mediaItem: true },
   });
+  const existingWatchlistKeys = new Set(
+    existingWatchlist
+      .filter((w) => Boolean(w.mediaItem))
+      .map((w) =>
+        filmIdentity({
+          title: w.mediaItem.title,
+          year: w.mediaItem.releaseDate
+            ? Number(w.mediaItem.releaseDate.slice(0, 4)) || null
+            : null,
+        }),
+      ),
+  );
 
   // 4. Existing diary entries
   const existingDiary = await db.query.diaryEntries.findMany({
@@ -149,17 +163,22 @@ export async function previewLetterboxdImport(
   ).length;
 
   const newDiaryCount = summary.diaryEntries.filter((d) => {
-    // Generate sample event key for preview comparison
-    const sig = `${d.title.toLowerCase()}::${d.year ?? ""}::${d.watchedDate || ""}::${d.loggedDate || ""}::${d.isRewatch}::${d.rating ?? ""}::${(d.tags || []).slice().sort().join(",")}::${d.occurrenceIndex || 1}`;
-    return !existingDiaryEventKeys.has(sig);
+    const key = d.sourceEventKey || buildDiaryEventKey(d);
+    return !existingDiaryEventKeys.has(key);
   }).length;
 
-  const newWatchlistCount = summary.watchlist.length;
+  const newWatchlistCount = summary.watchlist.filter(
+    (w) => !existingWatchlistKeys.has(filmIdentity(w)),
+  ).length;
 
   const newListsCount = summary.customLists.filter(
     (l) =>
       (!l.url || !existingListUris.has(l.url)) &&
       !existingListTitles.has(l.title.trim().toLowerCase()),
+  ).length;
+
+  const newRatingsCount = summary.films.filter(
+    (f) => f.rating !== undefined && !existingRatingKeys.has(filmIdentity(f)),
   ).length;
 
   const unsupportedReasons: string[] = [];
@@ -189,8 +208,8 @@ export async function previewLetterboxdImport(
     breakdown: {
       films: { new: newCount, existing: existingCount },
       ratings: {
-        new: summary.totalRatings,
-        existing: existingCount,
+        new: newRatingsCount,
+        existing: summary.totalRatings - newRatingsCount,
         preservedAubreyEdits: preservedRatingsCount,
       },
       reviews: {
@@ -203,7 +222,7 @@ export async function previewLetterboxdImport(
       },
       watchlist: {
         new: newWatchlistCount,
-        existing: existingWatchlist.length,
+        existing: summary.watchlist.length - newWatchlistCount,
       },
       lists: {
         new: newListsCount,
@@ -405,6 +424,8 @@ export async function executeLetterboxdImport(
     let preservedCount = 0;
     let newReviewsCount = 0;
     let newDiaryCount = 0;
+    let updatedDiaryCount = 0;
+    let preservedDiaryCount = 0;
     let newWatchlistCount = 0;
     let newListsCount = 0;
     let listEntriesCount = 0;
@@ -615,6 +636,7 @@ export async function executeLetterboxdImport(
           sourceService: "letterboxd",
           sourceUri: rev.letterboxdUri || null,
           watchedDate: rev.watchedDate || null,
+          tags: rev.tags && rev.tags.length > 0 ? rev.tags : null,
           publishedAt: pubDate,
           createdAt: pubDate,
           updatedAt: new Date(),
@@ -627,6 +649,7 @@ export async function executeLetterboxdImport(
           .set({
             ratingId: linkedRating?.id ?? existingRev.ratingId,
             watchedDate: rev.watchedDate || existingRev.watchedDate,
+            tags: rev.tags && rev.tags.length > 0 ? rev.tags : existingRev.tags,
             updatedAt: new Date(),
           })
           .where(eq(reviews.id, existingRev.id));
@@ -655,9 +678,8 @@ export async function executeLetterboxdImport(
         continue;
       }
 
-      // Generate stable viewing-event key to guarantee repeat-import idempotency
-      const baseSignature = `${mediaItem.id}::${d.watchedDate || ""}::${d.loggedDate || ""}::${d.isRewatch}::${d.rating ?? ""}::${(d.tags || []).slice().sort().join(",")}`;
-      const eventKey = `${baseSignature}::${d.occurrenceIndex || 1}`;
+      // Generate stable viewing-event key to guarantee repeat-import idempotency and update stability
+      const eventKey = d.sourceEventKey || buildDiaryEventKey(d);
 
       const existingDiary = await tx.query.diaryEntries.findFirst({
         where: (entry, { and, eq }) =>
@@ -692,7 +714,7 @@ export async function executeLetterboxdImport(
           loggedDate: d.loggedDate ? new Date(d.loggedDate) : null,
           isRewatch: d.isRewatch,
           ratingValue: d.rating ?? null,
-          tags: d.tags.length > 0 ? d.tags : null,
+          tags: d.tags && d.tags.length > 0 ? d.tags : null,
           sourceService: "letterboxd",
           sourceUri: d.letterboxdUri || null, // preserve film URI for provenance
           sourceEventKey: eventKey, // unique viewing event key
@@ -700,6 +722,27 @@ export async function executeLetterboxdImport(
           updatedAt: new Date(),
         });
         newDiaryCount++;
+      } else {
+        // Legitimate reimport or update: check if rating or tags changed in Letterboxd
+        const ratingChanged = (d.rating ?? null) !== existingDiary.ratingValue;
+        const currentTags = (existingDiary.tags as string[]) || [];
+        const newTags = d.tags || [];
+        const tagsChanged =
+          currentTags.slice().sort().join(",") !== newTags.slice().sort().join(",");
+
+        if (ratingChanged || tagsChanged) {
+          await tx
+            .update(diaryEntries)
+            .set({
+              ratingValue: d.rating ?? existingDiary.ratingValue,
+              tags: newTags.length > 0 ? newTags : null,
+              updatedAt: new Date(),
+            })
+            .where(eq(diaryEntries.id, existingDiary.id));
+          updatedDiaryCount++;
+        } else {
+          preservedDiaryCount++;
+        }
       }
     }
 
@@ -772,10 +815,22 @@ export async function executeLetterboxdImport(
             visibility: "private", // strictly private
             sourceService: "letterboxd",
             sourceUri: list.url || null,
+            tags: list.tags && list.tags.length > 0 ? list.tags : null,
           })
           .returning();
         col = newCol;
         newListsCount++;
+      } else {
+        if ((list.tags && list.tags.length > 0) || list.description) {
+          await tx
+            .update(collections)
+            .set({
+              tags: list.tags && list.tags.length > 0 ? list.tags : col.tags,
+              description: list.description || col.description,
+              updatedAt: new Date(),
+            })
+            .where(eq(collections.id, col.id));
+        }
       }
 
       for (const entry of list.entries) {
@@ -845,10 +900,17 @@ export async function executeLetterboxdImport(
     }
 
     const totalUnresolvedAndQuarantined = quarantinedCount;
-    const message =
-      totalUnresolvedAndQuarantined > 0
-        ? `Processed ${summary.films.length} films (${newCount} new, ${updatedCount} updated, ${preservedCount} preserved Aubrey edits). Added ${newDiaryCount} viewing logs, ${newReviewsCount} private reviews, ${newWatchlistCount} watchlist items, and ${newListsCount} lists. ${totalUnresolvedAndQuarantined} items were quarantined as ambiguous or unmapped.`
-        : `Successfully processed ${summary.films.length} films (${newCount} new, ${updatedCount} updated, ${preservedCount} preserved Aubrey edits). Added ${newDiaryCount} viewing logs, ${newReviewsCount} private reviews, ${newWatchlistCount} watchlist items, and ${newListsCount} lists.`;
+    const unsupportedNotice =
+      summary.unsupportedItems && summary.unsupportedItems.length > 0
+        ? ` Note: ${summary.unsupportedItems.length} external/unsupported files (${summary.unsupportedItems.map((u) => u.filename).join(", ")}) were reported and not imported into your library.`
+        : "";
+
+    const quarantineNotice =
+      quarantinedCount > 0
+        ? ` ${quarantinedCount} entries with ambiguous matches or missing metadata were quarantined in your unresolved import log for review.`
+        : "";
+
+    const message = `Processed ${summary.films.length} films (${newCount} new, ${updatedCount} updated, ${preservedCount} preserved Aubrey edits). Added ${newDiaryCount} viewing logs, ${newReviewsCount} private reviews, ${newWatchlistCount} watchlist items, and ${newListsCount} custom lists.${quarantineNotice}${unsupportedNotice}`;
 
     return {
       newCount,
@@ -856,6 +918,8 @@ export async function executeLetterboxdImport(
       preservedCount,
       newReviewsCount,
       newDiaryCount,
+      updatedDiaryCount,
+      preservedDiaryCount,
       newWatchlistCount,
       newListsCount,
       listEntriesCount,
@@ -865,7 +929,7 @@ export async function executeLetterboxdImport(
       reconciliation: {
         films: { total: summary.films.length, new: newCount, updated: updatedCount, preserved: preservedCount },
         reviews: { total: summary.reviews.length, created: newReviewsCount },
-        diary: { total: summary.diaryEntries.length, created: newDiaryCount },
+        diary: { total: summary.diaryEntries.length, created: newDiaryCount, updated: updatedDiaryCount, preserved: preservedDiaryCount },
         watchlist: { total: summary.watchlist.length, created: newWatchlistCount },
         lists: { total: summary.customLists.length, created: newListsCount, entries: listEntriesCount },
         unresolvedCount: totalUnresolvedAndQuarantined,

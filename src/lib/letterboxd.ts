@@ -23,6 +23,35 @@ export interface ParsedDiaryEntry {
   rating?: number;
   tags: string[];
   occurrenceIndex: number;
+  sourceEventKey?: string;
+}
+
+export function canonicalFilmKey(d: {
+  title: string;
+  year: number | null;
+  letterboxdUri?: string | null;
+}): string {
+  if (d.letterboxdUri && d.letterboxdUri.trim()) {
+    return d.letterboxdUri.trim().toLowerCase();
+  }
+  return `${d.title.trim().toLowerCase()}::${d.year ?? ""}`;
+}
+
+export function buildDiaryEventKey(d: {
+  title: string;
+  year: number | null;
+  letterboxdUri?: string | null;
+  watchedDate: string | null;
+  loggedDate: string | null;
+  isRewatch: boolean;
+  occurrenceIndex?: number;
+}): string {
+  const filmKey = canonicalFilmKey(d);
+  const watched = d.watchedDate || "";
+  const logged = d.loggedDate || "";
+  const rewatch = d.isRewatch ? "1" : "0";
+  const occ = d.occurrenceIndex || 1;
+  return `${filmKey}::${watched}::${logged}::${rewatch}::${occ}`;
 }
 
 export interface ParsedReview {
@@ -454,21 +483,27 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
             }
           }
 
-          // Distinguish same-day multiple viewings using an occurrence index
-          const signature = `${name.trim().toLowerCase()}::${parseYear(year) ?? ""}::${watchDate}::${loggedDate}::${isRewatch}::${ratingVal ?? ""}::${tags.slice().sort().join(",")}`;
-          const currentOcc = (diaryOccurrenceTracker.get(signature) || 0) + 1;
-          diaryOccurrenceTracker.set(signature, currentOcc);
+          // Distinguish multiple genuine viewings deterministically using an occurrence index
+          // Stable signature separates film identity and viewing timing from mutable ratings and tags
+          const watchedDateValid = isValidWatchDate(watchDate) ? watchDate : null;
+          const loggedDateValid = isValidWatchDate(loggedDate) ? loggedDate : null;
+          const eventSig = `${canonicalFilmKey({ title: name, year: parseYear(year), letterboxdUri: uri })}::${watchedDateValid || ""}::${loggedDateValid || ""}::${isRewatch ? "1" : "0"}`;
+          const currentOcc = (diaryOccurrenceTracker.get(eventSig) || 0) + 1;
+          diaryOccurrenceTracker.set(eventSig, currentOcc);
+
+          const sourceEventKey = `${eventSig}::${currentOcc}`;
 
           diaryEntries.push({
             title: name.trim(),
             year: parseYear(year),
             letterboxdUri: uri.trim(),
-            watchedDate: isValidWatchDate(watchDate) ? watchDate : null,
-            loggedDate: isValidWatchDate(loggedDate) ? loggedDate : null,
+            watchedDate: watchedDateValid,
+            loggedDate: loggedDateValid,
             isRewatch,
             rating: ratingVal,
             tags,
             occurrenceIndex: currentOcc,
+            sourceEventKey,
           });
         }
       }
@@ -704,7 +739,7 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
           });
         }
 
-        if (entries.length > 0) {
+        if (listTitle) {
           customLists.push({
             filename: fileName,
             title: listTitle,
