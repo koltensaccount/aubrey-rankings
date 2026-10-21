@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { mediaItems, importSourceMappings, type MediaItem, type ImportSourceMapping } from "@/db/schema";
 import { tmdb, type TmdbSearchResult } from "@/lib/tmdb";
 import { resolveMediaItem } from "@/lib/media-resolution";
+import { canonicalFilmKey, normalizeLetterboxdFilmUri } from "@/lib/letterboxd";
 import { and, eq, sql, isNull, or } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 
@@ -382,7 +383,7 @@ export async function resolveLetterboxdMediaIdentity(
 ): Promise<{ match: MatchedMediaResult | null; quarantine?: UnmatchedQuarantineResult }> {
   const cleanTitle = film.title.trim();
   const year = film.year;
-  const uri = film.letterboxdUri?.trim() || null;
+  const uri = film.letterboxdUri?.trim() ? normalizeLetterboxdFilmUri(film.letterboxdUri) : null;
   const cacheKey = uri
     ? `uri::${uri.toLowerCase()}`
     : `${cleanTitle.toLowerCase()}::${year ?? ""}`;
@@ -427,23 +428,25 @@ export async function resolveLetterboxdMediaIdentity(
     }
   }
 
-  const titleYearMapping = await db.query.importSourceMappings.findFirst({
-    where: (m, { and, eq, isNull }) =>
-      and(
-        eq(m.sourceService, "letterboxd"),
-        sql`lower(trim(${m.sourceTitle})) = lower(${cleanTitle})`,
-        year ? eq(m.sourceYear, year) : isNull(m.sourceYear)
-      ),
-    with: { mediaItem: true },
-  });
-  if (titleYearMapping?.mediaItem) {
-    const result: MatchedMediaResult = {
-      mediaItem: titleYearMapping.mediaItem,
-      confidence: "manual",
-      isTvException: titleYearMapping.sourceMediaType === "episode",
-    };
-    targetCache.set(cacheKey, result);
-    return { match: result };
+  if (!uri) {
+    const titleYearMapping = await db.query.importSourceMappings.findFirst({
+      where: (m, { and, eq, isNull }) =>
+        and(
+          eq(m.sourceService, "letterboxd"),
+          sql`lower(trim(${m.sourceTitle})) = lower(${cleanTitle})`,
+          year ? eq(m.sourceYear, year) : isNull(m.sourceYear)
+        ),
+      with: { mediaItem: true },
+    });
+    if (titleYearMapping?.mediaItem) {
+      const result: MatchedMediaResult = {
+        mediaItem: titleYearMapping.mediaItem,
+        confidence: "manual",
+        isTvException: titleYearMapping.sourceMediaType === "episode",
+      };
+      targetCache.set(cacheKey, result);
+      return { match: result };
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -827,9 +830,7 @@ export async function batchResolveIdentities(
   // Deduplicate by distinct Letterboxd URI when available, otherwise by title::year
   const uniqueFilms = new Map<string, SourceFilmCandidate>();
   for (const f of films) {
-    const key = f.letterboxdUri?.trim()
-      ? f.letterboxdUri.trim().toLowerCase()
-      : `${f.title.trim().toLowerCase()}::${f.year ?? ""}`;
+    const key = canonicalFilmKey(f);
     if (!uniqueFilms.has(key)) {
       uniqueFilms.set(key, f);
     }
@@ -847,14 +848,22 @@ export async function batchResolveIdentities(
         const titleYearKey = `${film.title.trim().toLowerCase()}::${film.year ?? ""}`;
         if (match) {
           resolvedMap.set(key, match);
-          if (film.letterboxdUri) resolvedMap.set(film.letterboxdUri.trim().toLowerCase(), match);
+          if (film.letterboxdUri) {
+            resolvedMap.set(canonicalFilmKey(film), match);
+            resolvedMap.set(normalizeLetterboxdFilmUri(film.letterboxdUri), match);
+            resolvedMap.set(film.letterboxdUri.trim().toLowerCase(), match);
+          }
           if (!resolvedMap.has(titleYearKey)) {
             resolvedMap.set(titleYearKey, match);
           }
           if (match.isTvException) tvExceptionsCount++;
         } else if (quarantine) {
           quarantineMap.set(key, quarantine);
-          if (film.letterboxdUri) quarantineMap.set(film.letterboxdUri.trim().toLowerCase(), quarantine);
+          if (film.letterboxdUri) {
+            quarantineMap.set(canonicalFilmKey(film), quarantine);
+            quarantineMap.set(normalizeLetterboxdFilmUri(film.letterboxdUri), quarantine);
+            quarantineMap.set(film.letterboxdUri.trim().toLowerCase(), quarantine);
+          }
           if (!quarantineMap.has(titleYearKey)) {
             quarantineMap.set(titleYearKey, quarantine);
           }

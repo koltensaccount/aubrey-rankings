@@ -70,8 +70,9 @@ import {
   verifyBackupReadiness,
 } from "@/lib/library-cleanup";
 import { randomUUID } from "crypto";
-import { seedDefaultRatingSystem } from "@/lib/auth";
-import type { NextRequest } from "next/server";
+import { auth, seedDefaultRatingSystem } from "@/lib/auth";
+import { NextRequest } from "next/server";
+import { POST as resolveMappingPost } from "@/app/api/admin/import-lab/resolve-mapping/route";
 
 describe("Phase 14D: Import Lab & Letterboxd Reliability", () => {
   const runId = `p14d_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -919,5 +920,257 @@ describe("Phase 14D: Import Lab & Letterboxd Reliability", () => {
     assert.equal(singleFilm.isFavorite, true);
     assert.equal(singleFilm.review, "Sci-fi masterpiece");
     assert.equal(singleFilm.watchDate, "2022-01-01");
+  });
+
+  it("19. Import Lab manual mappings never overwrite, re-tag, or delete verified production mappings", async () => {
+    // 1. Establish verified admin session
+    const adminEmail = `admin_lab_${runId}@example.com`;
+    const adminRes = await auth.api.signUpEmail({
+      body: {
+        name: "Admin User",
+        email: adminEmail,
+        password: "AdminPassword123!",
+      },
+      asResponse: true,
+    });
+    const adminCookie = adminRes.headers.get("set-cookie") || "";
+    await db.update(user).set({ emailVerified: true }).where(eq(user.email, adminEmail));
+    process.env.ADMIN_EMAILS = `${process.env.ADMIN_EMAILS || ""},${adminEmail}`;
+
+    // 2. Insert verified production mapping
+    const prodMapId = `map_prod_prot_${randomUUID()}`;
+    const prodMediaId = `media_prod_prot_${randomUUID()}`;
+    const collidingUri = `https://boxd.it/prod_col_${runId}`;
+    const collidingTitle = `Colliding Production Title ${runId}`;
+    const collidingYear = 2021;
+
+    const [prodMedia] = await db
+      .insert(mediaItems)
+      .values({
+        id: prodMediaId,
+        title: collidingTitle,
+        releaseDate: `${collidingYear}-01-01`,
+        mediaType: "movie",
+      })
+      .returning();
+    trackedMediaIds.push(prodMedia.id);
+
+    await db.insert(importSourceMappings).values({
+      id: prodMapId,
+      sourceService: "letterboxd",
+      sourceUri: collidingUri,
+      sourceTitle: collidingTitle,
+      sourceYear: collidingYear,
+      sourceMediaType: "movie",
+      mediaItemId: prodMedia.id,
+      confidence: "tmdb_verified",
+      metadata: {
+        verifiedBy: "production_curator",
+        productionTimestamp: 1600000000,
+        score: 0.99,
+      },
+    });
+
+    const originalMapping = await db.query.importSourceMappings.findFirst({
+      where: eq(importSourceMappings.id, prodMapId),
+    });
+    assert.ok(originalMapping);
+
+    // 3. Insert colliding quarantined item in the test workspace and a resolved target media item
+    const targetTmdbId = 88888;
+    const [targetMedia] = await db
+      .insert(mediaItems)
+      .values({
+        id: `tmdb-movie-${targetTmdbId}`,
+        tmdbId: targetTmdbId,
+        title: "Resolved Target Film",
+        releaseDate: "2021-01-01",
+        mediaType: "movie",
+      })
+      .returning();
+    trackedMediaIds.push(targetMedia.id);
+
+    const unresItemId = `unres_test_${randomUUID()}`;
+    await db.insert(unresolvedImportItems).values({
+      id: unresItemId,
+      userId: TEST_WORKSPACE_USER_ID,
+      sourceService: "letterboxd",
+      sourceType: "film",
+      sourceData: {
+        title: collidingTitle,
+        year: collidingYear,
+        uri: collidingUri,
+      },
+      reason: "ambiguous_media",
+      details: "Test workspace quarantined title colliding with verified production mapping",
+    });
+
+    // 4. Attempt to resolve the mapping via POST /api/admin/import-lab/resolve-mapping
+    const reqHeaders = new Headers({
+      cookie: adminCookie,
+      "content-type": "application/json",
+    });
+
+    const res = await resolveMappingPost(
+      new NextRequest("http://localhost:3000/api/admin/import-lab/resolve-mapping", {
+        method: "POST",
+        headers: reqHeaders,
+        body: JSON.stringify({
+          unresolvedItemId: unresItemId,
+          tmdbId: targetTmdbId,
+          mediaType: "movie",
+        }),
+      })
+    );
+
+    // Must return 409 Conflict and refuse to overwrite or re-tag production mapping
+    assert.equal(res.status, 409);
+    const json = await res.json();
+    assert.match(json.error, /Conflicting production mapping exists/);
+
+    // 5. Execute test workspace reset
+    await resetTestWorkspace(TEST_WORKSPACE_USER_ID);
+
+    // 6. Verify production mapping is byte-for-byte preserved after test reset
+    const surviving = await db.query.importSourceMappings.findFirst({
+      where: eq(importSourceMappings.id, prodMapId),
+    });
+
+    assert.ok(surviving, "Production mapping must survive test reset");
+    assert.equal(surviving.id, originalMapping.id);
+    assert.equal(surviving.mediaItemId, originalMapping.mediaItemId);
+    assert.equal(surviving.confidence, originalMapping.confidence);
+    assert.equal(surviving.sourceUri, originalMapping.sourceUri);
+    assert.equal(surviving.sourceTitle, originalMapping.sourceTitle);
+    assert.equal(surviving.sourceYear, originalMapping.sourceYear);
+    assert.equal(surviving.sourceMediaType, originalMapping.sourceMediaType);
+    assert.deepEqual(surviving.metadata, originalMapping.metadata);
+    assert.equal((surviving.metadata as any)?.isTestWorkspace, undefined);
+
+    // Clean up
+    await db.delete(importSourceMappings).where(eq(importSourceMappings.id, prodMapId));
+    await db.delete(user).where(eq(user.email, adminEmail));
+  });
+
+  it("20. full end-to-end import keeps distinct films sharing title and year separate, while deduplicating cross-file records and rewatches", async () => {
+    const e2eZip = new AdmZip();
+    const uriDelToro = `https://boxd.it/pinocchio-deltoro-${runId}`;
+    const uriDisney = `https://boxd.it/pinocchio-disney-${runId}`;
+
+    e2eZip.addFile(
+      "ratings.csv",
+      Buffer.from(
+        `Date,Name,Year,Letterboxd URI,Rating\n` +
+          `2022-12-10,Pinocchio,2022,${uriDelToro},4.5\n` +
+          `2022-12-15,Pinocchio,2022,${uriDisney},2.0\n`,
+        "utf8"
+      )
+    );
+
+    e2eZip.addFile(
+      "watched.csv",
+      Buffer.from(
+        `Date,Name,Year,Letterboxd URI\n` +
+          `2022-12-10,Pinocchio,2022,${uriDelToro}\n` +
+          `2022-12-15,Pinocchio,2022,${uriDisney}\n`,
+        "utf8"
+      )
+    );
+
+    e2eZip.addFile(
+      "reviews.csv",
+      Buffer.from(
+        `Date,Name,Year,Letterboxd URI,Rating,Rewatch,Review,Tags,Watched Date\n` +
+          `2022-12-10,Pinocchio,2022,${uriDelToro},4.5,No,"Guillermo del Toro masterpiece","stop-motion",2022-12-10\n` +
+          `2022-12-15,Pinocchio,2022,${uriDisney},2.0,No,"Unnecessary remake","disney",2022-12-15\n`,
+        "utf8"
+      )
+    );
+
+    e2eZip.addFile(
+      "diary.csv",
+      Buffer.from(
+        `Date,Name,Year,Letterboxd URI,Rating,Rewatch,Tags,Watched Date\n` +
+          `2022-12-10,Pinocchio,2022,${uriDelToro},4.5,No,"first viewing",2022-12-10\n` +
+          `2023-01-05,Pinocchio,2022,${uriDelToro},5.0,Yes,"rewatch",2023-01-05\n` +
+          `2022-12-15,Pinocchio,2022,${uriDisney},2.0,No,"live action",2022-12-15\n`,
+        "utf8"
+      )
+    );
+
+    const summary = parseLetterboxdZip(e2eZip.toBuffer());
+    assert.equal(summary.films.length, 2, "Both distinct Pinocchio films must be present in parsed films");
+    assert.equal(summary.diaryEntries.length, 3, "All three diary entries must be present");
+    assert.equal(summary.reviews.length, 2, "Both reviews must be present");
+
+    // 1. Initial import execution
+    const result = await executeLetterboxdImport(realUserId, summary, {
+      allowSyntheticPlaceholders: true,
+    });
+    assert.equal(result.newCount, 2, "Both distinct films must be created as new ratings");
+    assert.equal(result.newReviewsCount, 2, "Both reviews must be created");
+    assert.equal(result.newDiaryCount, 3, "All 3 diary viewings must be created");
+
+    // 2. Verify ratings table state
+    const userRatings = await db.query.ratings.findMany({
+      where: and(eq(ratings.userId, realUserId), isNull(ratings.collectionId)),
+      with: { mediaItem: true },
+    });
+    const pinocchioRatings = userRatings.filter((r) => r.mediaItem.title === "Pinocchio");
+    assert.equal(pinocchioRatings.length, 2, "Exactly two rating rows must exist for the two distinct films");
+
+    const rDelToro = pinocchioRatings.find((r) => r.letterboxdUri === uriDelToro);
+    const rDisney = pinocchioRatings.find((r) => r.letterboxdUri === uriDisney);
+    assert.ok(rDelToro, "Del Toro rating must exist");
+    assert.ok(rDisney, "Disney rating must exist");
+    assert.notEqual(rDelToro.mediaItemId, rDisney.mediaItemId, "Each film must have a separate mediaItem ID");
+    assert.equal(rDelToro.sourceRating, 4.5);
+    assert.equal(rDisney.sourceRating, 2.0);
+    trackedMediaIds.push(rDelToro.mediaItemId, rDisney.mediaItemId);
+
+    // 3. Verify reviews table state
+    const userReviews = await db.query.reviews.findMany({
+      where: eq(reviews.userId, realUserId),
+    });
+    const pinocchioReviews = userReviews.filter((rev) =>
+      rev.mediaItemId === rDelToro.mediaItemId || rev.mediaItemId === rDisney.mediaItemId
+    );
+    assert.equal(pinocchioReviews.length, 2, "Exactly two reviews must exist");
+    const revDelToro = pinocchioReviews.find((rev) => rev.mediaItemId === rDelToro.mediaItemId);
+    const revDisney = pinocchioReviews.find((rev) => rev.mediaItemId === rDisney.mediaItemId);
+    assert.ok(revDelToro);
+    assert.ok(revDisney);
+    assert.equal(revDelToro.content, "Guillermo del Toro masterpiece");
+    assert.equal(revDisney.content, "Unnecessary remake");
+
+    // 4. Verify diary table state (viewing events & rewatches)
+    const userDiary = await db.query.diaryEntries.findMany({
+      where: eq(diaryEntries.userId, realUserId),
+    });
+    const pinocchioDiary = userDiary.filter((d) =>
+      d.mediaItemId === rDelToro.mediaItemId || d.mediaItemId === rDisney.mediaItemId
+    );
+    assert.equal(pinocchioDiary.length, 3, "Exactly 3 diary entries must exist");
+
+    const delToroEntries = pinocchioDiary.filter((d) => d.mediaItemId === rDelToro.mediaItemId);
+    const disneyEntries = pinocchioDiary.filter((d) => d.mediaItemId === rDisney.mediaItemId);
+    assert.equal(delToroEntries.length, 2, "Del Toro film must have 2 diary entries");
+    assert.equal(disneyEntries.length, 1, "Disney film must have 1 diary entry");
+
+    const delToroFirst = delToroEntries.find((d) => d.watchedDate === "2022-12-10");
+    const delToroRewatch = delToroEntries.find((d) => d.watchedDate === "2023-01-05");
+    assert.ok(delToroFirst);
+    assert.ok(delToroRewatch);
+    assert.equal(delToroFirst.isRewatch, false, "Original viewing must have isRewatch=false");
+    assert.equal(delToroRewatch.isRewatch, true, "Subsequent viewing must have isRewatch=true");
+    assert.equal(delToroRewatch.sourceRating, 5.0);
+
+    // 5. Test re-import idempotency
+    const reimportResult = await executeLetterboxdImport(realUserId, summary, {
+      allowSyntheticPlaceholders: true,
+    });
+    assert.equal(reimportResult.newCount, 0, "No new films created on reimport");
+    assert.equal(reimportResult.newReviewsCount, 0, "No duplicate reviews created on reimport");
+    assert.equal(reimportResult.newDiaryCount, 0, "No duplicate diary entries created on reimport");
   });
 });

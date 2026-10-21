@@ -117,7 +117,18 @@ export async function POST(request: NextRequest) {
     }
 
     if (existingMapping) {
-      // Update existing mapping with verified assignment
+      const isTestMapping = Boolean((existingMapping.metadata as any)?.isTestWorkspace);
+      if (!isTestMapping) {
+        return NextResponse.json(
+          {
+            error:
+              "Conflicting production mapping exists. Import Lab manual resolutions cannot overwrite, re-tag, or delete verified production mappings.",
+          },
+          { status: 409 }
+        );
+      }
+
+      // Safe to update existing test-scoped mapping with verified assignment
       await db
         .update(importSourceMappings)
         .set({

@@ -32,7 +32,7 @@ export function canonicalFilmKey(d: {
   letterboxdUri?: string | null;
 }): string {
   if (d.letterboxdUri && d.letterboxdUri.trim()) {
-    return d.letterboxdUri.trim().toLowerCase();
+    return normalizeLetterboxdFilmUri(d.letterboxdUri);
   }
   return `${d.title.trim().toLowerCase()}::${d.year ?? ""}`;
 }
