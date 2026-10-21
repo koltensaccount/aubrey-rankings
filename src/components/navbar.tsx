@@ -24,8 +24,7 @@ export function Navbar() {
       : "a";
   const username = (session?.user as { username?: string } | undefined)?.username;
   const primaryNavigation = [
-    { href: "/", label: "My Library", icon: Library, active: pathname === "/" || pathname === "/profile" },
-    { href: "/journal", label: "Journal", icon: BookOpen, active: pathname === "/journal" },
+    { href: "/", label: "Library", icon: Library, active: pathname === "/" || pathname === "/profile" || pathname.startsWith("/journal") },
     { href: "/discover", label: "Discover", icon: Compass, active: pathname === "/discover" || pathname === "/explore" || pathname.startsWith("/media/") },
     { href: "/feed", label: "Feed", icon: Rss, active: pathname === "/feed" },
   ];
