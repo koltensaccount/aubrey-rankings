@@ -19,6 +19,7 @@ import {
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
 import { reviewScoreOnTen } from "@/lib/review-rating";
+import { getPersonalMediaUrl } from "@/lib/media-url";
 import { CinematicTimeline, type TimelineEntry } from "./cinematic-timeline";
 import { WatchedGrid, type WatchedItem } from "./watched-grid";
 import { WatchlistGrid, type WatchlistGridItem } from "./watchlist-grid";
@@ -396,7 +397,8 @@ export function LibraryView({
                         Boolean(r.mediaItem?.seasonNumber && r.mediaItem?.episodeNumber);
                       const isDraft = r.status === "draft" || r.status === "unpublished";
                       const score = r.rating ? reviewScoreOnTen(r.rating) : null;
-                      const targetLink = `/media/${encodeURIComponent(r.mediaItemId)}?journal=1`;
+                      const personalViewLink = getPersonalMediaUrl(r.mediaItemId);
+                      const editLink = getPersonalMediaUrl(r.mediaItemId, { journal: true });
 
                       return (
                         <article
@@ -404,7 +406,7 @@ export function LibraryView({
                           className="p-4 sm:p-5 rounded-card bg-card border border-border hover:border-primary/40 transition-colors shadow-xs"
                         >
                           <div className="flex items-start gap-4">
-                            <Link href={targetLink} className="shrink-0">
+                            <Link href={personalViewLink} className="shrink-0">
                               <div
                                 className={`rounded overflow-hidden border border-border ${
                                   isEpisode ? "w-24 sm:w-28 aspect-video" : "w-14 sm:w-16 aspect-[2/3]"
@@ -453,7 +455,7 @@ export function LibraryView({
                               </div>
 
                               <h4 className="font-display text-xl uppercase tracking-tight text-foreground truncate">
-                                <Link href={targetLink} className="hover:text-primary transition-colors">
+                                <Link href={personalViewLink} className="hover:text-primary transition-colors">
                                   {r.mediaItem?.title}
                                 </Link>
                               </h4>
@@ -475,7 +477,7 @@ export function LibraryView({
                                     : ""}
                                 </span>
                                 <Link
-                                  href={targetLink}
+                                  href={editLink}
                                   className="inline-flex items-center gap-1 font-semibold text-primary hover:underline"
                                 >
                                   <PenLine size={12} />
@@ -515,14 +517,14 @@ export function LibraryView({
                         rating.mediaItem?.mediaType === "episode" ||
                         Boolean(rating.mediaItem?.seasonNumber && rating.mediaItem?.episodeNumber);
                       const score = reviewScoreOnTen(rating);
-                      const targetLink = `/media/${encodeURIComponent(rating.mediaItemId)}?journal=1`;
+                      const personalViewLink = getPersonalMediaUrl(rating.mediaItemId);
 
                       return (
                         <article
                           key={rating.id}
                           className="p-3 rounded-card bg-card border border-border flex items-center gap-3 hover:border-primary/40 transition-colors shadow-xs"
                         >
-                          <Link href={targetLink} className="shrink-0">
+                          <Link href={personalViewLink} className="shrink-0">
                             <div
                               className={`rounded overflow-hidden border border-border ${
                                 isEpisode ? "w-16 aspect-video" : "w-10 aspect-[2/3]"
@@ -543,7 +545,7 @@ export function LibraryView({
 
                           <div className="min-w-0 flex-1 space-y-1">
                             <h4 className="font-display text-base uppercase tracking-tight text-foreground truncate">
-                              <Link href={targetLink} className="hover:text-primary transition-colors">
+                              <Link href={personalViewLink} className="hover:text-primary transition-colors">
                                 {rating.mediaItem?.title}
                               </Link>
                             </h4>
@@ -589,7 +591,8 @@ export function LibraryView({
                       const isEpisode =
                         item.mediaItem?.mediaType === "episode" ||
                         Boolean(item.mediaItem?.seasonNumber && item.mediaItem?.episodeNumber);
-                      const targetLink = `/media/${encodeURIComponent(item.mediaItemId)}?journal=1`;
+                      const personalViewLink = getPersonalMediaUrl(item.mediaItemId);
+                      const rateLink = getPersonalMediaUrl(item.mediaItemId, { journal: true });
 
                       return (
                         <article
@@ -597,7 +600,7 @@ export function LibraryView({
                           className="p-3 rounded-card bg-card border border-border flex items-center justify-between gap-3 hover:border-primary/40 transition-colors shadow-xs"
                         >
                           <div className="flex items-center gap-3 min-w-0">
-                            <Link href={targetLink} className="shrink-0">
+                            <Link href={personalViewLink} className="shrink-0">
                               <div
                                 className={`rounded overflow-hidden border border-border ${
                                   isEpisode ? "w-16 aspect-video" : "w-10 aspect-[2/3]"
@@ -618,7 +621,7 @@ export function LibraryView({
 
                             <div className="min-w-0 flex-1">
                               <h4 className="font-display text-base uppercase tracking-tight text-foreground truncate">
-                                <Link href={targetLink} className="hover:text-primary transition-colors">
+                                <Link href={personalViewLink} className="hover:text-primary transition-colors">
                                   {item.mediaItem?.title}
                                 </Link>
                               </h4>
@@ -629,7 +632,7 @@ export function LibraryView({
                           </div>
 
                           <Link
-                            href={targetLink}
+                            href={rateLink}
                             className="shrink-0 px-2.5 py-1 rounded-button bg-surface border border-border text-[11px] font-semibold text-primary hover:bg-surface-elevated transition-colors"
                           >
                             Rate

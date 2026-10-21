@@ -20,6 +20,7 @@ import { getMediaArtworkAspect } from "@/lib/artwork";
 import { LikeButton } from "@/components/social/like-button";
 import { SaveRankingButton } from "@/components/social/save-ranking-button";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
+import { getPublicMediaUrl } from "@/lib/media-url";
 
 export interface FeedAuthor {
   id: string;
@@ -521,7 +522,7 @@ export function CommunityFeed({
                     </div>
 
                     <Link
-                      href={`/media/${md.id}`}
+                      href={getPublicMediaUrl(md.id)}
                       className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-surface border border-border text-primary-text hover:border-primary/50 transition-colors shrink-0"
                     >
                       {isTvEp ? "Episode" : "Film"}
@@ -540,7 +541,7 @@ export function CommunityFeed({
                     <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <Link
-                          href={`/media/${md.id}`}
+                          href={getPublicMediaUrl(md.id)}
                           className="font-display text-lg uppercase font-bold text-foreground hover:text-primary-text transition-colors line-clamp-1"
                         >
                           {md.title}

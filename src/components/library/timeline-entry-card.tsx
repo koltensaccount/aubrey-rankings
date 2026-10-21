@@ -5,6 +5,7 @@ import { Star, History, Lock, Globe, Link2, Edit2 } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
 import { StarRating } from "@/components/rating/star-rating";
+import { getPersonalMediaUrl } from "@/lib/media-url";
 import type { DiaryViewingEvent } from "./rewatch-history-modal";
 
 interface TimelineEntryCardProps {
@@ -121,7 +122,7 @@ export function TimelineEntryCard({
           <div className="flex items-start gap-3.5 sm:gap-4">
             {/* Artwork Poster or Episode Still */}
             <Link
-              href={`/media/${encodeURIComponent(mediaItem.id)}`}
+              href={getPersonalMediaUrl(mediaItem.id)}
               className={`shrink-0 ${isEpisode ? "w-24 sm:w-28 aspect-video" : "w-14 sm:w-16 aspect-[2/3]"} hover:opacity-90 transition-opacity`}
             >
               <CinematicMediaCard
@@ -170,7 +171,7 @@ export function TimelineEntryCard({
               {/* Title in Barlow Condensed */}
               <h3 className="font-display text-xl sm:text-2xl uppercase tracking-tight text-foreground truncate">
                 <Link
-                  href={`/media/${encodeURIComponent(mediaItem.id)}`}
+                  href={getPersonalMediaUrl(mediaItem.id)}
                   className="hover:text-primary transition-colors"
                 >
                   {mediaItem.title}

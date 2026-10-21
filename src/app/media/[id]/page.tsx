@@ -1,25 +1,23 @@
-import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { db } from "@/db";
-import { mediaItems, ratings, collections, user, reviews } from "@/db/schema";
-import { eq, and, isNull, isNotNull, ne, desc } from "drizzle-orm";
-import { getTmdbImageUrl, tmdb } from "@/lib/tmdb";
-import { resolvePosterUrl } from "@/lib/artwork";
+import { mediaItems, ratings, collections, collectionEntries, user, reviews, diaryEntries, watchlistItems } from "@/db/schema";
+import { eq, and, isNull, desc } from "drizzle-orm";
+import { tmdb } from "@/lib/tmdb";
 import { getServerSession } from "@/lib/server-session";
 import { getBlockedUserIds } from "@/lib/safety";
-import { ArrowLeft, Star, Film, Tv, MessageSquare, ExternalLink, EyeOff, PenLine, BookOpen } from "lucide-react";
-import { WriteReviewButton, JournalTriggerButton } from "@/components/reviews/write-review-button";
-import { AddToRankingButton } from "@/components/collections/add-to-ranking-dialog";
-import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
 import { canShowReviewRating, reviewScoreOnTen, tmdbAudienceRating } from "@/lib/review-rating";
 import { getCommunityAverage } from "@/lib/community-rating";
+import { getPersonalMediaUrl } from "@/lib/media-url";
+import { MediaHeroBanner } from "@/components/media/media-hero-banner";
+import { MediaPublicOverview, type PublicReviewItem, type TvSeasonTab, type TvEpisodeItem } from "@/components/media/media-public-overview";
+import { MediaPersonalView, type PersonalRatingData, type PersonalReviewData, type PersonalDiaryData, type PersonalCollectionRankData } from "@/components/media/media-personal-view";
 
 export default async function MediaDetailsPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ type?: string; season?: string; journal?: string }>;
+  searchParams?: Promise<{ type?: string; season?: string; journal?: string; view?: string }>;
 }) {
   const { id: rawMediaId } = await params;
   let decodedId = rawMediaId;
@@ -29,6 +27,7 @@ export default async function MediaDetailsPage({
 
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const requestedType = resolvedSearchParams.type?.toLowerCase();
+  const activeView: "overview" | "personal" = resolvedSearchParams.view === "personal" ? "personal" : "overview";
 
   let media: any = await db.query.mediaItems.findFirst({
     where: (m, { eq, or }) => or(eq(m.id, rawMediaId), eq(m.id, decodedId)),
@@ -155,7 +154,7 @@ export default async function MediaDetailsPage({
       });
     }
 
-    // If still not in DB, resolve from TMDB on demand WITHOUT inserting into the database
+    // Resolve from TMDB on demand without inserting into the database
     if (!media) {
       try {
         if (requestedType === "tv") {
@@ -197,7 +196,6 @@ export default async function MediaDetailsPage({
             };
           }
         } else {
-          // No media type specified: try movie first, then TV
           try {
             const movie = await tmdb.getMovieDetails(tmdbNum);
             if (movie && (movie.title || movie.id)) {
@@ -249,77 +247,150 @@ export default async function MediaDetailsPage({
   }
 
   const session = await getServerSession();
+
+  // If requesting personal view while not signed in, redirect to login
+  if (activeView === "personal" && !session) {
+    redirect(`/login?redirect=${encodeURIComponent(getPersonalMediaUrl(media.id))}`);
+  }
+
   const blockedUserIds = session ? await getBlockedUserIds(session.user.id) : new Set<string>();
 
-  // Fetch published public first-class reviews and legacy collection reviews
   const isEphemeral = typeof media.id === "string" && media.id.startsWith("tmdb-");
   const syntheticMatch = isEphemeral ? /^tmdb-(movie|tv)-(\d+)$/.exec(media.id) : null;
   const restoredMedia = syntheticMatch ? await db.query.mediaItems.findFirst({
     where: (m, { and, eq }) => and(eq(m.tmdbId, Number(syntheticMatch[2])), eq(m.mediaType, syntheticMatch[1])),
   }) : null;
   const journalMediaId = restoredMedia?.id ?? media.id;
+
+  // Query Personal Data for authenticated user
   const ownerGlobalRating = session
     ? await db.query.ratings.findFirst({
         where: (r, { and, eq, isNull }) => and(eq(r.userId, session.user.id), eq(r.mediaItemId, journalMediaId), isNull(r.collectionId)),
-        with: { categoryScores: true },
+        with: {
+          categoryScores: {
+            with: {
+              category: true,
+            },
+          },
+          ratingSystem: true,
+          tier: true,
+        },
       })
     : null;
-  const ownerJournalReview = session
-    ? await db.query.reviews.findFirst({
-        where: (rv, { and, eq, or }) => and(
+
+  const ownerReviews = session
+    ? await db.query.reviews.findMany({
+        where: (rv, { and, eq }) => and(
           eq(rv.userId, session.user.id),
-          eq(rv.mediaItemId, journalMediaId),
-          eq(rv.isJournal, true),
-          ownerGlobalRating ? or(eq(rv.ratingId, ownerGlobalRating.id), isNull(rv.ratingId)) : isNull(rv.ratingId)
+          eq(rv.mediaItemId, journalMediaId)
         ),
         orderBy: [desc(reviews.updatedAt)],
       })
+    : [];
+
+  const ownerJournalReview = ownerReviews.find((r) => r.isJournal) || ownerReviews[0] || null;
+
+  const ownerDiaryEntries = session
+    ? await db.query.diaryEntries.findMany({
+        where: (d, { and, eq }) => and(
+          eq(d.userId, session.user.id),
+          eq(d.mediaItemId, journalMediaId)
+        ),
+        orderBy: [desc(diaryEntries.watchedDate), desc(diaryEntries.loggedDate), desc(diaryEntries.createdAt)],
+      })
+    : [];
+
+  const ownerWatchlistItem = session
+    ? await db.query.watchlistItems.findFirst({
+        where: (w, { and, eq }) => and(
+          eq(w.userId, session.user.id),
+          eq(w.mediaItemId, journalMediaId)
+        ),
+      })
     : null;
 
-  // 1. First-class published reviews
-  const rawFirstClassReviews = await db.query.reviews.findMany({
-        where: (rv, { and, eq }) =>
-          and(
-            eq(rv.mediaItemId, journalMediaId),
-            eq(rv.status, "published"),
-            eq(rv.visibility, "public")
-          ),
-        orderBy: [desc(reviews.publishedAt), desc(reviews.createdAt)],
+  const allMediaCollectionEntries = session
+    ? await db.query.collectionEntries.findMany({
+        where: eq(collectionEntries.mediaItemId, journalMediaId),
         with: {
-          user: {
+          collection: true,
+        },
+      })
+    : [];
+
+  const ownerRankedCollections: PersonalCollectionRankData[] = allMediaCollectionEntries
+    .filter((e) => e.collection && e.collection.userId === session?.user?.id)
+    .map((e) => ({
+      collectionId: e.collection.id,
+      collectionTitle: e.collection.title,
+      collectionType: e.collection.collectionType || "standard",
+      sortOrder: e.sortOrder,
+      notes: e.notes,
+    }));
+
+  const hasPersonalActivity = Boolean(
+    ownerGlobalRating ||
+    ownerReviews.length > 0 ||
+    ownerDiaryEntries.length > 0 ||
+    ownerWatchlistItem ||
+    ownerRankedCollections.length > 0
+  );
+
+  const personalSummary = session
+    ? {
+        isWatched: Boolean(ownerGlobalRating?.isWatched || ownerDiaryEntries.length > 0),
+        viewingsCount: ownerDiaryEntries.length,
+        hasReview: ownerReviews.length > 0,
+        hasRating: Boolean(ownerGlobalRating?.calculatedOverallScore !== null && ownerGlobalRating?.calculatedOverallScore !== undefined),
+        isWatchlist: Boolean(ownerWatchlistItem),
+        rankedCollectionsCount: ownerRankedCollections.length,
+      }
+    : null;
+
+  // Query Public Data: published public reviews and scores
+  const rawFirstClassReviews = await db.query.reviews.findMany({
+    where: (rv, { and, eq }) =>
+      and(
+        eq(rv.mediaItemId, journalMediaId),
+        eq(rv.status, "published"),
+        eq(rv.visibility, "public")
+      ),
+    orderBy: [desc(reviews.publishedAt), desc(reviews.createdAt)],
+    with: {
+      user: {
+        columns: {
+          id: true,
+          name: true,
+          username: true,
+          image: true,
+        },
+      },
+      rating: {
+        columns: {
+          id: true,
+          calculatedOverallScore: true,
+          sourceRating: true,
+          sourceScale: true,
+          sourceService: true,
+          ratingSystemId: true,
+          tierId: true,
+        },
+        with: {
+          ratingSystem: { columns: { scale: true, type: true } },
+          categoryScores: { columns: { id: true } },
+          tier: {
             columns: {
               id: true,
               name: true,
-              username: true,
-              image: true,
-            },
-          },
-          rating: {
-            columns: {
-              id: true,
-              calculatedOverallScore: true,
-              sourceRating: true,
-              sourceScale: true,
-              sourceService: true,
-              ratingSystemId: true,
-              tierId: true,
-            },
-            with: {
-              ratingSystem: { columns: { scale: true, type: true } },
-              categoryScores: { columns: { id: true } },
-              tier: {
-                columns: {
-                  id: true,
-                  name: true,
-                  color: true,
-                },
-              },
+              color: true,
             },
           },
         },
-      });
+      },
+    },
+  });
 
-  const firstClassReviews = rawFirstClassReviews
+  const publicReviews: PublicReviewItem[] = rawFirstClassReviews
     .filter((r) => !blockedUserIds.has(r.userId))
     .map((r) => ({
       id: r.id,
@@ -338,7 +409,6 @@ export default async function MediaDetailsPage({
           }
         : null,
       isSpoiler: r.isSpoiler,
-      watchDate: null,
       publishedAt: r.publishedAt,
       updatedAt: r.updatedAt,
       author: {
@@ -347,15 +417,12 @@ export default async function MediaDetailsPage({
         username: r.user.username,
         image: r.user.image,
       },
-      collection: null,
     }));
-
-  const publicReviews = firstClassReviews;
 
   const averageScore = await getCommunityAverage(journalMediaId, blockedUserIds);
   let tmdbRating = tmdbAudienceRating(media.tmdbMetadata);
-  let tvSeasonsList: any[] = [];
-  let seasonEpisodes: any[] = [];
+  let tvSeasonsList: TvSeasonTab[] = [];
+  let seasonEpisodes: TvEpisodeItem[] = [];
   const selectedSeason = resolvedSearchParams.season ? parseInt(resolvedSearchParams.season, 10) : 1;
   let activeSeasonNumber = selectedSeason;
 
@@ -370,7 +437,15 @@ export default async function MediaDetailsPage({
         if (currentSeason) {
           activeSeasonNumber = currentSeason.season_number;
           const seasonData = await tmdb.getTvSeason(media.tmdbId, currentSeason.season_number);
-          seasonEpisodes = seasonData?.episodes || [];
+          seasonEpisodes = (seasonData?.episodes || []).map((e: any) => ({
+            id: e.id,
+            name: e.name,
+            overview: e.overview || null,
+            episode_number: e.episode_number,
+            season_number: e.season_number,
+            air_date: e.air_date || null,
+            still_path: e.still_path || null,
+          }));
         }
       }
     } catch { /* Keep available cached metadata when TMDB is unavailable. */ }
@@ -395,7 +470,9 @@ export default async function MediaDetailsPage({
               id: e.tmdbId || e.id,
               name: e.title,
               overview: e.overview,
-              episode_number: e.episodeNumber,
+              episode_number: e.episodeNumber || 1,
+              season_number: e.seasonNumber || activeSeasonNumber,
+              air_date: e.releaseDate,
               still_path: e.stillPath,
             }));
         }
@@ -408,20 +485,6 @@ export default async function MediaDetailsPage({
     } catch { /* Keep available cached metadata when TMDB is unavailable. */ }
   }
 
-  const isTv = media.mediaType === "tv" || media.mediaType === "episode" || Boolean(media.seasonNumber);
-  const stillUrl = media.stillPath ? getTmdbImageUrl(media.stillPath, "original") : null;
-  const backdropUrl = media.backdropPath ? getTmdbImageUrl(media.backdropPath, "original") : null;
-  const posterUrl = media.posterPath ? resolvePosterUrl(media.posterPath, "w500") : null;
-  const heroImage = stillUrl || backdropUrl || posterUrl;
-
-  const year = (media.releaseDate || "").split("-")[0];
-  const episodeBadge =
-    media.seasonNumber && media.episodeNumber
-      ? `Season ${media.seasonNumber}, Episode ${media.episodeNumber}`
-      : media.seasonNumber
-        ? `Season ${media.seasonNumber}`
-        : null;
-
   const parentTvIdMatch = media.parentMediaId
     ? /^(?:tmdb-)?tv_?(\d+)$/i.exec(media.parentMediaId) || /^\d+$/.exec(media.parentMediaId)
     : null;
@@ -431,415 +494,119 @@ export default async function MediaDetailsPage({
     : media.parentMediaId
       ? `/media/${media.parentMediaId}?type=tv`
       : null;
+
   const shouldAutoOpen = Boolean(session && (resolvedSearchParams.journal === "1" || resolvedSearchParams.journal === "true"));
+
+  const personalRatingProp: PersonalRatingData | null = ownerGlobalRating
+    ? {
+        id: ownerGlobalRating.id,
+        calculatedOverallScore: ownerGlobalRating.calculatedOverallScore,
+        ratingSystemId: ownerGlobalRating.ratingSystemId,
+        ratingSystemName: ownerGlobalRating.ratingSystem?.name || null,
+        tier: ownerGlobalRating.tier
+          ? {
+              id: ownerGlobalRating.tier.id,
+              name: ownerGlobalRating.tier.name,
+              color: ownerGlobalRating.tier.color,
+            }
+          : null,
+        categoryScores: ownerGlobalRating.categoryScores?.map((cs) => ({
+          categoryId: cs.categoryId,
+          categoryName: (cs as any).category?.name || "Criterion",
+          score: cs.score,
+        })),
+        personalNotes: ownerGlobalRating.personalNotes,
+      }
+    : null;
+
+  const personalReviewsProp: PersonalReviewData[] = ownerReviews.map((r) => ({
+    id: r.id,
+    title: r.title,
+    content: r.content,
+    draftContent: r.draftContent,
+    contentFormat: r.contentFormat,
+    draftContentFormat: r.draftContentFormat,
+    status: r.status,
+    visibility: r.visibility,
+    isSpoiler: r.isSpoiler,
+    publishedAt: r.publishedAt,
+    updatedAt: r.updatedAt,
+    createdAt: r.createdAt,
+  }));
+
+  const personalDiaryProp: PersonalDiaryData[] = ownerDiaryEntries.map((d) => ({
+    id: d.id,
+    watchedDate: d.watchedDate,
+    loggedDate: d.loggedDate,
+    isRewatch: d.isRewatch,
+    ratingValue: d.ratingValue,
+    notes: d.notes,
+    createdAt: d.createdAt,
+  }));
 
   return (
     <div className="min-h-screen bg-background text-foreground pb-24 transition-colors">
-      {/* Hero Banner */}
-      <div className="relative w-full h-72 sm:h-96 overflow-hidden bg-card border-b border-border">
-        {heroImage ? (
-          <>
-            <img
-              src={heroImage}
-              alt={media.title}
-              className="w-full h-full object-cover opacity-40 filter saturate-75"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-background via-background/60 to-transparent" />
-          </>
+      <MediaHeroBanner
+        media={media}
+        activeView={activeView}
+        isAuthenticated={Boolean(session)}
+        hasPersonalActivity={hasPersonalActivity}
+        averageScore={averageScore}
+        tmdbRating={tmdbRating}
+        seriesDetailsHref={seriesDetailsHref}
+        personalSummary={personalSummary}
+      />
+
+      <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+        {activeView === "personal" ? (
+          <MediaPersonalView
+            media={media}
+            journalMediaId={journalMediaId}
+            isWatchlist={Boolean(ownerWatchlistItem)}
+            ownerRating={personalRatingProp}
+            ownerReviews={personalReviewsProp}
+            ownerDiaryEntries={personalDiaryProp}
+            ownerRankedCollections={ownerRankedCollections}
+            shouldAutoOpen={shouldAutoOpen}
+          />
         ) : (
-          <div className="w-full h-full bg-surface" />
+          <MediaPublicOverview
+            media={media}
+            journalMediaId={journalMediaId}
+            isAuthenticated={Boolean(session)}
+            isWatchlist={Boolean(ownerWatchlistItem)}
+            hasPersonalActivity={hasPersonalActivity}
+            ownerGlobalRating={ownerGlobalRating ? {
+              calculatedOverallScore: ownerGlobalRating.calculatedOverallScore,
+              ratingSystemId: ownerGlobalRating.ratingSystemId,
+              categoryScores: ownerGlobalRating.categoryScores?.map((cs) => ({
+                categoryId: cs.categoryId,
+                score: cs.score,
+              })),
+            } : null}
+            ownerJournalReview={ownerJournalReview ? {
+              id: ownerJournalReview.id,
+              title: ownerJournalReview.title,
+              content: ownerJournalReview.content,
+              draftContent: ownerJournalReview.draftContent,
+              contentFormat: ownerJournalReview.contentFormat,
+              draftContentFormat: ownerJournalReview.draftContentFormat,
+              status: ownerJournalReview.status,
+              visibility: ownerJournalReview.visibility,
+              isSpoiler: ownerJournalReview.isSpoiler,
+              ratingId: ownerJournalReview.ratingId,
+              shareRating: ownerJournalReview.shareRating,
+            } : null}
+            shouldAutoOpen={shouldAutoOpen}
+            averageScore={averageScore}
+            tmdbRating={tmdbRating}
+            tvSeasonsList={tvSeasonsList}
+            seasonEpisodes={seasonEpisodes}
+            activeSeasonNumber={activeSeasonNumber}
+            publicReviews={publicReviews}
+          />
         )}
-
-        <div className="absolute top-6 left-4 sm:left-8 z-20 flex items-center gap-2">
-          <Link
-            href="/discover"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card/80 backdrop-blur-sm text-xs font-semibold text-foreground hover:bg-surface transition-colors"
-          >
-            <ArrowLeft size={13} />
-            <span>Back to Explore</span>
-          </Link>
-          {seriesDetailsHref && (
-            <Link
-              href={seriesDetailsHref}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card/80 backdrop-blur-sm text-xs font-semibold text-foreground hover:bg-surface transition-colors"
-            >
-              <Tv size={13} />
-              <span>Series Details</span>
-            </Link>
-          )}
-        </div>
-
-        <div className="absolute bottom-6 left-4 sm:left-8 right-4 sm:right-8 z-20 max-w-4xl space-y-2">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-primary/20 text-primary border border-primary/30">
-              {media.mediaType === "episode" ? "Television Episode" : isTv ? "Television" : "Film"}
-            </span>
-            {episodeBadge && (
-              <span className="text-xs font-semibold text-muted-foreground">
-                · {episodeBadge}
-              </span>
-            )}
-            {year && (
-              <span className="text-xs text-muted-foreground">
-                · {year}
-              </span>
-            )}
-          </div>
-
-          <h1 className="font-display text-3xl sm:text-5xl uppercase font-bold text-foreground tracking-tight">
-            {media.title}
-          </h1>
-
-          {averageScore && (
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface border border-border text-xs font-semibold">
-              <Star size={13} className="text-amber-400 fill-amber-400" />
-              <span>★ {averageScore.average.toFixed(1)} / 10 Aubrey average ({averageScore.count} people)</span>
-              <span className="text-muted-foreground">({publicReviews.length} reviews)</span>
-            </div>
-          )}
-          {tmdbRating && <p className="text-xs text-foreground">TMDB audience: {tmdbRating.score.toFixed(1)} / 10{tmdbRating.votes !== null ? ` · ${tmdbRating.votes.toLocaleString()} votes` : ""}</p>}
-        </div>
-      </div>
-
-      <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 space-y-10">
-        {/* Media Primary Action Bar */}
-        <section aria-label="Media actions" className="flex flex-wrap items-center justify-between gap-4 p-4 rounded-xl border border-border bg-card shadow-sm">
-          <div className="flex flex-wrap items-center gap-2.5">
-            {media.mediaType === "tv" ? (
-              <a
-                href="#seasons-and-episodes"
-                className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground font-semibold text-xs transition-colors shadow-sm"
-              >
-                <Tv size={14} />
-                <span>Journal an Episode</span>
-              </a>
-            ) : (
-              <WriteReviewButton
-                autoOpen={shouldAutoOpen}
-                mediaItemId={journalMediaId}
-                mediaTitle={media.title}
-                posterPath={media.posterPath || media.stillPath}
-                initialQuickScore={ownerGlobalRating?.calculatedOverallScore ?? null}
-                initialDetailedRating={ownerGlobalRating?.ratingSystemId ? { ratingSystemId: ownerGlobalRating.ratingSystemId, categoryScores: ownerGlobalRating.categoryScores.map((score) => ({ categoryId: score.categoryId, score: score.score })) } : null}
-                existingReview={ownerJournalReview ? {
-                  id: ownerJournalReview.id,
-                  title: ownerJournalReview.title,
-                  content: ownerJournalReview.content,
-                  draftContent: ownerJournalReview.draftContent,
-                  contentFormat: ownerJournalReview.contentFormat as "plain" | "markdown",
-                  draftContentFormat: ownerJournalReview.draftContentFormat as "plain" | "markdown" | null,
-                  status: ownerJournalReview.status as "draft" | "published" | "unpublished",
-                  visibility: ownerJournalReview.visibility as "private" | "unlisted" | "public",
-                  isSpoiler: ownerJournalReview.isSpoiler,
-                  ratingId: ownerJournalReview.ratingId,
-                  shareRating: ownerJournalReview.shareRating,
-                  isJournal: true,
-                } : null}
-              />
-            )}
-
-            <AddToRankingButton
-              mediaItemId={journalMediaId}
-              mediaTitle={media.title}
-              mediaType={media.mediaType}
-              seasonNumber={media.seasonNumber}
-              episodeNumber={media.episodeNumber}
-              parentShowTmdbId={
-                media.mediaType === "episode" && media.parentMediaId
-                  ? parseInt(media.parentMediaId.replace(/^tv_/, ""), 10) || null
-                  : null
-              }
-              posterPath={media.posterPath}
-              stillPath={media.stillPath}
-            />
-          </div>
-
-          {/* User's existing status on this media item */}
-          <div className="text-xs text-muted-foreground flex items-center gap-2">
-            {session ? (
-              ownerGlobalRating || ownerJournalReview ? (
-                <div className="flex items-center gap-2">
-                  <span className="inline-block w-2 h-2 rounded-full bg-primary" />
-                  <span className="font-medium text-foreground">In your Journal</span>
-                  {ownerGlobalRating?.calculatedOverallScore !== undefined && ownerGlobalRating.calculatedOverallScore !== null && (
-                    <span className="px-1.5 py-0.5 rounded bg-primary/10 border border-primary/20 text-primary font-bold text-[11px]">
-                      ★ {ownerGlobalRating.calculatedOverallScore.toFixed(1)}/10
-                    </span>
-                  )}
-                  {ownerJournalReview?.status === "draft" && (
-                    <span className="text-[10px] uppercase font-bold text-primary">
-                      · Draft saved
-                    </span>
-                  )}
-                </div>
-              ) : media.mediaType === "tv" ? (
-                <span>Select an episode below to log in your Journal</span>
-              ) : (
-                <span>Not in your Journal yet</span>
-              )
-            ) : (
-              <span>Sign in to log this in your personal Journal</span>
-            )}
-          </div>
-        </section>
-
-        {/* Overview */}
-        {media.overview && (
-          <section className="space-y-2">
-            <h2 className="font-display text-lg uppercase font-bold text-foreground">
-              Synopsis
-            </h2>
-            <p className="text-sm text-muted-foreground leading-relaxed">
-              {media.overview}
-            </p>
-          </section>
-        )}
-
-        {/* Seasons & Episodes section for TV shows */}
-        {media.mediaType === "tv" && tvSeasonsList.length > 0 && (
-          <section id="seasons-and-episodes" className="space-y-4 pt-4 border-t border-border">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <Tv size={18} className="text-primary-text" />
-                <h2 className="font-display text-2xl uppercase tracking-tight text-foreground">
-                  Seasons & Episodes
-                </h2>
-              </div>
-              <span className="text-xs text-muted-foreground">
-                Season {activeSeasonNumber} ({seasonEpisodes.length} episodes)
-              </span>
-            </div>
-
-            {/* Season Selector Tabs */}
-            {tvSeasonsList.length > 1 && (
-              <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
-                {tvSeasonsList.map((s) => (
-                  <Link
-                    key={s.id || s.season_number}
-                    href={`/media/${encodeURIComponent(rawMediaId)}?type=tv&season=${s.season_number}`}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-colors ${
-                      s.season_number === activeSeasonNumber
-                        ? "bg-primary text-white shadow-sm"
-                        : "bg-surface border border-border text-foreground hover:bg-surface-raised"
-                    }`}
-                  >
-                    {s.name || `Season ${s.season_number}`}
-                  </Link>
-                ))}
-              </div>
-            )}
-
-            {/* Episodes List */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {seasonEpisodes.map((ep) => {
-                const epMediaId = `tv_${media.tmdbId}_s${activeSeasonNumber}_e${ep.episode_number}`;
-                const still = ep.still_path ? getTmdbImageUrl(ep.still_path, "w300") : null;
-                return (
-                  <div
-                    key={ep.id}
-                    className="flex flex-col sm:flex-row gap-3 p-3 rounded-xl border border-border bg-card hover:border-primary/40 transition-colors"
-                  >
-                    {still ? (
-                      <div className="w-full sm:w-32 h-20 shrink-0 rounded-lg overflow-hidden bg-surface relative">
-                        <img
-                          src={still}
-                          alt={ep.name}
-                          className="w-full h-full object-cover"
-                        />
-                        <span className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold bg-black/70 text-white">
-                          E{ep.episode_number}
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="w-full sm:w-32 h-20 shrink-0 rounded-lg bg-surface flex items-center justify-center text-xs font-mono text-muted-foreground border border-border">
-                        S{activeSeasonNumber}E{ep.episode_number}
-                      </div>
-                    )}
-                    <div className="min-w-0 flex-1 flex flex-col justify-between">
-                      <div>
-                        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium">
-                          <span>Episode {ep.episode_number}</span>
-                          {ep.air_date && <span>· {ep.air_date.split("-")[0]}</span>}
-                        </div>
-                        <h4 className="font-semibold text-sm text-foreground truncate mt-0.5">
-                          {ep.name || `Episode ${ep.episode_number}`}
-                        </h4>
-                        {ep.overview && (
-                          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
-                            {ep.overview}
-                          </p>
-                        )}
-                      </div>
-                      <div className="pt-2 flex items-center gap-2">
-                        <Link
-                          href={session?.user ? `/media/${epMediaId}?journal=1` : `/login?redirect=${encodeURIComponent(`/media/${epMediaId}?journal=1`)}`}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-button bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-xs font-semibold transition-colors"
-                        >
-                          <PenLine size={12} />
-                          <span>Add to Journal</span>
-                        </Link>
-                        <AddToRankingButton
-                          mediaItemId={epMediaId}
-                          mediaTitle={ep.name ? `${media.title}: ${ep.name}` : `Episode ${ep.episode_number}`}
-                          mediaType="episode"
-                          seasonNumber={activeSeasonNumber}
-                          episodeNumber={ep.episode_number}
-                          parentShowTmdbId={media.tmdbId}
-                          stillPath={ep.still_path}
-                          variant="minimal"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </section>
-        )}
-
-        {/* Community Reviews Section */}
-        <section className="space-y-6 pt-4 border-t border-border">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <MessageSquare size={18} className="text-primary-text" />
-              <h2 className="font-display text-2xl uppercase tracking-tight text-foreground">
-                Community Reviews ({publicReviews.length})
-              </h2>
-            </div>
-          </div>
-
-          {publicReviews.length === 0 ? (
-            <div className="py-12 text-center rounded-xl border border-dashed border-border bg-card/60 p-6 space-y-3">
-              <p className="text-sm font-semibold text-foreground">No published community reviews yet</p>
-              <p className="text-xs text-muted-foreground max-w-sm mx-auto">
-                Be the first to share a review for &ldquo;{media.title}&rdquo; from your personal Journal.
-              </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {publicReviews.map((rev) => {
-                const authorInitial = (
-                  rev.author.name ||
-                  rev.author.username ||
-                  "U"
-                )
-                  .charAt(0)
-                  .toUpperCase();
-
-                const profileHref = rev.author.username
-                  ? `/u/${rev.author.username}`
-                  : null;
-
-                return (
-                  <article
-                    key={rev.id}
-                    className="rounded-card border border-border-card bg-card p-5 space-y-3 transition-colors shadow-sm"
-                  >
-                    {/* Header */}
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        {profileHref ? (
-                          <Link
-                            href={profileHref}
-                            className="h-8 w-8 rounded-full bg-surface border border-border flex items-center justify-center text-xs font-semibold text-primary-text hover:border-primary transition-colors shrink-0 overflow-hidden"
-                          >
-                            {rev.author.image ? (
-                              <img
-                                src={rev.author.image}
-                                alt={rev.author.name || "Critic"}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              authorInitial
-                            )}
-                          </Link>
-                        ) : (
-                          <div className="h-8 w-8 rounded-full bg-surface border border-border flex items-center justify-center text-xs font-semibold text-primary-text shrink-0">
-                            {authorInitial}
-                          </div>
-                        )}
-
-                        <div className="text-xs">
-                          <div className="flex items-center gap-1.5">
-                            {profileHref ? (
-                              <Link
-                                href={profileHref}
-                                className="font-semibold text-foreground hover:text-primary-text transition-colors"
-                              >
-                                {rev.author.name || `@${rev.author.username}`}
-                              </Link>
-                            ) : (
-                              <span className="font-semibold text-foreground">
-                                {rev.author.name || "Critic"}
-                              </span>
-                            )}
-                            {rev.author.username && (
-                              <span className="text-muted-foreground">@{rev.author.username}</span>
-                            )}
-                          </div>
-                          <span className="text-[11px] text-muted-foreground">
-                            Published Review ·{" "}
-                            <Link
-                              href={rev.reviewUrl}
-                              className="text-primary-text hover:underline"
-                            >
-                              View Dispatch &rarr;
-                            </Link>
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        {rev.tier && (
-                          <div
-                            className="px-2 py-0.5 rounded text-[10px] font-mono font-bold text-white shadow-sm"
-                            style={{ backgroundColor: rev.tier.color }}
-                          >
-                            Tier {rev.tier.name}
-                          </div>
-                        )}
-                        {rev.score !== null && (
-                          <div className="px-2.5 py-1 rounded-md bg-surface border border-border text-xs font-bold text-primary-text">
-                            ★ {rev.score.toFixed(1)} / 10
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Review Title & Text */}
-                    <div className="pl-10 border-l border-border/60 space-y-1.5">
-                      {rev.title && (
-                        <h4 className="font-display text-sm uppercase font-bold text-foreground">
-                          <Link href={rev.reviewUrl} className="hover:text-primary-text transition-colors">
-                            {rev.title}
-                          </Link>
-                        </h4>
-                      )}
-                      <SpoilerConcealedText
-                        content={rev.reviewText}
-                        format={rev.contentFormat as "plain" | "markdown"}
-                        isSpoiler={rev.isSpoiler}
-                        quoteStyle={true}
-                        className="text-xs sm:text-sm text-foreground/90 leading-relaxed whitespace-pre-line italic"
-                      />
-                      {rev.reviewType === "independent" && (
-                        <div className="pt-1">
-                          <Link
-                            href={rev.reviewUrl}
-                            className="text-xs font-semibold text-primary-text hover:underline inline-flex items-center gap-1"
-                          >
-                            <span>Read full review & join discussion →</span>
-                          </Link>
-                        </div>
-                      )}
-                    </div>
-                  </article>
-                );
-              })}
-            </div>
-          )}
-        </section>
-      </div>
+      </main>
     </div>
   );
 }

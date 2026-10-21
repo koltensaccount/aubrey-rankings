@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { Star, History, Plus, Search, Filter } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
+import { getPersonalMediaUrl } from "@/lib/media-url";
 import { RewatchHistoryModal } from "./rewatch-history-modal";
 import { LogViewingDialog } from "./log-viewing-dialog";
 
@@ -161,7 +162,7 @@ export function WatchedGrid({ initialItems }: WatchedGridProps) {
               >
                 {/* Artwork Poster */}
                 <div className="relative">
-                  <Link href={`/media/${encodeURIComponent(item.id)}`}>
+                  <Link href={getPersonalMediaUrl(item.id)}>
                     <CinematicMediaCard
                       title={item.title}
                       posterPath={isEpisode ? item.stillPath || item.posterPath : item.posterPath}
@@ -191,7 +192,7 @@ export function WatchedGrid({ initialItems }: WatchedGridProps) {
                 <div className="p-3 space-y-1">
                   <h4 className="font-display text-base uppercase tracking-tight text-foreground truncate">
                     <Link
-                      href={`/media/${encodeURIComponent(item.id)}`}
+                      href={getPersonalMediaUrl(item.id)}
                       className="hover:text-primary transition-colors"
                     >
                       {item.title}

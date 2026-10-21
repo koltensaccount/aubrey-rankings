@@ -26,6 +26,7 @@ import { ReviewEditorDialog } from "@/components/reviews/review-editor-dialog";
 import { MarkdownRenderer, ReviewContentFormat } from "@/components/reviews/markdown-renderer";
 import { resolvePosterUrl } from "@/lib/artwork";
 import { getTmdbImageUrl } from "@/lib/tmdb";
+import { getPublicMediaUrl } from "@/lib/media-url";
 
 interface ReviewDetailClientProps {
   initialReview: {
@@ -151,7 +152,7 @@ export function ReviewDetailClient({
 
         <div className="absolute top-6 left-4 sm:left-8 z-20">
           <Link
-            href={`/media/${media.id}`}
+            href={getPublicMediaUrl(media.id)}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card/80 backdrop-blur-sm text-xs font-semibold text-foreground hover:bg-surface transition-colors cursor-pointer"
           >
             <ArrowLeft size={13} />
@@ -394,7 +395,7 @@ export function ReviewDetailClient({
           }));
         }}
         onDeleted={() => {
-          router.push(`/media/${media.id}`);
+          router.push(getPublicMediaUrl(media.id));
         }}
       />
 
