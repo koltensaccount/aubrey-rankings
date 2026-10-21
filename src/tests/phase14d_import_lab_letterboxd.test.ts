@@ -674,4 +674,250 @@ describe("Phase 14D: Import Lab & Letterboxd Reliability", () => {
     // Cleanup created mapping
     await db.delete(importSourceMappings).where(eq(importSourceMappings.id, existing.id));
   });
+
+  it("16. preview-to-import cache safety: preview results never leak synthetic preview_* media IDs into execution", async () => {
+    // 1. Preview a candidate in-memory with persist: false
+    const candidateFilm = {
+      title: "Black Mirror: The National Anthem",
+      year: 2011,
+      letterboxdUri: `https://boxd.it/preview_test_${runId}`,
+    };
+
+    const previewRes = await resolveLetterboxdMediaIdentity(candidateFilm, {
+      persist: false,
+      isTestWorkspace: true,
+    });
+
+    assert.ok(previewRes.match);
+    assert.ok(previewRes.match.mediaItem);
+    assert.ok(
+      String(previewRes.match.mediaItem.id).startsWith("preview_"),
+      `Expected preview ID but got: ${previewRes.match.mediaItem.id}`
+    );
+
+    // 2. In the exact same runtime process, execute an import containing the same candidate
+    const zip = new AdmZip();
+    const diaryContent = `Date,Name,Year,Letterboxd URI,Rating,Rewatch,Tags,Watched Date
+2026-03-01,Black Mirror: The National Anthem,2011,https://boxd.it/preview_test_${runId},4.5,No,"tv",2026-03-01
+`;
+    zip.addFile("diary.csv", Buffer.from(diaryContent, "utf8"));
+    const summary = parseLetterboxdZip(zip.toBuffer());
+
+    const importRes = await executeLetterboxdImport(TEST_WORKSPACE_USER_ID, summary, {
+      allowSyntheticPlaceholders: true,
+    });
+
+    assert.equal(importRes.newDiaryCount, 1);
+
+    // 3. Verify the persisted diary and ratings records in the database
+    const persistedDiary = await db.query.diaryEntries.findFirst({
+      where: and(
+        eq(diaryEntries.userId, TEST_WORKSPACE_USER_ID),
+        eq(diaryEntries.sourceEventKey, `${candidateFilm.letterboxdUri}::2026-03-01::2026-03-01::0::1`)
+      ),
+    });
+
+    assert.ok(persistedDiary, "Diary entry should be persisted in database");
+    assert.ok(persistedDiary.mediaItemId);
+    assert.equal(
+      persistedDiary.mediaItemId.startsWith("preview_"),
+      false,
+      `persistedDiary.mediaItemId must NOT start with preview_: ${persistedDiary.mediaItemId}`
+    );
+
+    // Verify foreign key points to a valid persisted mediaItems record
+    const persistedMedia = await db.query.mediaItems.findFirst({
+      where: eq(mediaItems.id, persistedDiary.mediaItemId),
+    });
+    assert.ok(persistedMedia, "Referenced mediaItem record must exist in database");
+    assert.equal(persistedMedia.id.startsWith("preview_"), false);
+    trackedMediaIds.push(persistedMedia.id);
+
+    const persistedRating = await db.query.ratings.findFirst({
+      where: and(
+        eq(ratings.userId, TEST_WORKSPACE_USER_ID),
+        eq(ratings.mediaItemId, persistedMedia.id)
+      ),
+    });
+    assert.ok(persistedRating, "Rating must exist in database");
+    assert.equal(persistedRating.mediaItemId, persistedMedia.id);
+
+    // Clean up test workspace
+    await resetTestWorkspace(TEST_WORKSPACE_USER_ID);
+  });
+
+  it("17. test workspace mapping isolation: test mappings are purged on reset without damaging production mappings", async () => {
+    // 1. Insert a test mapping tagged with isTestWorkspace: true
+    const testMapId = `map_test_${randomUUID()}`;
+    const testMediaId = `media_test_${randomUUID()}`;
+    const testUri = `https://boxd.it/test_map_${runId}`;
+    const [testMedia] = await db
+      .insert(mediaItems)
+      .values({
+        id: testMediaId,
+        title: `Test Isolation Movie ${runId}`,
+        releaseDate: "2021-01-01",
+        mediaType: "movie",
+      })
+      .returning();
+    trackedMediaIds.push(testMedia.id);
+
+    await db.insert(importSourceMappings).values({
+      id: testMapId,
+      sourceService: "letterboxd",
+      sourceUri: testUri,
+      sourceTitle: `Test Isolation Movie ${runId}`,
+      sourceYear: 2021,
+      sourceMediaType: "movie",
+      mediaItemId: testMedia.id,
+      confidence: "manual_verified",
+      metadata: {
+        manualAdminResolution: true,
+        isTestWorkspace: true,
+      },
+    });
+
+    // 2. Insert a production mapping without isTestWorkspace flag
+    const prodMapId = `map_prod_${randomUUID()}`;
+    const prodMediaId = `media_prod_${randomUUID()}`;
+    const prodUri = `https://boxd.it/prod_map_${runId}`;
+    const [prodMedia] = await db
+      .insert(mediaItems)
+      .values({
+        id: prodMediaId,
+        title: `Production Preserved Movie ${runId}`,
+        releaseDate: "2019-01-01",
+        mediaType: "movie",
+      })
+      .returning();
+    trackedMediaIds.push(prodMedia.id);
+
+    await db.insert(importSourceMappings).values({
+      id: prodMapId,
+      sourceService: "letterboxd",
+      sourceUri: prodUri,
+      sourceTitle: `Production Preserved Movie ${runId}`,
+      sourceYear: 2019,
+      sourceMediaType: "movie",
+      mediaItemId: prodMedia.id,
+      confidence: "tmdb_verified",
+      metadata: {
+        verifiedProduction: true,
+      },
+    });
+
+    // 3. Verify test mapping resolves in memory
+    const beforeReset = await resolveLetterboxdMediaIdentity({
+      title: `Test Isolation Movie ${runId}`,
+      year: 2021,
+      letterboxdUri: testUri,
+    });
+    assert.ok(beforeReset.match);
+    assert.equal(beforeReset.match.mediaItem.id, testMedia.id);
+
+    // 4. Perform workspace reset
+    const resetResult = await resetTestWorkspace(TEST_WORKSPACE_USER_ID);
+    assert.ok(resetResult.mappingsDeleted >= 1, "Should have deleted at least 1 test mapping");
+
+    // 5. Confirm test mapping was deleted from database
+    const survivingTestMap = await db.query.importSourceMappings.findFirst({
+      where: eq(importSourceMappings.id, testMapId),
+    });
+    assert.equal(survivingTestMap, undefined, "Test workspace mapping must not survive reset");
+
+    // 6. Confirm production mapping survived intact
+    const survivingProdMap = await db.query.importSourceMappings.findFirst({
+      where: eq(importSourceMappings.id, prodMapId),
+    });
+    assert.ok(survivingProdMap, "Verified production mapping must survive reset intact");
+    assert.equal(survivingProdMap.mediaItemId, prodMedia.id);
+
+    // 7. Verify subsequent resolution does NOT resolve to deleted test mapping
+    const afterReset = await resolveLetterboxdMediaIdentity({
+      title: `Test Isolation Movie ${runId}`,
+      year: 2021,
+      letterboxdUri: testUri,
+    }, { allowSyntheticPlaceholders: true });
+    assert.notEqual(afterReset.match?.mediaItem?.id, testMedia.id);
+
+    // Clean up production mapping
+    await db.delete(importSourceMappings).where(eq(importSourceMappings.id, prodMapId));
+  });
+
+  it("18. distinct letterboxd identities and cross-file deduplication", async () => {
+    // 1. Distinct URL preservation: Two distinct films sharing title and year but different URIs
+    const distinctZip = new AdmZip();
+    const watchedContent = `Date,Name,Year,Letterboxd URI
+2022-12-10,Pinocchio,2022,https://boxd.it/pinocchio-deltoro
+2022-12-15,Pinocchio,2022,https://boxd.it/pinocchio-disney
+`;
+    distinctZip.addFile("watched.csv", Buffer.from(watchedContent, "utf8"));
+    const distinctSummary = parseLetterboxdZip(distinctZip.toBuffer());
+
+    assert.equal(distinctSummary.films.length, 2, "Both distinct films must be preserved in summary.films");
+    assert.equal(distinctSummary.totalUniqueFilms, 2);
+    assert.equal(distinctSummary.films[0].letterboxdUri, "https://boxd.it/pinocchio-deltoro");
+    assert.equal(distinctSummary.films[1].letterboxdUri, "https://boxd.it/pinocchio-disney");
+
+    const batchRes = await batchResolveIdentities(distinctSummary.films, 5, {
+      allowSyntheticPlaceholders: true,
+    });
+    assert.equal(batchRes.stats.total, 2, "Batch resolution must preserve both distinct candidate films");
+
+    // 2. Cross-file deduplication: A single film referenced across ratings, watched, reviews, diary, and likes
+    const multiFileZip = new AdmZip();
+    multiFileZip.addFile(
+      "ratings.csv",
+      Buffer.from(
+        `Date,Name,Year,Letterboxd URI,Rating\n2022-01-01,Arrival,2016,https://boxd.it/arrival,4.5\n`,
+        "utf8"
+      )
+    );
+    multiFileZip.addFile(
+      "watched.csv",
+      Buffer.from(
+        `Date,Name,Year,Letterboxd URI\n2022-01-01,Arrival,2016,https://boxd.it/arrival\n`,
+        "utf8"
+      )
+    );
+    multiFileZip.addFile(
+      "reviews.csv",
+      Buffer.from(
+        `Date,Name,Year,Letterboxd URI,Rating,Rewatch,Review,Tags,Watched Date\n2022-01-01,Arrival,2016,https://boxd.it/arrival,4.5,No,"Sci-fi masterpiece","sci-fi",2022-01-01\n`,
+        "utf8"
+      )
+    );
+    multiFileZip.addFile(
+      "diary.csv",
+      Buffer.from(
+        `Date,Name,Year,Letterboxd URI,Rating,Rewatch,Tags,Watched Date\n2022-01-01,Arrival,2016,https://boxd.it/arrival,4.5,No,"sci-fi",2022-01-01\n`,
+        "utf8"
+      )
+    );
+    multiFileZip.addFile(
+      "likes/films.csv",
+      Buffer.from(
+        `Date,Name,Year,Letterboxd URI\n2022-01-01,Arrival,2016,https://boxd.it/arrival\n`,
+        "utf8"
+      )
+    );
+
+    const multiSummary = parseLetterboxdZip(multiFileZip.toBuffer());
+    assert.equal(multiSummary.films.length, 1, "Identical film across files must deduplicate to exactly 1 record");
+    assert.equal(multiSummary.totalUniqueFilms, 1);
+    assert.equal(multiSummary.totalRatings, 1);
+    assert.equal(multiSummary.totalWatched, 1);
+    assert.equal(multiSummary.totalReviews, 1);
+    assert.equal(multiSummary.totalDiaryEntries, 1);
+    assert.equal(multiSummary.totalLikes, 1);
+
+    const singleFilm = multiSummary.films[0];
+    assert.equal(singleFilm.title, "Arrival");
+    assert.equal(singleFilm.year, 2016);
+    assert.equal(singleFilm.rating, 4.5);
+    assert.equal(singleFilm.isWatched, true);
+    assert.equal(singleFilm.isFavorite, true);
+    assert.equal(singleFilm.review, "Sci-fi masterpiece");
+    assert.equal(singleFilm.watchDate, "2022-01-01");
+  });
 });

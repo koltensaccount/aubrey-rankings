@@ -363,28 +363,35 @@ export async function executeLetterboxdImport(
       const uriKey = uri?.trim().toLowerCase() || null;
 
       if (
-        ambiguousIdentities.has(identityKey) ||
+        (uriKey && ambiguousIdentities.has(uriKey)) ||
         ambiguousIdentities.has(canonKey) ||
-        (uriKey && ambiguousIdentities.has(uriKey))
+        (!uriKey && ambiguousIdentities.has(identityKey))
       ) {
         return null;
       }
-      if (mediaCache.has(identityKey)) return mediaCache.get(identityKey);
-      if (mediaCache.has(canonKey)) return mediaCache.get(canonKey);
       if (uriKey && mediaCache.has(uriKey)) return mediaCache.get(uriKey);
+      if (mediaCache.has(canonKey)) return mediaCache.get(canonKey);
+      if (!uriKey && mediaCache.has(identityKey)) return mediaCache.get(identityKey);
 
-      // Check pre-resolved identities
+      // Check pre-resolved identities (prioritizing uriKey and canonKey over loose identityKey)
       const preResolved =
-        resolvedMap.get(identityKey) ||
+        (uriKey ? resolvedMap.get(uriKey) : null) ||
         resolvedMap.get(canonKey) ||
-        (uriKey ? resolvedMap.get(uriKey) : null);
+        (!uriKey ? resolvedMap.get(identityKey) : null);
       if (preResolved) {
         if (preResolved.mediaItem) {
-          mediaCache.set(identityKey, preResolved.mediaItem);
-          mediaCache.set(canonKey, preResolved.mediaItem);
-          if (uriKey) mediaCache.set(uriKey, preResolved.mediaItem);
-          resolvedMediaMap.set(identityKey, preResolved.mediaItem.id);
-          return preResolved.mediaItem;
+          // Defensive guard: Ensure synthetic preview_* identities can NEVER leak into real import execution!
+          if (preResolved.mediaItem.id && String(preResolved.mediaItem.id).startsWith("preview_")) {
+            // Reject preview placeholder in real execution and fall through to authoritative DB/TMDB resolution
+          } else {
+            if (uriKey) mediaCache.set(uriKey, preResolved.mediaItem);
+            mediaCache.set(canonKey, preResolved.mediaItem);
+            if (!uriKey) {
+              mediaCache.set(identityKey, preResolved.mediaItem);
+              resolvedMediaMap.set(identityKey, preResolved.mediaItem.id);
+            }
+            return preResolved.mediaItem;
+          }
         }
 
         if (preResolved.isSyntheticFallback) {
@@ -400,10 +407,12 @@ export async function executeLetterboxdImport(
           });
 
           if (existingMedia) {
-            mediaCache.set(identityKey, existingMedia);
-            mediaCache.set(canonKey, existingMedia);
             if (uriKey) mediaCache.set(uriKey, existingMedia);
-            resolvedMediaMap.set(identityKey, existingMedia.id);
+            mediaCache.set(canonKey, existingMedia);
+            if (!uriKey) {
+              mediaCache.set(identityKey, existingMedia);
+              resolvedMediaMap.set(identityKey, existingMedia.id);
+            }
             return existingMedia;
           }
 
@@ -418,23 +427,25 @@ export async function executeLetterboxdImport(
             })
             .returning();
 
-          mediaCache.set(identityKey, fallback);
-          mediaCache.set(canonKey, fallback);
           if (uriKey) mediaCache.set(uriKey, fallback);
-          resolvedMediaMap.set(identityKey, fallback.id);
+          mediaCache.set(canonKey, fallback);
+          if (!uriKey) {
+            mediaCache.set(identityKey, fallback);
+            resolvedMediaMap.set(identityKey, fallback.id);
+          }
           return fallback;
         }
       }
 
       // Check pre-resolved quarantines
       const preQuarantined =
-        quarantineMap.get(identityKey) ||
+        (uriKey ? quarantineMap.get(uriKey) : null) ||
         quarantineMap.get(canonKey) ||
-        (uriKey ? quarantineMap.get(uriKey) : null);
+        (!uriKey ? quarantineMap.get(identityKey) : null);
       if (preQuarantined) {
-        ambiguousIdentities.add(identityKey);
-        ambiguousIdentities.add(canonKey);
         if (uriKey) ambiguousIdentities.add(uriKey);
+        ambiguousIdentities.add(canonKey);
+        if (!uriKey) ambiguousIdentities.add(identityKey);
         await tx.insert(unresolvedImportItems).values({
           id: `unres_${randomUUID()}`,
           userId,
@@ -448,12 +459,14 @@ export async function executeLetterboxdImport(
         return null;
       }
 
-      // Direct match by user's known rating
-      const knownRating = ratingByIdentity.get(identityKey);
-      if (knownRating?.mediaItem) {
-        mediaCache.set(identityKey, knownRating.mediaItem);
-        resolvedMediaMap.set(identityKey, knownRating.mediaItem.id);
-        return knownRating.mediaItem;
+      // Direct match by user's known rating (only when no explicit uriKey is provided)
+      if (!uriKey) {
+        const knownRating = ratingByIdentity.get(identityKey);
+        if (knownRating?.mediaItem) {
+          mediaCache.set(identityKey, knownRating.mediaItem);
+          resolvedMediaMap.set(identityKey, knownRating.mediaItem.id);
+          return knownRating.mediaItem;
+        }
       }
 
       // Check DB by title

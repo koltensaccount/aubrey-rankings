@@ -345,16 +345,21 @@ export function calculateCandidateScore(
 }
 
 /**
- * In-memory resolution cache for this runtime session to prevent duplicate network calls
+ * In-memory resolution caches for this runtime session to prevent duplicate network calls.
+ * Execution and preview caches are strictly isolated: preview mode results (which may include
+ * synthetic preview_* media IDs) are never shared with or exposed to execution mode.
  */
-const resolutionCache = new Map<string, MatchedMediaResult | null>();
+const executionCache = new Map<string, MatchedMediaResult | null>();
+const previewCache = new Map<string, MatchedMediaResult | null>();
 
 export function clearResolutionCache(): void {
-  resolutionCache.clear();
+  executionCache.clear();
+  previewCache.clear();
 }
 
 export function invalidateResolutionCache(key: string): void {
-  resolutionCache.delete(key);
+  executionCache.delete(key);
+  previewCache.delete(key);
 }
 
 /**
@@ -381,6 +386,9 @@ export async function resolveLetterboxdMediaIdentity(
   const cacheKey = uri
     ? `uri::${uri.toLowerCase()}`
     : `${cleanTitle.toLowerCase()}::${year ?? ""}`;
+  const isPreview = options?.persist === false;
+  const targetCache = isPreview ? previewCache : executionCache;
+
   const hasTmdbCredentials = Boolean(
     process.env.TMDB_API_READ_ACCESS_TOKEN || process.env.TMDB_API_KEY
   );
@@ -389,9 +397,14 @@ export async function resolveLetterboxdMediaIdentity(
     (process.env.AUBREY_ALLOW_SYNTHETIC_MEDIA === "1" ||
       (!hasTmdbCredentials && (process.env.CI === "true" || process.env.AUBREY_TEST_MODE === "1")));
 
-  if (resolutionCache.has(cacheKey)) {
-    const cached = resolutionCache.get(cacheKey)!;
-    return { match: cached };
+  if (targetCache.has(cacheKey)) {
+    const cached = targetCache.get(cacheKey)!;
+    // Execution mode safety guard: Never return any preview_* media identity during real execution!
+    if (!isPreview && cached?.mediaItem?.id && String(cached.mediaItem.id).startsWith("preview_")) {
+      targetCache.delete(cacheKey);
+    } else {
+      return { match: cached };
+    }
   }
 
   // -------------------------------------------------------------------------
@@ -409,7 +422,7 @@ export async function resolveLetterboxdMediaIdentity(
         confidence: "manual",
         isTvException: mapping.sourceMediaType === "episode",
       };
-      resolutionCache.set(cacheKey, result);
+      targetCache.set(cacheKey, result);
       return { match: result };
     }
   }
@@ -429,7 +442,7 @@ export async function resolveLetterboxdMediaIdentity(
       confidence: "manual",
       isTvException: titleYearMapping.sourceMediaType === "episode",
     };
-    resolutionCache.set(cacheKey, result);
+    targetCache.set(cacheKey, result);
     return { match: result };
   }
 
@@ -478,7 +491,7 @@ export async function resolveLetterboxdMediaIdentity(
           confidence: "exact",
           isTvException: matchCandidate.mediaType === "episode",
         };
-        resolutionCache.set(cacheKey, result);
+        targetCache.set(cacheKey, result);
         return { match: result };
       }
     }
@@ -512,7 +525,7 @@ export async function resolveLetterboxdMediaIdentity(
           confidence: "exact",
           isTvException: m.mediaType === "episode",
         };
-        resolutionCache.set(cacheKey, result);
+        targetCache.set(cacheKey, result);
         return { match: result };
       }
     }
@@ -537,7 +550,7 @@ export async function resolveLetterboxdMediaIdentity(
         seasonNumber: tvException.seasonNumber,
         episodeNumber: tvException.episodeNumber,
       };
-      resolutionCache.set(cacheKey, result);
+      targetCache.set(cacheKey, result);
       return { match: result };
     }
 
@@ -579,7 +592,7 @@ export async function resolveLetterboxdMediaIdentity(
             seasonNumber: tvException.seasonNumber,
             episodeNumber: tvException.episodeNumber,
           };
-          resolutionCache.set(cacheKey, result);
+          targetCache.set(cacheKey, result);
           return { match: result };
         }
       }
@@ -688,7 +701,7 @@ export async function resolveLetterboxdMediaIdentity(
           confidence: "tmdb_verified",
           isTvException: isTv,
         };
-        resolutionCache.set(cacheKey, previewResult);
+        targetCache.set(cacheKey, previewResult);
         return { match: previewResult };
       }
 
@@ -729,7 +742,7 @@ export async function resolveLetterboxdMediaIdentity(
             confidence: "tmdb_verified",
             isTvException: isTv,
           };
-          resolutionCache.set(cacheKey, result);
+          targetCache.set(cacheKey, result);
           return { match: result };
         }
       }
@@ -743,7 +756,7 @@ export async function resolveLetterboxdMediaIdentity(
         confidence: "exact",
         isTvException: false,
       };
-      resolutionCache.set(cacheKey, result);
+      targetCache.set(cacheKey, result);
       return { match: result };
     }
 
@@ -773,7 +786,7 @@ export async function resolveLetterboxdMediaIdentity(
         confidence: "exact",
         isTvException: false,
       };
-      resolutionCache.set(cacheKey, result);
+      targetCache.set(cacheKey, result);
       return { match: result };
     }
     return {
@@ -811,10 +824,12 @@ export async function batchResolveIdentities(
   const resolvedMap = new Map<string, MatchedMediaResult>();
   const quarantineMap = new Map<string, UnmatchedQuarantineResult>();
 
-  // Deduplicate by film identity key
+  // Deduplicate by distinct Letterboxd URI when available, otherwise by title::year
   const uniqueFilms = new Map<string, SourceFilmCandidate>();
   for (const f of films) {
-    const key = `${f.title.trim().toLowerCase()}::${f.year ?? ""}`;
+    const key = f.letterboxdUri?.trim()
+      ? f.letterboxdUri.trim().toLowerCase()
+      : `${f.title.trim().toLowerCase()}::${f.year ?? ""}`;
     if (!uniqueFilms.has(key)) {
       uniqueFilms.set(key, f);
     }
@@ -829,13 +844,20 @@ export async function batchResolveIdentities(
     await Promise.all(
       chunk.map(async ([key, film]) => {
         const { match, quarantine } = await resolveLetterboxdMediaIdentity(film, options);
+        const titleYearKey = `${film.title.trim().toLowerCase()}::${film.year ?? ""}`;
         if (match) {
           resolvedMap.set(key, match);
           if (film.letterboxdUri) resolvedMap.set(film.letterboxdUri.trim().toLowerCase(), match);
+          if (!resolvedMap.has(titleYearKey)) {
+            resolvedMap.set(titleYearKey, match);
+          }
           if (match.isTvException) tvExceptionsCount++;
         } else if (quarantine) {
           quarantineMap.set(key, quarantine);
           if (film.letterboxdUri) quarantineMap.set(film.letterboxdUri.trim().toLowerCase(), quarantine);
+          if (!quarantineMap.has(titleYearKey)) {
+            quarantineMap.set(titleYearKey, quarantine);
+          }
         }
       })
     );

@@ -17,6 +17,7 @@ import { getServerSession } from "@/lib/server-session";
 import { checkIsAdmin } from "@/lib/admin";
 import { cookies } from "next/headers";
 import type { NextRequest } from "next/server";
+import { clearResolutionCache } from "@/lib/letterboxd-matching";
 
 export const TEST_WORKSPACE_USER_ID = "usr_test_import_workspace";
 export const TEST_WORKSPACE_EMAIL = "test-workspace@aubrey.local";
@@ -226,9 +227,13 @@ export async function resetTestWorkspace(targetUserId: string = TEST_WORKSPACE_U
       .returning({ id: unresolvedImportItems.id });
 
     // 7. Delete mappings created during test workspace imports
-    await tx
+    const mappingsDeleted = await tx
       .delete(importSourceMappings)
-      .where(sql`("metadata"->>'isTestWorkspace')::boolean = true`);
+      .where(sql`("metadata"->>'isTestWorkspace')::boolean = true`)
+      .returning({ id: importSourceMappings.id });
+
+    // Invalidate in-memory caches so no test mappings survive or influence subsequent operations
+    clearResolutionCache();
 
     return {
       diaryDeleted: diaryDeleted.length,
@@ -238,6 +243,7 @@ export async function resetTestWorkspace(targetUserId: string = TEST_WORKSPACE_U
       collectionsDeleted: colIds.length,
       collectionEntriesDeleted: collectionEntriesDeletedCount,
       unresolvedDeleted: unresolvedDeleted.length,
+      mappingsDeleted: mappingsDeleted.length,
     };
   });
 }

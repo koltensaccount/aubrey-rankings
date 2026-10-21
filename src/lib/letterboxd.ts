@@ -219,6 +219,27 @@ function cleanFilenameTitle(filename: string): string {
 /**
  * Parses an official Letterboxd ZIP export archive buffer
  */
+export function normalizeLetterboxdFilmUri(uri: string): string {
+  if (!uri) return "";
+  const trimmed = uri.trim();
+  // Match letterboxd.com/[username]/film/<slug>/[viewing-number]/ -> normalize to https://letterboxd.com/film/<slug>/
+  const diaryMatch = trimmed.match(
+    /^(https?:\/\/letterboxd\.com\/)[^\/]+\/film\/([^\/\?#]+)(?:\/\d+)?\/?$/i
+  );
+  if (diaryMatch) {
+    return `https://letterboxd.com/film/${diaryMatch[2].toLowerCase()}/`;
+  }
+
+  const filmMatch = trimmed.match(
+    /^(https?:\/\/letterboxd\.com\/film\/[^\/\?#]+)\/?$/i
+  );
+  if (filmMatch) {
+    return `${filmMatch[1].toLowerCase()}/`;
+  }
+
+  return trimmed.toLowerCase();
+}
+
 export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
   const zip = new AdmZip(zipBuffer);
   const zipEntries = zip.getEntries();
@@ -230,6 +251,7 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
   }
 
   const filmMap = new Map<string, ParsedLetterboxdFilm>();
+  const titleYearToFilms = new Map<string, Set<ParsedLetterboxdFilm>>();
   const diaryEntries: ParsedDiaryEntry[] = [];
   const reviews: ParsedReview[] = [];
   const watchlist: ParsedWatchlistItem[] = [];
@@ -244,25 +266,84 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
     title: string,
     yearStr: string,
     uri: string,
+    options?: { isDiaryOrReview?: boolean }
   ): ParsedLetterboxdFilm | null => {
     const cleanTitle = title.trim();
     if (!cleanTitle) return null;
 
     const year = parseYear(yearStr);
-    const key = `${cleanTitle.toLowerCase()}::${year ?? ""}`;
+    const cleanUri = uri?.trim() || "";
+    const titleYearKey = `${cleanTitle.toLowerCase()}::${year ?? ""}`;
+    const normUri = normalizeLetterboxdFilmUri(cleanUri);
 
-    if (!filmMap.has(key)) {
-      filmMap.set(key, {
+    // 1. Direct lookup by normalized URI
+    if (normUri && filmMap.has(normUri)) {
+      return filmMap.get(normUri)!;
+    }
+
+    // 2. Direct lookup by raw cleanUri
+    if (cleanUri && filmMap.has(cleanUri.toLowerCase())) {
+      return filmMap.get(cleanUri.toLowerCase())!;
+    }
+
+    const existingCandidates = titleYearToFilms.get(titleYearKey);
+
+    // 3. If this call comes from diary.csv or reviews.csv:
+    // In Letterboxd exports, diary and review files contain viewing/review-specific URLs
+    // (e.g. /username/film/slug/1/ or synthetic repeat URLs).
+    // If there is already exactly ONE film for this title and year, attach to it!
+    if (options?.isDiaryOrReview && existingCandidates && existingCandidates.size === 1) {
+      return Array.from(existingCandidates)[0];
+    }
+
+    // 4. If an un-URI'd film was previously created for this title/year, adopt this URI
+    if (existingCandidates && existingCandidates.size === 1) {
+      const candidate = Array.from(existingCandidates)[0];
+      if (!candidate.letterboxdUri) {
+        candidate.letterboxdUri = cleanUri;
+        filmMap.delete(titleYearKey);
+        filmMap.set(normUri || cleanUri.toLowerCase(), candidate);
+        return candidate;
+      }
+    }
+
+    // 5. If URI is present: create a distinct film for this URI
+    if (cleanUri) {
+      const key = normUri || cleanUri.toLowerCase();
+      const film: ParsedLetterboxdFilm = {
         title: cleanTitle,
         year,
-        letterboxdUri: uri.trim(),
+        letterboxdUri: cleanUri,
         isWatched: false,
         isFavorite: false,
-      });
+      };
+      filmMap.set(key, film);
+      if (!titleYearToFilms.has(titleYearKey)) {
+        titleYearToFilms.set(titleYearKey, new Set());
+      }
+      titleYearToFilms.get(titleYearKey)!.add(film);
+      return film;
     }
-    const film = filmMap.get(key)!;
-    if (!film.letterboxdUri && uri.trim()) {
-      film.letterboxdUri = uri.trim();
+
+    // 6. If NO URI is present:
+    if (existingCandidates && existingCandidates.size === 1) {
+      return Array.from(existingCandidates)[0];
+    }
+
+    let film = filmMap.get(titleYearKey);
+    if (!film) {
+      film = {
+        title: cleanTitle,
+        year,
+        letterboxdUri: "",
+        isWatched: false,
+        isFavorite: false,
+      };
+      filmMap.set(titleYearKey, film);
+      if (!titleYearToFilms.has(titleYearKey)) {
+        titleYearToFilms.set(titleYearKey, new Set());
+      }
+      titleYearToFilms.get(titleYearKey)!.add(film);
     }
     return film;
   };
@@ -399,7 +480,7 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
           const isRewatch = rewatchIdx !== -1 && /^yes$/i.test((row[rewatchIdx] || "").trim());
           const tags = tagsIdx !== -1 ? parseTags(row[tagsIdx]) : [];
 
-          const film = getOrCreateFilm(name, year, uri);
+          const film = getOrCreateFilm(name, year, uri, { isDiaryOrReview: true });
           if (film) {
             film.isWatched = true;
             if (review) {
@@ -470,7 +551,7 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
           const isRewatch = rewatchIdx !== -1 && /^yes$/i.test((row[rewatchIdx] || "").trim());
           const tags = tagsIdx !== -1 ? parseTags(row[tagsIdx]) : [];
 
-          const film = getOrCreateFilm(name, year, uri);
+          const film = getOrCreateFilm(name, year, uri, { isDiaryOrReview: true });
           if (film) {
             film.isWatched = true;
             if (isValidWatchDate(watchDate)) {

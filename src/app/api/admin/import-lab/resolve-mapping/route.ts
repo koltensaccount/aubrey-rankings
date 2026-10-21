@@ -4,7 +4,7 @@ import { importSourceMappings, unresolvedImportItems, mediaItems } from "@/db/sc
 import { eq, and, sql } from "drizzle-orm";
 import { resolveMediaItem } from "@/lib/media-resolution";
 import { randomUUID } from "crypto";
-import { verifyAdminOrTestSession } from "@/lib/test-workspace";
+import { verifyAdminOrTestSession, TEST_WORKSPACE_USER_ID } from "@/lib/test-workspace";
 import { clearResolutionCache } from "@/lib/letterboxd-matching";
 
 export const dynamic = "force-dynamic";
@@ -28,12 +28,16 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  // Scope quarantined item lookup strictly to the test workspace
   const unresolved = await db.query.unresolvedImportItems.findFirst({
-    where: eq(unresolvedImportItems.id, unresolvedItemId),
+    where: and(
+      eq(unresolvedImportItems.id, unresolvedItemId),
+      eq(unresolvedImportItems.userId, TEST_WORKSPACE_USER_ID)
+    ),
   });
 
   if (!unresolved) {
-    return NextResponse.json({ error: "Quarantined item not found" }, { status: 404 });
+    return NextResponse.json({ error: "Quarantined item not found in test workspace" }, { status: 404 });
   }
 
   try {
@@ -76,6 +80,7 @@ export async function POST(request: NextRequest) {
 
     const metadataObj: Record<string, any> = {
       manualAdminResolution: true,
+      isTestWorkspace: true,
       tmdbId,
       resolvedAt: new Date().toISOString(),
       mediaTitle: resolvedRecord?.title,
@@ -139,11 +144,18 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Invalidate in-memory cache so fresh mapping immediately takes effect
+    // Invalidate in-memory caches so fresh mapping immediately takes effect
     clearResolutionCache();
 
-    // 3. Remove quarantined entry
-    await db.delete(unresolvedImportItems).where(eq(unresolvedImportItems.id, unresolvedItemId));
+    // 3. Remove quarantined entry scoped strictly to test workspace
+    await db
+      .delete(unresolvedImportItems)
+      .where(
+        and(
+          eq(unresolvedImportItems.id, unresolvedItemId),
+          eq(unresolvedImportItems.userId, TEST_WORKSPACE_USER_ID)
+        )
+      );
 
     return NextResponse.json({
       success: true,

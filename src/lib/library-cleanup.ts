@@ -32,16 +32,22 @@ export function getCleanupSecret(): string {
 
 /**
  * Explicitly verifies server-side database backup readiness before any live deletion.
+ * Note: File presence alone is a readiness check, not proof of restore capability.
  * Refuses real cleanup if a verified backup cannot be verified.
  */
 export async function verifyBackupReadiness(): Promise<{
   verified: boolean;
   backupPath?: string;
+  message?: string;
   error?: string;
 }> {
   // 1. Explicit verification override for testing / deployment pipeline
   if (process.env.AUBREY_BACKUP_VERIFIED === "true") {
-    return { verified: true, backupPath: "verified_via_server_flag" };
+    return {
+      verified: true,
+      backupPath: "verified_via_server_flag",
+      message: "Server-side backup readiness confirmed via environment flag (readiness check only; restore validation required before production rollout)",
+    };
   }
 
   // 2. Production backup directory inspection
@@ -60,7 +66,11 @@ export async function verifyBackupReadiness(): Promise<{
         const hoursAgo = (Date.now() - stats.mtimeMs) / (1000 * 60 * 60);
         // Backup must be non-empty and taken within the last 48 hours
         if (stats.size > 0 && hoursAgo <= 48) {
-          return { verified: true, backupPath: newest };
+          return {
+            verified: true,
+            backupPath: newest,
+            message: `Verified backup file detected at ${path.basename(newest)} (readiness check passed; restore validation required before production rollout)`,
+          };
         }
       }
     }
@@ -74,7 +84,7 @@ export async function verifyBackupReadiness(): Promise<{
   return {
     verified: false,
     error:
-      "Server-side backup readiness could not be verified. A verified database backup is required before cleanup execution.",
+      "Server-side backup readiness could not be verified. A verified database backup file presence check is required before cleanup execution (file presence alone is a readiness check, not proof of restore).",
   };
 }
 
@@ -83,6 +93,7 @@ export interface CleanupPreview {
   token: string;
   expiresAt: string;
   backupVerified: boolean;
+  backupReadinessMessage?: string;
   toRemove: {
     letterboxdDiaryEntries: number;
     letterboxdReviews: number;
@@ -292,6 +303,9 @@ export async function calculateCleanupPreview(userId: string): Promise<CleanupPr
     token,
     expiresAt,
     backupVerified: backupCheck.verified,
+    backupReadinessMessage: backupCheck.verified
+      ? backupCheck.message || "Verified backup file detected on server (readiness check passed; restore validation required before production rollout)"
+      : backupCheck.error || "Server-side backup readiness could not be verified (file presence alone is a readiness check, not proof of restore).",
     toRemove,
     toPreserve,
   };

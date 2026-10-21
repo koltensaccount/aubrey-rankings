@@ -945,6 +945,29 @@ export default function AdminImportLabPage() {
 
             {cleanupPreview && (
               <div className="space-y-6 pt-4 border-t border-border">
+                {/* Backup Readiness Status Banner */}
+                {cleanupPreview.backupVerified ? (
+                  <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-primary/10 border border-primary/30 text-xs text-foreground">
+                    <CheckCircle2 size={16} className="text-primary mt-0.5 shrink-0" />
+                    <div className="space-y-0.5">
+                      <p className="font-semibold text-primary">Database Backup Readiness Check Passed</p>
+                      <p className="text-muted-foreground text-[11px]">
+                        {cleanupPreview.backupReadinessMessage || "Verified backup file detected on server (file presence confirms readiness; restore validation required before production rollout)."}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-start gap-2.5 p-3.5 rounded-xl bg-surface-elevated border border-border text-xs text-foreground">
+                    <AlertTriangle size={16} className="text-muted-foreground mt-0.5 shrink-0" />
+                    <div className="space-y-0.5">
+                      <p className="font-semibold text-foreground">Backup Readiness Verification Pending</p>
+                      <p className="text-muted-foreground text-[11px]">
+                        {cleanupPreview.backupReadinessMessage || "Server-side backup readiness could not be verified (file presence alone is a readiness check, not proof of restore). Real execution blocked."}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 {/* Two-Column Comparison */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {/* Column 1: Items to Remove */}
@@ -967,7 +990,10 @@ export default function AdminImportLabPage() {
                         <strong className="font-mono">{cleanupPreview.toRemove.letterboxdReviews}</strong>
                       </li>
                       <li className="flex justify-between py-1.5">
-                        <span>Watchlist Items</span>
+                        <div>
+                          <span>Watchlist Items</span>
+                          <span className="block text-[10px] text-muted-foreground">All watchlist records (export does not tag source)</span>
+                        </div>
                         <strong className="font-mono">{cleanupPreview.toRemove.letterboxdWatchlistItems}</strong>
                       </li>
                       <li className="flex justify-between py-1.5">
