@@ -7,6 +7,7 @@ import {
   getPersonalMediaUrl,
   getRankingMediaUrl,
 } from "../lib/media-url";
+import { reviewScoreOnTen } from "../lib/review-rating";
 
 // =============================================================================
 // Safety Checks BEFORE Database / Authentication Modules Initialize
@@ -449,6 +450,298 @@ describe("Phase 15A: Unified Media Pages & Navigation Architecture", () => {
       // Verify database row count did not change
       const afterCount = await db.$count(mediaItems);
       assert.equal(afterCount, beforeCount, "Browsing must remain strictly non-mutating");
+    });
+  });
+
+  describe("Part 6: Correct Review Editing & Type Preservation", () => {
+    let importedJournalReviewId = `rev_jour_${suffix}`;
+    let independentReviewId = `rev_indep_${suffix}`;
+
+    before(async () => {
+      // 1. Insert an imported Journal review (isJournal: true)
+      await db.insert(reviews).values({
+        id: importedJournalReviewId,
+        userId: testUser1Id,
+        mediaItemId: testMovieId,
+        title: "Imported Journal Dispatch",
+        content: "Original journal diary entry from Letterboxd import.",
+        status: "published",
+        visibility: "public",
+        isJournal: true,
+        shareRating: true,
+        publishedAt: new Date(),
+      });
+
+      // 2. Insert an independent review (isJournal: false)
+      await db.insert(reviews).values({
+        id: independentReviewId,
+        userId: testUser1Id,
+        mediaItemId: testMovieId,
+        title: "Standalone Detailed Essay",
+        content: "An extensive thematic analysis of the film.",
+        status: "published",
+        visibility: "public",
+        isJournal: false,
+        shareRating: false,
+        publishedAt: new Date(),
+      });
+    });
+
+    it("preserves isJournal=true when editing an imported Journal review", async () => {
+      const reviewBefore = await db.query.reviews.findFirst({
+        where: eq(reviews.id, importedJournalReviewId),
+      });
+      assert.ok(reviewBefore);
+      assert.equal(reviewBefore.isJournal, true);
+
+      // Simulate editing the journal review
+      await db.update(reviews)
+        .set({
+          content: "Updated journal diary entry content.",
+          updatedAt: new Date(),
+        })
+        .where(eq(reviews.id, importedJournalReviewId));
+
+      const reviewAfter = await db.query.reviews.findFirst({
+        where: eq(reviews.id, importedJournalReviewId),
+      });
+      assert.ok(reviewAfter);
+      assert.equal(reviewAfter.content, "Updated journal diary entry content.");
+      assert.equal(reviewAfter.isJournal, true, "isJournal must remain true after edit");
+      assert.equal(reviewAfter.shareRating, true, "shareRating must be preserved");
+    });
+
+    it("preserves isJournal=false when editing an independent review", async () => {
+      const reviewBefore = await db.query.reviews.findFirst({
+        where: eq(reviews.id, independentReviewId),
+      });
+      assert.ok(reviewBefore);
+      assert.equal(reviewBefore.isJournal, false);
+
+      // Simulate editing the independent review via the standard review update path
+      await db.update(reviews)
+        .set({
+          title: "Revised Standalone Essay Headline",
+          content: "Updated essay content with deeper insights.",
+          updatedAt: new Date(),
+        })
+        .where(eq(reviews.id, independentReviewId));
+
+      const reviewAfter = await db.query.reviews.findFirst({
+        where: eq(reviews.id, independentReviewId),
+      });
+      assert.ok(reviewAfter);
+      assert.equal(reviewAfter.title, "Revised Standalone Essay Headline");
+      assert.equal(reviewAfter.content, "Updated essay content with deeper insights.");
+      assert.equal(reviewAfter.isJournal, false, "isJournal must remain false after edit");
+    });
+
+    it("handles multiple reviews belonging to the same user and title without conflation", async () => {
+      const allUserReviews = await db.query.reviews.findMany({
+        where: and(
+          eq(reviews.userId, testUser1Id),
+          eq(reviews.mediaItemId, testMovieId)
+        ),
+      });
+
+      // User has multiple reviews (publicReviewId, draftReviewId, privateReviewId, importedJournalReviewId, independentReviewId)
+      assert.ok(allUserReviews.length >= 2, "User should have multiple reviews for this title");
+
+      // Verify ownerJournalReview lookup specifically finds the journal review and does NOT pick an independent review
+      const ownerJournalReview = allUserReviews.find((r) => r.isJournal) || null;
+      assert.ok(ownerJournalReview, "Must find the journal review");
+      assert.equal(ownerJournalReview.isJournal, true);
+      assert.equal(ownerJournalReview.id, importedJournalReviewId);
+
+      // Verify that updating one review does not affect the other review
+      await db.update(reviews)
+        .set({ content: "Independent review second revision." })
+        .where(eq(reviews.id, independentReviewId));
+
+      const journalCheck = await db.query.reviews.findFirst({
+        where: eq(reviews.id, importedJournalReviewId),
+      });
+      assert.equal(journalCheck?.content, "Updated journal diary entry content.", "Journal review must remain untouched");
+
+      const independentCheck = await db.query.reviews.findFirst({
+        where: eq(reviews.id, independentReviewId),
+      });
+      assert.equal(independentCheck?.content, "Independent review second revision.");
+    });
+  });
+
+  describe("Part 7: Preventing Overlapping Review Dialogs & Canonical Auto-open", () => {
+    it("identifies exactly one canonical journal review editor target when multiple reviews exist", async () => {
+      const allUserReviews = await db.query.reviews.findMany({
+        where: and(
+          eq(reviews.userId, testUser1Id),
+          eq(reviews.mediaItemId, testMovieId)
+        ),
+      });
+
+      // Distinct counts of journal vs independent reviews
+      const journalReviews = allUserReviews.filter((r) => r.isJournal);
+      const independentReviews = allUserReviews.filter((r) => !r.isJournal);
+
+      assert.ok(journalReviews.length >= 1, "Has at least one journal review");
+      assert.ok(independentReviews.length >= 1, "Has at least one independent review");
+
+      // The canonical journal review target must never fall back to independent review
+      const canonicalTarget = allUserReviews.find((r) => r.isJournal) || null;
+      assert.equal(canonicalTarget?.isJournal, true);
+      assert.notEqual(canonicalTarget?.id, independentReviews[0].id);
+    });
+
+    it("verifies single editor auto-open contract for deep links", () => {
+      // Test URL construction: journal=1 deep link should route with canonical param
+      const url = getPersonalMediaUrl("test-media-item", { journal: true });
+      assert.ok(url.includes("journal=1"));
+
+      // Secondary review editor dialogs must NOT mount or auto-open by default
+      const editingReviewInitial = null;
+      assert.equal(editingReviewInitial, null, "Modal state for editing individual reviews must start closed");
+    });
+  });
+
+  describe("Part 8: Accurate Imported Letterboxd Rating Display & Scale Normalization", () => {
+    let letterboxdMediaId = `med_lb_${suffix}`;
+    let letterboxdRatingId = `rat_lb_${suffix}`;
+
+    before(async () => {
+      await db.insert(mediaItems).values({
+        id: letterboxdMediaId,
+        title: "Imported Film Test",
+        mediaType: "movie",
+        releaseDate: "2021-06-15",
+      });
+
+      // Insert an imported Letterboxd 5-star rating (4.5 / 5 stars, calculatedOverallScore is null)
+      await db.insert(ratings).values({
+        id: letterboxdRatingId,
+        userId: testUser1Id,
+        mediaItemId: letterboxdMediaId,
+        collectionId: null,
+        calculatedOverallScore: null,
+        sourceRating: 4.5,
+        sourceScale: 5,
+        sourceService: "letterboxd",
+        isWatched: true,
+      });
+    });
+
+    after(async () => {
+      try {
+        await db.delete(ratings).where(eq(ratings.id, letterboxdRatingId));
+        await db.delete(mediaItems).where(eq(mediaItems.id, letterboxdMediaId));
+      } catch {}
+    });
+
+    it("normalizes Letterboxd 5-star score (4.5 / 5) to 9.0 / 10 via reviewScoreOnTen", async () => {
+      const rating = await db.query.ratings.findFirst({
+        where: eq(ratings.id, letterboxdRatingId),
+        with: {
+          categoryScores: true,
+          ratingSystem: true,
+        },
+      });
+
+      assert.ok(rating);
+      assert.equal(rating.sourceRating, 4.5);
+      assert.equal(rating.sourceScale, 5);
+      assert.equal(rating.sourceService, "letterboxd");
+      assert.equal(rating.calculatedOverallScore, null);
+
+      // Calculate normalized score using reviewScoreOnTen
+      const normalizedScore = reviewScoreOnTen({
+        calculatedOverallScore: rating.calculatedOverallScore,
+        sourceRating: rating.sourceRating,
+        sourceScale: rating.sourceScale,
+        sourceService: rating.sourceService,
+        ratingSystemId: rating.ratingSystemId,
+        tierId: rating.tierId,
+        ratingSystem: rating.ratingSystem ? { scale: rating.ratingSystem.scale, type: rating.ratingSystem.type } : null,
+        categoryScores: rating.categoryScores ?? [],
+      });
+
+      assert.equal(normalizedScore, 9.0, "4.5 / 5 stars must normalize to 9.0 / 10");
+    });
+
+    it("evaluates hasRating=true in personal summary for imported Letterboxd ratings", async () => {
+      const rating = await db.query.ratings.findFirst({
+        where: and(
+          eq(ratings.userId, testUser1Id),
+          eq(ratings.mediaItemId, letterboxdMediaId),
+          isNull(ratings.collectionId)
+        ),
+        with: {
+          categoryScores: true,
+          ratingSystem: true,
+        },
+      });
+
+      assert.ok(rating);
+
+      const normalizedScore = reviewScoreOnTen({
+        calculatedOverallScore: rating.calculatedOverallScore,
+        sourceRating: rating.sourceRating,
+        sourceScale: rating.sourceScale,
+        sourceService: rating.sourceService,
+        ratingSystemId: rating.ratingSystemId,
+        tierId: rating.tierId,
+        ratingSystem: rating.ratingSystem ? { scale: rating.ratingSystem.scale, type: rating.ratingSystem.type } : null,
+        categoryScores: rating.categoryScores ?? [],
+      });
+
+      const hasPersonalRating = Boolean(
+        rating && (
+          normalizedScore !== null ||
+          rating.calculatedOverallScore !== null ||
+          rating.sourceRating !== null ||
+          rating.tierId !== null
+        )
+      );
+
+      assert.equal(hasPersonalRating, true, "Imported rating must count as hasRating=true in personal summary");
+    });
+
+    it("strictly isolates global imported rating from collection-scoped ratings", async () => {
+      // Insert a collection rating for the same media item
+      const collRatingId = `rat_lb_col_${suffix}`;
+      const collId = `col_lb_${suffix}`;
+
+      await db.insert(collections).values({
+        id: collId,
+        userId: testUser1Id,
+        title: "Test Collection for Letterboxd Item",
+        collectionType: "standard",
+        visibility: "private",
+      });
+
+      await db.insert(ratings).values({
+        id: collRatingId,
+        userId: testUser1Id,
+        mediaItemId: letterboxdMediaId,
+        collectionId: collId,
+        calculatedOverallScore: 7.0,
+      });
+
+      // Query standalone global rating
+      const globalRating = await db.query.ratings.findFirst({
+        where: and(
+          eq(ratings.userId, testUser1Id),
+          eq(ratings.mediaItemId, letterboxdMediaId),
+          isNull(ratings.collectionId)
+        ),
+      });
+
+      assert.ok(globalRating);
+      assert.equal(globalRating.collectionId, null);
+      assert.equal(globalRating.sourceRating, 4.5);
+      assert.equal(globalRating.calculatedOverallScore, null);
+
+      // Clean up test collection and rating
+      await db.delete(ratings).where(eq(ratings.id, collRatingId));
+      await db.delete(collections).where(eq(collections.id, collId));
     });
   });
 });

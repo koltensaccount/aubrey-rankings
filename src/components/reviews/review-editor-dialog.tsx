@@ -170,7 +170,7 @@ export function ReviewEditorDialog({
     setError(null);
 
     try {
-      if (journalMode) {
+      if (journalMode && (!existingReview?.id || existingReview.isJournal !== false)) {
         const shouldSaveWriting = Boolean(existingReview?.id || title.trim() || content.trim());
         const res = await fetch("/api/journal", {
           method: "POST",

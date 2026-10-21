@@ -288,7 +288,7 @@ export default async function MediaDetailsPage({
       })
     : [];
 
-  const ownerJournalReview = ownerReviews.find((r) => r.isJournal) || ownerReviews[0] || null;
+  const ownerJournalReview = ownerReviews.find((r) => r.isJournal) || null;
 
   const ownerDiaryEntries = session
     ? await db.query.diaryEntries.findMany({
@@ -328,8 +328,30 @@ export default async function MediaDetailsPage({
       notes: e.notes,
     }));
 
+  const normalizedRatingScore = ownerGlobalRating
+    ? reviewScoreOnTen({
+        calculatedOverallScore: ownerGlobalRating.calculatedOverallScore,
+        sourceRating: ownerGlobalRating.sourceRating,
+        sourceScale: ownerGlobalRating.sourceScale,
+        sourceService: ownerGlobalRating.sourceService,
+        ratingSystemId: ownerGlobalRating.ratingSystemId,
+        tierId: ownerGlobalRating.tierId,
+        ratingSystem: ownerGlobalRating.ratingSystem ? { scale: ownerGlobalRating.ratingSystem.scale, type: ownerGlobalRating.ratingSystem.type } : null,
+        categoryScores: ownerGlobalRating.categoryScores ?? [],
+      })
+    : null;
+
+  const hasPersonalRating = Boolean(
+    ownerGlobalRating && (
+      normalizedRatingScore !== null ||
+      ownerGlobalRating.calculatedOverallScore !== null ||
+      ownerGlobalRating.sourceRating !== null ||
+      ownerGlobalRating.tierId !== null
+    )
+  );
+
   const hasPersonalActivity = Boolean(
-    ownerGlobalRating ||
+    hasPersonalRating ||
     ownerReviews.length > 0 ||
     ownerDiaryEntries.length > 0 ||
     ownerWatchlistItem ||
@@ -341,7 +363,7 @@ export default async function MediaDetailsPage({
         isWatched: Boolean(ownerGlobalRating?.isWatched || ownerDiaryEntries.length > 0),
         viewingsCount: ownerDiaryEntries.length,
         hasReview: ownerReviews.length > 0,
-        hasRating: Boolean(ownerGlobalRating?.calculatedOverallScore !== null && ownerGlobalRating?.calculatedOverallScore !== undefined),
+        hasRating: hasPersonalRating,
         isWatchlist: Boolean(ownerWatchlistItem),
         rankedCollectionsCount: ownerRankedCollections.length,
       }
@@ -501,6 +523,10 @@ export default async function MediaDetailsPage({
     ? {
         id: ownerGlobalRating.id,
         calculatedOverallScore: ownerGlobalRating.calculatedOverallScore,
+        normalizedScore: normalizedRatingScore ?? ownerGlobalRating.calculatedOverallScore,
+        sourceRating: ownerGlobalRating.sourceRating,
+        sourceScale: ownerGlobalRating.sourceScale,
+        sourceService: ownerGlobalRating.sourceService,
         ratingSystemId: ownerGlobalRating.ratingSystemId,
         ratingSystemName: ownerGlobalRating.ratingSystem?.name || null,
         tier: ownerGlobalRating.tier
@@ -529,10 +555,31 @@ export default async function MediaDetailsPage({
     status: r.status,
     visibility: r.visibility,
     isSpoiler: r.isSpoiler,
+    isJournal: Boolean(r.isJournal),
+    shareRating: Boolean(r.shareRating),
     publishedAt: r.publishedAt,
     updatedAt: r.updatedAt,
     createdAt: r.createdAt,
   }));
+
+  const personalJournalReviewProp: PersonalReviewData | null = ownerJournalReview
+    ? {
+        id: ownerJournalReview.id,
+        title: ownerJournalReview.title,
+        content: ownerJournalReview.content,
+        draftContent: ownerJournalReview.draftContent,
+        contentFormat: ownerJournalReview.contentFormat,
+        draftContentFormat: ownerJournalReview.draftContentFormat,
+        status: ownerJournalReview.status,
+        visibility: ownerJournalReview.visibility,
+        isSpoiler: ownerJournalReview.isSpoiler,
+        isJournal: Boolean(ownerJournalReview.isJournal),
+        shareRating: Boolean(ownerJournalReview.shareRating),
+        publishedAt: ownerJournalReview.publishedAt,
+        updatedAt: ownerJournalReview.updatedAt,
+        createdAt: ownerJournalReview.createdAt,
+      }
+    : null;
 
   const personalDiaryProp: PersonalDiaryData[] = ownerDiaryEntries.map((d) => ({
     id: d.id,
@@ -564,6 +611,7 @@ export default async function MediaDetailsPage({
             journalMediaId={journalMediaId}
             isWatchlist={Boolean(ownerWatchlistItem)}
             ownerRating={personalRatingProp}
+            ownerJournalReview={personalJournalReviewProp}
             ownerReviews={personalReviewsProp}
             ownerDiaryEntries={personalDiaryProp}
             ownerRankedCollections={ownerRankedCollections}

@@ -130,16 +130,14 @@ async function startServer(): Promise<ChildProcess> {
 
   server.stdout?.on("data", (data) => {
     const text = data.toString();
-    if (text.includes("Ready") || text.includes("started server")) {
+    if (text.includes("Ready") || text.includes("started server") || text.includes("Error") || text.includes("error")) {
       console.log(`Next.js test server output: ${text.trim()}`);
     }
   });
 
   server.stderr?.on("data", (data) => {
     const text = data.toString();
-    if (!text.includes("ExperimentalWarning")) {
-      console.error(`Next.js stderr: ${text.trim()}`);
-    }
+    console.error(`Next.js stderr: ${text.trim()}`);
   });
 
   // Poll for server availability
@@ -254,14 +252,17 @@ async function main() {
 
     // 3. Seed personal activity for owner:
     console.log("Seeding owner personal activity...");
-    // A. Standalone Rating
+    // A. Standalone Rating (Imported from Letterboxd with 4.5 / 5 stars)
     const [ownerRating] = await db
       .insert(ratings)
       .values({
         id: `rat_p15a_owner_${tag}`,
         userId: ownerUserId,
         mediaItemId: testMovieId,
-        calculatedOverallScore: 9.2,
+        calculatedOverallScore: null,
+        sourceRating: 4.5,
+        sourceScale: 5,
+        sourceService: "letterboxd",
         isWatched: true,
         personalNotes: "Roger Deakins' cinematography is peerless. Denis Villeneuve at his peak.",
       })
@@ -296,7 +297,23 @@ async function main() {
       .returning();
     createdDiaryIds.push(diary1.id, diary2.id);
 
-    // C. Personal Reviews & Drafts
+    // C. Personal Reviews & Drafts (Journal Review + Independent Draft)
+    const [ownerJournal] = await db
+      .insert(reviews)
+      .values({
+        id: `rev_journal_${tag}`,
+        userId: ownerUserId,
+        mediaItemId: testMovieId,
+        title: "Letterboxd Import Diary Entry",
+        content: "Saw on opening night at Lincoln Square IMAX. The bass rattled the floor.",
+        status: "published",
+        visibility: "public",
+        isJournal: true,
+        shareRating: true,
+        publishedAt: new Date(),
+      })
+      .returning();
+
     const [ownerDraft] = await db
       .insert(reviews)
       .values({
@@ -308,9 +325,10 @@ async function main() {
         draftContent: "Draft in progress exploring yellow vs orange palettes in the Vegas sequence.",
         status: "draft",
         visibility: "private",
+        isJournal: false,
       })
       .returning();
-    createdReviewIds.push(ownerDraft.id);
+    createdReviewIds.push(ownerJournal.id, ownerDraft.id);
 
     // D. Watchlist
     const [wl] = await db
@@ -429,7 +447,9 @@ async function main() {
 
     // Verify personal view contents:
     const yourRatingCard = await ownerPage.textContent("div:has-text('Your Rating')");
-    assert.ok(yourRatingCard?.includes("9.2"), "Personal view must display user's standalone rating of 9.2");
+    assert.ok(yourRatingCard?.includes("9.0"), "Personal view must display user's normalized rating of 9.0");
+    assert.ok(yourRatingCard?.includes("Imported from Letterboxd"), "Personal view must display Letterboxd import indicator");
+    assert.ok(yourRatingCard?.includes("4.5 / 5 stars"), "Personal view must display original 4.5 / 5 stars");
     assert.ok(
       yourRatingCard?.includes("Roger Deakins' cinematography is peerless"),
       "Personal view must display rating notes"
@@ -440,13 +460,19 @@ async function main() {
     assert.ok(historyCard?.includes("Rewatch"), "Personal view must display Rewatch badge");
     assert.ok(historyCard?.includes("IMAX 70mm re-release viewing"), "Personal view must show viewing notes");
 
-    // Verify personal draft review is visible here
+    // Verify personal reviews (both journal review and independent draft)
     const reviewsSection = await ownerPage.textContent("section:has-text('Your Reviews & Drafts')");
     assert.ok(
       reviewsSection?.includes("Working Analysis of Denis Villeneuve's Color Symbolism"),
       "Personal view must display user's draft review"
     );
+    assert.ok(
+      reviewsSection?.includes("Letterboxd Import Diary Entry"),
+      "Personal view must display user's journal review"
+    );
     assert.ok(reviewsSection?.includes("Draft"), "Personal view must show Draft badge");
+    assert.ok(reviewsSection?.includes("Journal"), "Personal view must show Journal badge");
+    assert.ok(reviewsSection?.includes("Review"), "Personal view must show Review badge");
 
     // Verify ranked collections section
     const rankedSection = await ownerPage.textContent("section:has-text('Ranked in Your Collections')");
@@ -475,6 +501,7 @@ async function main() {
 
     // Scenario 4: TV Episode Overview linking to parent series
     console.log("Testing Scenario 4: TV Episode Overview...");
+    await visitorPage.waitForTimeout(800);
     await visitorPage.goto(`${BASE_URL}/media/${testEpisodeId}`, { waitUntil: "domcontentloaded" });
     await visitorPage.waitForTimeout(600);
     const epHeading = await visitorPage.textContent("h1");

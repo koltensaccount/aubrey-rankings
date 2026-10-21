@@ -1,4 +1,8 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Star,
   Tv,
@@ -15,8 +19,10 @@ import {
   Clock,
   ArrowRight,
   EyeOff,
+  Pencil,
 } from "lucide-react";
-import { WriteReviewButton } from "@/components/reviews/write-review-button";
+import { WriteReviewButton, JournalTriggerButton } from "@/components/reviews/write-review-button";
+import { ReviewEditorDialog } from "@/components/reviews/review-editor-dialog";
 import { AddToRankingButton } from "@/components/collections/add-to-ranking-dialog";
 import { MediaWatchlistButton } from "./media-watchlist-button";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
@@ -25,6 +31,10 @@ import { getPublicMediaUrl } from "@/lib/media-url";
 export interface PersonalRatingData {
   id: string;
   calculatedOverallScore?: number | null;
+  normalizedScore?: number | null;
+  sourceRating?: number | null;
+  sourceScale?: number | null;
+  sourceService?: string | null;
   ratingSystemId?: string | null;
   ratingSystemName?: string | null;
   tier?: {
@@ -51,6 +61,8 @@ export interface PersonalReviewData {
   status: "draft" | "published" | "unpublished" | string;
   visibility: "public" | "unlisted" | "private" | string;
   isSpoiler: boolean;
+  isJournal: boolean;
+  shareRating: boolean;
   publishedAt: Date | string | null;
   updatedAt: Date | string | null;
   createdAt: Date | string | null;
@@ -96,6 +108,7 @@ interface MediaPersonalViewProps {
   journalMediaId: string;
   isWatchlist: boolean;
   ownerRating: PersonalRatingData | null;
+  ownerJournalReview: PersonalReviewData | null;
   ownerReviews: PersonalReviewData[];
   ownerDiaryEntries: PersonalDiaryData[];
   ownerRankedCollections: PersonalCollectionRankData[];
@@ -107,16 +120,21 @@ export function MediaPersonalView({
   journalMediaId,
   isWatchlist,
   ownerRating,
+  ownerJournalReview,
   ownerReviews,
   ownerDiaryEntries,
   ownerRankedCollections,
   shouldAutoOpen,
 }: MediaPersonalViewProps) {
+  const router = useRouter();
+  const [editingReview, setEditingReview] = useState<PersonalReviewData | null>(null);
+
   const isTv = media.mediaType === "tv";
   const publicOverviewUrl = getPublicMediaUrl(media.id);
 
-  // Pick the most recent draft or review for editing context
-  const primaryReview = ownerReviews[0] || null;
+  const displayScore = ownerRating?.normalizedScore ?? ownerRating?.calculatedOverallScore ?? null;
+  const isImportedRating = Boolean(ownerRating?.sourceRating !== null && ownerRating?.sourceRating !== undefined);
+  const hasRatingContent = displayScore !== null || Boolean(ownerRating?.tier);
 
   return (
     <div className="space-y-10">
@@ -156,6 +174,8 @@ export function MediaPersonalView({
             </Link>
           ) : (
             <WriteReviewButton
+              isCanonical
+              buttonId="canonical-journal-button"
               autoOpen={shouldAutoOpen}
               mediaItemId={journalMediaId}
               mediaTitle={media.title}
@@ -173,19 +193,19 @@ export function MediaPersonalView({
                   : null
               }
               existingReview={
-                primaryReview
+                ownerJournalReview
                   ? {
-                      id: primaryReview.id,
-                      title: primaryReview.title,
-                      content: primaryReview.content,
-                      draftContent: primaryReview.draftContent,
-                      contentFormat: primaryReview.contentFormat as "plain" | "markdown",
-                      draftContentFormat: primaryReview.draftContentFormat as "plain" | "markdown" | null,
-                      status: primaryReview.status as "draft" | "published" | "unpublished",
-                      visibility: primaryReview.visibility as "private" | "unlisted" | "public",
-                      isSpoiler: primaryReview.isSpoiler,
+                      id: ownerJournalReview.id,
+                      title: ownerJournalReview.title,
+                      content: ownerJournalReview.content,
+                      draftContent: ownerJournalReview.draftContent,
+                      contentFormat: ownerJournalReview.contentFormat as "plain" | "markdown",
+                      draftContentFormat: ownerJournalReview.draftContentFormat as "plain" | "markdown" | null,
+                      status: ownerJournalReview.status as "draft" | "published" | "unpublished",
+                      visibility: ownerJournalReview.visibility as "private" | "unlisted" | "public",
+                      isSpoiler: ownerJournalReview.isSpoiler,
                       ratingId: ownerRating?.id || null,
-                      shareRating: false,
+                      shareRating: ownerJournalReview.shareRating,
                       isJournal: true,
                     }
                   : null
@@ -246,18 +266,22 @@ export function MediaPersonalView({
             )}
           </div>
 
-          {ownerRating?.calculatedOverallScore !== undefined && ownerRating.calculatedOverallScore !== null ? (
+          {hasRatingContent ? (
             <div className="space-y-4">
               <div className="flex items-baseline gap-3">
-                <span className="text-4xl font-display font-extrabold text-primary-text">
-                  ★ {ownerRating.calculatedOverallScore.toFixed(1)}
-                </span>
-                <span className="text-sm text-muted-foreground font-semibold">
-                  / 10
-                </span>
-                {ownerRating.tier && (
+                {displayScore !== null && (
+                  <>
+                    <span className="text-4xl font-display font-extrabold text-primary-text">
+                      ★ {displayScore.toFixed(1)}
+                    </span>
+                    <span className="text-sm text-muted-foreground font-semibold">
+                      / 10
+                    </span>
+                  </>
+                )}
+                {ownerRating?.tier && (
                   <span
-                    className="ml-auto px-2 py-0.5 rounded text-xs font-mono font-bold text-white shadow-xs"
+                    className={`${displayScore !== null ? "ml-auto" : ""} px-2 py-0.5 rounded text-xs font-mono font-bold text-white shadow-xs`}
                     style={{ backgroundColor: ownerRating.tier.color }}
                   >
                     Tier {ownerRating.tier.name}
@@ -265,14 +289,25 @@ export function MediaPersonalView({
                 )}
               </div>
 
-              {ownerRating.ratingSystemName && (
+              {isImportedRating && (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span className="px-2 py-0.5 rounded bg-surface border border-border font-medium text-foreground">
+                    Imported from {ownerRating?.sourceService === "letterboxd" ? "Letterboxd" : (ownerRating?.sourceService || "Letterboxd")}
+                  </span>
+                  <span>
+                    Original: {ownerRating?.sourceRating} / {ownerRating?.sourceScale || 5} stars
+                  </span>
+                </div>
+              )}
+
+              {ownerRating?.ratingSystemName && !isImportedRating && (
                 <p className="text-xs text-muted-foreground">
                   Using system: <strong className="text-foreground">{ownerRating.ratingSystemName}</strong>
                 </p>
               )}
 
               {/* Multi-criteria category scores if present */}
-              {ownerRating.categoryScores && ownerRating.categoryScores.length > 0 && (
+              {ownerRating?.categoryScores && ownerRating.categoryScores.length > 0 && (
                 <div className="space-y-2 pt-2 border-t border-border">
                   <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Criteria Breakdown
@@ -295,7 +330,7 @@ export function MediaPersonalView({
                 </div>
               )}
 
-              {ownerRating.personalNotes && (
+              {ownerRating?.personalNotes && (
                 <div className="pt-2 border-t border-border text-xs text-muted-foreground space-y-1">
                   <span className="font-semibold text-foreground uppercase text-[10px] tracking-wider">
                     Rating Notes
@@ -312,10 +347,8 @@ export function MediaPersonalView({
                 You haven&apos;t assigned a standalone rating to this title yet.
               </p>
               {!isTv && (
-                <WriteReviewButton
-                  mediaItemId={journalMediaId}
-                  mediaTitle={media.title}
-                  posterPath={media.posterPath || media.stillPath}
+                <JournalTriggerButton
+                  label="Rate in Journal"
                   className="px-3 py-1.5"
                 />
               )}
@@ -344,10 +377,8 @@ export function MediaPersonalView({
                 No viewing history logged in your Journal yet.
               </p>
               {!isTv && (
-                <WriteReviewButton
-                  mediaItemId={journalMediaId}
-                  mediaTitle={media.title}
-                  posterPath={media.posterPath || media.stillPath}
+                <JournalTriggerButton
+                  label="Add Viewing"
                   className="px-3 py-1.5"
                 />
               )}
@@ -405,11 +436,9 @@ export function MediaPersonalView({
             </span>
           </div>
           {!isTv && (
-            <WriteReviewButton
-              mediaItemId={journalMediaId}
-              mediaTitle={media.title}
-              posterPath={media.posterPath || media.stillPath}
-              initialQuickScore={ownerRating?.calculatedOverallScore ?? null}
+            <JournalTriggerButton
+              hasEntry={Boolean(ownerJournalReview)}
+              label={ownerJournalReview ? "Edit Journal Entry" : "Add to Journal"}
               className="text-xs px-3 py-1.5"
             />
           )}
@@ -451,6 +480,16 @@ export function MediaPersonalView({
                         </span>
                       )}
 
+                      {rev.isJournal ? (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-primary/10 text-primary border border-primary/20">
+                          Journal
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-surface text-muted-foreground border border-border">
+                          Review
+                        </span>
+                      )}
+
                       <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
                         {rev.visibility === "private" ? (
                           <>
@@ -472,26 +511,14 @@ export function MediaPersonalView({
                     </div>
 
                     <div className="flex items-center gap-2">
-                      <WriteReviewButton
-                        mediaItemId={journalMediaId}
-                        mediaTitle={media.title}
-                        posterPath={media.posterPath || media.stillPath}
-                        existingReview={{
-                          id: rev.id,
-                          title: rev.title,
-                          content: rev.content,
-                          draftContent: rev.draftContent,
-                          contentFormat: rev.contentFormat as "plain" | "markdown",
-                          draftContentFormat: rev.draftContentFormat as "plain" | "markdown" | null,
-                          status: rev.status as any,
-                          visibility: rev.visibility as any,
-                          isSpoiler: rev.isSpoiler,
-                          ratingId: ownerRating?.id || null,
-                          shareRating: false,
-                          isJournal: true,
-                        }}
-                        className="text-xs px-2.5 py-1"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => setEditingReview(rev)}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-surface hover:bg-surface-elevated text-foreground border border-border font-semibold text-xs transition-colors cursor-pointer"
+                      >
+                        <Pencil size={12} />
+                        <span>Edit</span>
+                      </button>
                       {rev.status === "published" && (
                         <Link
                           href={`/review/${rev.id}`}
@@ -601,6 +628,41 @@ export function MediaPersonalView({
           </div>
         )}
       </section>
+
+      {/* Focused Review Editor Dialog for Editing Any Review */}
+      {editingReview && (
+        <ReviewEditorDialog
+          isOpen={Boolean(editingReview)}
+          onClose={() => setEditingReview(null)}
+          mediaItemId={journalMediaId}
+          mediaTitle={media.title}
+          posterPath={media.posterPath || media.stillPath}
+          existingReview={{
+            id: editingReview.id,
+            title: editingReview.title,
+            content: editingReview.content,
+            draftContent: editingReview.draftContent,
+            contentFormat: (editingReview.draftContent ? editingReview.draftContentFormat || editingReview.contentFormat : editingReview.contentFormat) as any,
+            draftContentFormat: editingReview.draftContentFormat as any,
+            status: editingReview.status as any,
+            visibility: editingReview.visibility as any,
+            isSpoiler: editingReview.isSpoiler,
+            ratingId: ownerRating?.id || null,
+            shareRating: editingReview.shareRating,
+            isJournal: editingReview.isJournal,
+          }}
+          journalMode={editingReview.isJournal}
+          initialQuickScore={editingReview.isJournal ? (ownerRating?.calculatedOverallScore ?? null) : null}
+          onSaved={() => {
+            setEditingReview(null);
+            router.refresh();
+          }}
+          onDeleted={() => {
+            setEditingReview(null);
+            router.refresh();
+          }}
+        />
+      )}
     </div>
   );
 }

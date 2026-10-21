@@ -114,6 +114,8 @@ export function MediaPublicOverview({
             </a>
           ) : (
             <WriteReviewButton
+              isCanonical
+              buttonId="canonical-journal-button"
               autoOpen={shouldAutoOpen}
               mediaItemId={journalMediaId}
               mediaTitle={media.title}
