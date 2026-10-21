@@ -1,30 +1,29 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "@/lib/server-session";
-import { checkIsAdmin } from "@/lib/admin";
 import { executeCleanup } from "@/lib/library-cleanup";
-import { TEST_WORKSPACE_USER_ID } from "@/lib/test-workspace";
-import { cookies } from "next/headers";
+import { verifyAdminOrTestSession } from "@/lib/test-workspace";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(request);
-  const cookieStore = await cookies();
-  const adminReturnToken = cookieStore.get("aubrey_admin_session_token")?.value;
-
-  const isDirectAdmin = session && checkIsAdmin(session);
-  const isInTestWorkspaceWithReturn =
-    session?.user.id === TEST_WORKSPACE_USER_ID && Boolean(adminReturnToken);
-
-  if (!isDirectAdmin && !isInTestWorkspaceWithReturn) {
+  const auth = await verifyAdminOrTestSession(request);
+  if (!auth.authorized) {
     return NextResponse.json(
-      { error: "Unauthorized. Admin privileges required." },
-      { status: 403 }
+      { error: auth.error || "Unauthorized. Admin privileges required." },
+      { status: auth.status || 403 }
+    );
+  }
+
+  const targetUserId = auth.adminUser?.id || auth.user?.id;
+  if (!targetUserId) {
+    return NextResponse.json(
+      { error: "Could not identify target administrator account." },
+      { status: 400 }
     );
   }
 
   const body = await request.json().catch(() => ({}));
   const { token, confirmationPhrase, dryRun = true } = body;
+  const isDryRun = Boolean(dryRun);
 
   if (confirmationPhrase !== "PERMANENTLY_CLEAN_MY_LETTERBOXD_HISTORY") {
     return NextResponse.json(
@@ -43,8 +42,18 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (!isDryRun && auth.isTestWorkspace) {
+    return NextResponse.json(
+      {
+        error:
+          "Live cleanup execution requires switching back to your direct administrator account. Test workspace sessions are restricted to dry-run previews.",
+      },
+      { status: 400 }
+    );
+  }
+
   try {
-    const result = await executeCleanup(session.user.id, token, { dryRun: Boolean(dryRun) });
+    const result = await executeCleanup(targetUserId, token, { dryRun: isDryRun });
     return NextResponse.json({
       success: true,
       result,

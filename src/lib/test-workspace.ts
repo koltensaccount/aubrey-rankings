@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import {
   user,
+  session as sessionTable,
   diaryEntries,
   reviews,
   ratings,
@@ -8,12 +9,126 @@ import {
   collectionEntries,
   collections,
   unresolvedImportItems,
+  importSourceMappings,
 } from "@/db/schema";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, inArray, sql, and, gt } from "drizzle-orm";
 import { seedDefaultRatingSystem } from "@/lib/auth";
+import { getServerSession } from "@/lib/server-session";
+import { checkIsAdmin } from "@/lib/admin";
+import { cookies } from "next/headers";
+import type { NextRequest } from "next/server";
 
 export const TEST_WORKSPACE_USER_ID = "usr_test_import_workspace";
 export const TEST_WORKSPACE_EMAIL = "test-workspace@aubrey.local";
+
+export interface AdminAuthResult {
+  authorized: boolean;
+  status: number;
+  error?: string;
+  isDirectAdmin: boolean;
+  isTestWorkspace: boolean;
+  user?: any;
+  adminUser?: any;
+}
+
+/**
+ * Hardened admin session verification for Import Lab and Admin endpoints.
+ * Explicitly verifies the database-backed session relationship when switched into
+ * the test workspace. Never authorizes based on the mere presence of a cookie.
+ */
+export async function verifyAdminOrTestSession(
+  request: NextRequest
+): Promise<AdminAuthResult> {
+  const session = await getServerSession(request);
+
+  // Extract admin return token from request cookies or fallback to next/headers
+  let adminReturnToken = request?.cookies?.get?.("aubrey_admin_session_token")?.value;
+  if (!adminReturnToken && request?.headers) {
+    const rawCookie = request.headers.get("cookie") || "";
+    const match = rawCookie.match(/aubrey_admin_session_token=([^;]+)/);
+    if (match) adminReturnToken = match[1];
+  }
+  if (!adminReturnToken) {
+    try {
+      const cookieStore = await cookies();
+      adminReturnToken = cookieStore.get("aubrey_admin_session_token")?.value;
+    } catch {
+      // Outside Next.js request context (e.g. tests)
+    }
+  }
+
+  // 1. Direct authenticated admin
+  if (session && checkIsAdmin(session)) {
+    return {
+      authorized: true,
+      status: 200,
+      isDirectAdmin: true,
+      isTestWorkspace: false,
+      user: session.user,
+      adminUser: session.user,
+    };
+  }
+
+  // 2. Switched into test workspace
+  if (session?.user?.id === TEST_WORKSPACE_USER_ID) {
+    if (!adminReturnToken) {
+      return {
+        authorized: false,
+        status: 401,
+        error: "Unauthorized: Test workspace active but admin return token is missing.",
+        isDirectAdmin: false,
+        isTestWorkspace: true,
+      };
+    }
+
+    // Must verify against database session table!
+    const adminDbSession = await db.query.session.findFirst({
+      where: and(
+        eq(sessionTable.token, adminReturnToken),
+        gt(sessionTable.expiresAt, new Date())
+      ),
+      with: { user: true },
+    });
+
+    if (!adminDbSession?.user) {
+      return {
+        authorized: false,
+        status: 403,
+        error: "Unauthorized: Admin return session is invalid or has expired.",
+        isDirectAdmin: false,
+        isTestWorkspace: true,
+      };
+    }
+
+    if (!checkIsAdmin({ user: adminDbSession.user })) {
+      return {
+        authorized: false,
+        status: 403,
+        error:
+          "Forbidden: The session linked to the return token is not an authorized administrator.",
+        isDirectAdmin: false,
+        isTestWorkspace: true,
+      };
+    }
+
+    return {
+      authorized: true,
+      status: 200,
+      isDirectAdmin: false,
+      isTestWorkspace: true,
+      user: session.user,
+      adminUser: adminDbSession.user,
+    };
+  }
+
+  return {
+    authorized: false,
+    status: 403,
+    error: "Forbidden: Administrator privileges required.",
+    isDirectAdmin: false,
+    isTestWorkspace: false,
+  };
+}
 
 /**
  * Ensures the isolated test workspace user account exists.
@@ -109,6 +224,11 @@ export async function resetTestWorkspace(targetUserId: string = TEST_WORKSPACE_U
       .delete(unresolvedImportItems)
       .where(eq(unresolvedImportItems.userId, targetUserId))
       .returning({ id: unresolvedImportItems.id });
+
+    // 7. Delete mappings created during test workspace imports
+    await tx
+      .delete(importSourceMappings)
+      .where(sql`("metadata"->>'isTestWorkspace')::boolean = true`);
 
     return {
       diaryDeleted: diaryDeleted.length,

@@ -287,7 +287,12 @@ export const KNOWN_TV_EXCEPTIONS: Array<{
  */
 export function calculateCandidateScore(
   source: { title: string; year: number | null },
-  candidate: { title: string; releaseDate?: string | null; voteCount?: number }
+  candidate: {
+    title: string;
+    releaseDate?: string | null;
+    voteCount?: number;
+    mediaType?: string;
+  }
 ): number {
   const normSource = normalizeTitle(source.title);
   const normCandidate = normalizeTitle(candidate.title);
@@ -320,6 +325,9 @@ export function calculateCandidateScore(
       score += 0.35; // Perfect year match
     } else if (diff === 1) {
       score += 0.25; // Permitted 1-year discrepancy (festival vs theatrical)
+    } else if (candidate.mediaType === "tv" && source.year >= candidateYear) {
+      // Television show match: the series premiered prior to or during the episode's air year
+      score += 0.2;
     } else {
       score -= 0.3; // Significant year difference
     }
@@ -341,6 +349,14 @@ export function calculateCandidateScore(
  */
 const resolutionCache = new Map<string, MatchedMediaResult | null>();
 
+export function clearResolutionCache(): void {
+  resolutionCache.clear();
+}
+
+export function invalidateResolutionCache(key: string): void {
+  resolutionCache.delete(key);
+}
+
 /**
  * Resolves a single Letterboxd source item to a canonical Aubrey media record.
  * Uses a staged resolution workflow:
@@ -353,12 +369,18 @@ const resolutionCache = new Map<string, MatchedMediaResult | null>();
  */
 export async function resolveLetterboxdMediaIdentity(
   film: SourceFilmCandidate,
-  options?: { allowSyntheticPlaceholders?: boolean }
+  options?: {
+    allowSyntheticPlaceholders?: boolean;
+    persist?: boolean;
+    isTestWorkspace?: boolean;
+  }
 ): Promise<{ match: MatchedMediaResult | null; quarantine?: UnmatchedQuarantineResult }> {
   const cleanTitle = film.title.trim();
   const year = film.year;
   const uri = film.letterboxdUri?.trim() || null;
-  const cacheKey = `${cleanTitle.toLowerCase()}::${year ?? ""}`;
+  const cacheKey = uri
+    ? `uri::${uri.toLowerCase()}`
+    : `${cleanTitle.toLowerCase()}::${year ?? ""}`;
   const hasTmdbCredentials = Boolean(
     process.env.TMDB_API_READ_ACCESS_TOKEN || process.env.TMDB_API_KEY
   );
@@ -414,19 +436,19 @@ export async function resolveLetterboxdMediaIdentity(
   // -------------------------------------------------------------------------
   // STEP 2: Check Existing Aubrey DB for Verified Media Records with Artwork
   // -------------------------------------------------------------------------
-  const titleMatches = await db.query.mediaItems.findMany({
+  const allTitleMatches = await db.query.mediaItems.findMany({
     where: (m) => sql`lower(trim(${m.title})) = lower(${cleanTitle})`,
   });
 
-  if (titleMatches.length > 1) {
+  if (allTitleMatches.length > 1) {
     if (!year) {
       // Ambiguous: multiple records exist with this title but no year provided
       return {
         match: null,
         quarantine: {
           reason: "ambiguous_media",
-          details: `Title "${cleanTitle}" matches multiple existing database films with different years (${titleMatches.map((m) => m.releaseDate ? m.releaseDate.slice(0, 4) : "unknown").join(", ")}) but export row specified no year. Quarantined without assignment.`,
-          candidates: titleMatches.map((m) => ({
+          details: `Title "${cleanTitle}" matches multiple existing database films with different years (${allTitleMatches.map((m) => m.releaseDate ? m.releaseDate.slice(0, 4) : "unknown").join(", ")}) but export row specified no year. Quarantined without assignment.`,
+          candidates: allTitleMatches.map((m) => ({
             id: m.tmdbId || 0,
             title: m.title,
             year: m.releaseDate ? parseInt(m.releaseDate.slice(0, 4), 10) || null : null,
@@ -438,18 +460,27 @@ export async function resolveLetterboxdMediaIdentity(
       };
     }
 
-    const exactYearMatches = titleMatches.filter(
+    const exactYearMatches = allTitleMatches.filter(
       (m) => m.releaseDate && m.releaseDate.slice(0, 4) === String(year)
     );
 
     if (exactYearMatches.length === 1) {
-      const result: MatchedMediaResult = {
-        mediaItem: exactYearMatches[0],
-        confidence: "exact",
-        isTvException: exactYearMatches[0].mediaType === "episode",
-      };
-      resolutionCache.set(cacheKey, result);
-      return { match: result };
+      const matchCandidate = exactYearMatches[0];
+      // Do not prefer incomplete placeholder DB records over verified TMDB identities!
+      // If the candidate has no TMDB ID and no artwork, fall through to TMDB search.
+      if (
+        matchCandidate.tmdbId != null ||
+        matchCandidate.posterPath != null ||
+        matchCandidate.stillPath != null
+      ) {
+        const result: MatchedMediaResult = {
+          mediaItem: matchCandidate,
+          confidence: "exact",
+          isTvException: matchCandidate.mediaType === "episode",
+        };
+        resolutionCache.set(cacheKey, result);
+        return { match: result };
+      }
     }
 
     if (exactYearMatches.length > 1) {
@@ -469,17 +500,21 @@ export async function resolveLetterboxdMediaIdentity(
         },
       };
     }
-  } else if (titleMatches.length === 1) {
-    const m = titleMatches[0];
+  } else if (allTitleMatches.length === 1) {
+    const m = allTitleMatches[0];
     const mYear = m.releaseDate ? parseInt(m.releaseDate.slice(0, 4), 10) : null;
     if (!year || !mYear || mYear === year) {
-      const result: MatchedMediaResult = {
-        mediaItem: m,
-        confidence: "exact",
-        isTvException: m.mediaType === "episode",
-      };
-      resolutionCache.set(cacheKey, result);
-      return { match: result };
+      // Do not prefer incomplete placeholder DB records over verified TMDB identities!
+      // If the record has no TMDB ID and no artwork, fall through to TMDB search.
+      if (m.tmdbId != null || m.posterPath != null || m.stillPath != null) {
+        const result: MatchedMediaResult = {
+          mediaItem: m,
+          confidence: "exact",
+          isTvException: m.mediaType === "episode",
+        };
+        resolutionCache.set(cacheKey, result);
+        return { match: result };
+      }
     }
   }
 
@@ -488,6 +523,24 @@ export async function resolveLetterboxdMediaIdentity(
   // -------------------------------------------------------------------------
   const tvException = KNOWN_TV_EXCEPTIONS.find((e) => e.pattern.test(cleanTitle));
   if (tvException) {
+    // If preview mode (persist === false), return in-memory representation without DB write
+    if (options?.persist === false) {
+      const result: MatchedMediaResult = {
+        mediaItem: {
+          id: `preview_tv_${tvException.seriesTmdbId}_s${tvException.seasonNumber}_e${tvException.episodeNumber}`,
+          title: `${tvException.seriesTitle}: ${tvException.episodeTitle}`,
+          mediaType: "episode",
+        },
+        confidence: "tmdb_verified",
+        isTvException: true,
+        parentShowTitle: tvException.seriesTitle,
+        seasonNumber: tvException.seasonNumber,
+        episodeNumber: tvException.episodeNumber,
+      };
+      resolutionCache.set(cacheKey, result);
+      return { match: result };
+    }
+
     try {
       const episodeKey = `tv_${tvException.seriesTmdbId}_s${tvException.seasonNumber}_e${tvException.episodeNumber}`;
       const resolvedEpId = await resolveMediaItem(episodeKey);
@@ -513,6 +566,7 @@ export async function resolveLetterboxdMediaIdentity(
                 seasonNumber: tvException.seasonNumber,
                 episodeNumber: tvException.episodeNumber,
                 stillPath: epRecord.stillPath,
+                isTestWorkspace: Boolean(options?.isTestWorkspace),
               },
             })
             .onConflictDoNothing();
@@ -539,12 +593,14 @@ export async function resolveLetterboxdMediaIdentity(
   // -------------------------------------------------------------------------
   try {
     const searchRes = await tmdb.searchMovies(cleanTitle);
-    const results = searchRes?.results || [];
+    let results: any[] = searchRes?.results || [];
 
     if (results.length === 0) {
       // Also attempt multi search in case it was cataloged under TV on TMDB
       const multiRes = await tmdb.searchMulti(cleanTitle);
-      const multiResults = multiRes?.results || [];
+      const multiResults = (multiRes?.results || []).filter(
+        (c: any) => c.media_type === "movie" || c.media_type === "tv"
+      );
       if (multiResults.length === 0) {
         return {
           match: null,
@@ -554,16 +610,28 @@ export async function resolveLetterboxdMediaIdentity(
           },
         };
       }
+      results = multiResults;
     }
 
-    // Score and rank candidates
-    const scoredCandidates = results.map((c) => ({
-      candidate: c,
-      score: calculateCandidateScore(
-        { title: cleanTitle, year },
-        { title: c.title || "", releaseDate: c.release_date, voteCount: (c as any).vote_count }
-      ),
-    }));
+    // Score and rank candidates (supporting movie and TV)
+    const scoredCandidates = results.map((c: any) => {
+      const candidateTitle = c.title || c.name || "";
+      const candidateReleaseDate = c.release_date || c.first_air_date || null;
+      const mediaType = c.media_type || "movie";
+      return {
+        candidate: c,
+        mediaType,
+        score: calculateCandidateScore(
+          { title: cleanTitle, year },
+          {
+            title: candidateTitle,
+            releaseDate: candidateReleaseDate,
+            voteCount: c.vote_count,
+            mediaType,
+          }
+        ),
+      };
+    });
 
     // Sort descending by score
     scoredCandidates.sort((a, b) => b.score - a.score);
@@ -582,12 +650,14 @@ export async function resolveLetterboxdMediaIdentity(
         match: null,
         quarantine: {
           reason: "ambiguous_media",
-          details: `Multiple closely matching films found for "${cleanTitle}" (${year ?? "no year"}). Disambiguation required.`,
+          details: `Multiple closely matching titles found for "${cleanTitle}" (${year ?? "no year"}). Disambiguation required.`,
           candidates: scoredCandidates.slice(0, 5).map((sc) => ({
             id: sc.candidate.id,
-            title: sc.candidate.title || "",
-            year: sc.candidate.release_date ? parseInt(sc.candidate.release_date.slice(0, 4), 10) || null : null,
-            mediaType: "movie",
+            title: sc.candidate.title || sc.candidate.name || "",
+            year: (sc.candidate.release_date || sc.candidate.first_air_date)
+              ? parseInt((sc.candidate.release_date || sc.candidate.first_air_date).slice(0, 4), 10) || null
+              : null,
+            mediaType: sc.mediaType,
             posterPath: sc.candidate.poster_path,
             overview: sc.candidate.overview,
           })),
@@ -597,11 +667,34 @@ export async function resolveLetterboxdMediaIdentity(
 
     // High confidence threshold for automatic assignment (>= 0.80)
     if (topCandidate && topCandidate.score >= 0.80) {
-      const tmdbMovieId = topCandidate.candidate.id;
-      const canonicalMediaId = `movie_${tmdbMovieId}`;
+      const tmdbId = topCandidate.candidate.id;
+      const isTv = topCandidate.mediaType === "tv";
+      const resolvedMediaType = isTv ? "tv" : "movie";
+      const candidateTitle = topCandidate.candidate.title || topCandidate.candidate.name || cleanTitle;
+      const candidatePoster = topCandidate.candidate.poster_path;
+      const candidateDate = topCandidate.candidate.release_date || topCandidate.candidate.first_air_date;
 
-      // Resolve through resolveMediaItem to fetch full canonical TMDB details and persist
-      const resolvedId = await resolveMediaItem(`tmdb-movie-${tmdbMovieId}`);
+      // Preview mode: return match in-memory without persisting to database!
+      if (options?.persist === false) {
+        const previewResult: MatchedMediaResult = {
+          mediaItem: {
+            id: `preview_${resolvedMediaType}_${tmdbId}`,
+            tmdbId,
+            mediaType: resolvedMediaType,
+            title: candidateTitle,
+            posterPath: candidatePoster,
+            releaseDate: candidateDate,
+          },
+          confidence: "tmdb_verified",
+          isTvException: isTv,
+        };
+        resolutionCache.set(cacheKey, previewResult);
+        return { match: previewResult };
+      }
+
+      // Persist mode: resolve through resolveMediaItem
+      const identifier = isTv ? `tmdb-tv-${tmdbId}` : `tmdb-movie-${tmdbId}`;
+      const resolvedId = await resolveMediaItem(identifier);
       if (resolvedId) {
         const persisted = await db.query.mediaItems.findFirst({
           where: eq(mediaItems.id, resolvedId),
@@ -617,15 +710,16 @@ export async function resolveLetterboxdMediaIdentity(
               sourceUri: uri,
               sourceTitle: cleanTitle,
               sourceYear: year,
-              sourceMediaType: "movie",
+              sourceMediaType: resolvedMediaType,
               mediaItemId: persisted.id,
               confidence: "tmdb_verified",
               metadata: {
-                tmdbId: tmdbMovieId,
+                tmdbId,
                 title: persisted.title,
                 posterPath: persisted.posterPath,
                 releaseDate: persisted.releaseDate,
                 score: topCandidate.score,
+                isTestWorkspace: Boolean(options?.isTestWorkspace),
               },
             })
             .onConflictDoNothing();
@@ -633,7 +727,7 @@ export async function resolveLetterboxdMediaIdentity(
           const result: MatchedMediaResult = {
             mediaItem: persisted,
             confidence: "tmdb_verified",
-            isTvException: false,
+            isTvException: isTv,
           };
           resolutionCache.set(cacheKey, result);
           return { match: result };
@@ -657,12 +751,14 @@ export async function resolveLetterboxdMediaIdentity(
       match: null,
       quarantine: {
         reason: "ambiguous_media",
-        details: `Top candidate "${topCandidate?.candidate.title}" matched with insufficient confidence (${((topCandidate?.score || 0) * 100).toFixed(0)}%). Quarantined for review.`,
+        details: `Top candidate "${topCandidate?.candidate.title || topCandidate?.candidate.name}" matched with insufficient confidence (${((topCandidate?.score || 0) * 100).toFixed(0)}%). Quarantined for review.`,
         candidates: scoredCandidates.slice(0, 5).map((sc) => ({
           id: sc.candidate.id,
-          title: sc.candidate.title || "",
-          year: sc.candidate.release_date ? parseInt(sc.candidate.release_date.slice(0, 4), 10) || null : null,
-          mediaType: "movie",
+          title: sc.candidate.title || sc.candidate.name || "",
+          year: (sc.candidate.release_date || sc.candidate.first_air_date)
+            ? parseInt((sc.candidate.release_date || sc.candidate.first_air_date).slice(0, 4), 10) || null
+            : null,
+          mediaType: sc.mediaType,
           posterPath: sc.candidate.poster_path,
           overview: sc.candidate.overview,
         })),
@@ -697,7 +793,11 @@ export async function resolveLetterboxdMediaIdentity(
 export async function batchResolveIdentities(
   films: SourceFilmCandidate[],
   concurrency = 5,
-  options?: { allowSyntheticPlaceholders?: boolean }
+  options?: {
+    allowSyntheticPlaceholders?: boolean;
+    persist?: boolean;
+    isTestWorkspace?: boolean;
+  }
 ): Promise<{
   resolvedMap: Map<string, MatchedMediaResult>;
   quarantineMap: Map<string, UnmatchedQuarantineResult>;

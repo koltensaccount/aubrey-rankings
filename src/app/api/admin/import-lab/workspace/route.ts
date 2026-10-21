@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "@/lib/server-session";
-import { checkIsAdmin } from "@/lib/admin";
 import {
   ensureTestWorkspaceUser,
   getTestWorkspaceStats,
+  verifyAdminOrTestSession,
   TEST_WORKSPACE_USER_ID,
   TEST_WORKSPACE_EMAIL,
 } from "@/lib/test-workspace";
@@ -11,14 +10,17 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
-  const session = await getServerSession(request);
-  if (!session || !checkIsAdmin(session)) {
-    return NextResponse.json({ error: "Unauthorized. Admin privileges required." }, { status: 403 });
+  const auth = await verifyAdminOrTestSession(request);
+  if (!auth.authorized) {
+    return NextResponse.json(
+      { error: auth.error || "Unauthorized. Admin privileges required." },
+      { status: auth.status || 403 }
+    );
   }
 
   await ensureTestWorkspaceUser();
   const stats = await getTestWorkspaceStats();
-  const isActive = session.user.id === TEST_WORKSPACE_USER_ID || Boolean((session.user as any).isTestWorkspace);
+  const isActive = auth.isTestWorkspace;
 
   return NextResponse.json({
     workspace: {

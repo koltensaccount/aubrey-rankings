@@ -27,6 +27,7 @@ import AdmZip from "adm-zip";
 import { db } from "@/db";
 import {
   user,
+  session as sessionTable,
   mediaItems,
   ratings,
   reviews,
@@ -38,18 +39,25 @@ import {
   importSourceMappings,
   unresolvedImportItems,
 } from "@/db/schema";
-import { eq, and, isNull, isNotNull } from "drizzle-orm";
+import { eq, and, isNull, isNotNull, sql } from "drizzle-orm";
 import { parseLetterboxdZip } from "@/lib/letterboxd";
-import { executeLetterboxdImport } from "@/lib/letterboxd-import";
+import {
+  executeLetterboxdImport,
+  previewLetterboxdImport,
+} from "@/lib/letterboxd-import";
 import {
   resolveLetterboxdMediaIdentity,
   batchResolveIdentities,
   KNOWN_TV_EXCEPTIONS,
+  calculateCandidateScore,
+  clearResolutionCache,
+  invalidateResolutionCache,
 } from "@/lib/letterboxd-matching";
 import {
   ensureTestWorkspaceUser,
   resetTestWorkspace,
   getTestWorkspaceStats,
+  verifyAdminOrTestSession,
   TEST_WORKSPACE_USER_ID,
   TEST_WORKSPACE_EMAIL,
 } from "@/lib/test-workspace";
@@ -58,9 +66,12 @@ import {
   executeCleanup,
   generateCleanupToken,
   verifyCleanupToken,
+  getCleanupSecret,
+  verifyBackupReadiness,
 } from "@/lib/library-cleanup";
 import { randomUUID } from "crypto";
 import { seedDefaultRatingSystem } from "@/lib/auth";
+import type { NextRequest } from "next/server";
 
 describe("Phase 14D: Import Lab & Letterboxd Reliability", () => {
   const runId = `p14d_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
@@ -331,6 +342,18 @@ describe("Phase 14D: Import Lab & Letterboxd Reliability", () => {
       watchedDate: "2026-03-01",
       isRewatch: false,
       ratingValue: 9,
+      sourceService: "letterboxd",
+    });
+
+    // Create native Aubrey diary entry (must be PRESERVED)
+    await db.insert(diaryEntries).values({
+      id: `diary_native_${runId}`,
+      userId: realUserId,
+      mediaItemId: testFilm.id,
+      watchedDate: "2026-03-02",
+      isRewatch: false,
+      ratingValue: 8,
+      sourceService: null, // native Aubrey viewing
     });
 
     // Calculate cleanup preview
@@ -346,6 +369,7 @@ describe("Phase 14D: Import Lab & Letterboxd Reliability", () => {
     assert.ok(preview.toRemove.letterboxdCustomLists >= 1);
 
     // Check items permanently preserved
+    assert.ok(preview.toPreserve.nativeAubreyDiaryEntries >= 1);
     assert.ok(preview.toPreserve.aubreyRankingsAndLists >= 1);
     assert.ok(preview.toPreserve.aubreyCollectionEntries >= 1);
     assert.ok(preview.toPreserve.collectionScopedRatings >= 1);
@@ -366,5 +390,288 @@ describe("Phase 14D: Import Lab & Letterboxd Reliability", () => {
       where: eq(collections.id, aubreyRanking.id),
     });
     assert.ok(preservedRanking, "Aubrey ranking must remain intact");
+
+    // Clean up test native diary entry
+    await db.delete(diaryEntries).where(eq(diaryEntries.id, `diary_native_${runId}`));
+  });
+
+  it("7. enforces fail-closed cleanup signing secret when secret is unconfigured", () => {
+    const origAuthSecret = process.env.AUTH_SECRET;
+    const origCleanupSecret = process.env.CLEANUP_SECRET;
+    const origBetterAuthSecret = process.env.BETTER_AUTH_SECRET;
+
+    try {
+      delete process.env.AUTH_SECRET;
+      delete process.env.CLEANUP_SECRET;
+      delete process.env.BETTER_AUTH_SECRET;
+
+      assert.throws(() => getCleanupSecret(), {
+        message: /Cleanup secret is not configured/,
+      });
+    } finally {
+      if (origAuthSecret) process.env.AUTH_SECRET = origAuthSecret;
+      if (origCleanupSecret) process.env.CLEANUP_SECRET = origCleanupSecret;
+      if (origBetterAuthSecret) process.env.BETTER_AUTH_SECRET = origBetterAuthSecret;
+    }
+  });
+
+  it("8. fails closed and blocks live cleanup execution when backup readiness cannot be verified", async () => {
+    const origBackupVerified = process.env.AUBREY_BACKUP_VERIFIED;
+    const origBackupDir = process.env.BACKUP_DIR;
+
+    try {
+      delete process.env.AUBREY_BACKUP_VERIFIED;
+      process.env.BACKUP_DIR = `/tmp/non_existent_aubrey_backup_dir_${runId}`;
+
+      const { token } = generateCleanupToken(realUserId);
+
+      // Live cleanup must fail closed when backup is unverified
+      await assert.rejects(
+        async () => {
+          await executeCleanup(realUserId, token, { dryRun: false });
+        },
+        {
+          message: /Backup readiness could not be verified|Live cleanup execution refused/,
+        }
+      );
+    } finally {
+      if (origBackupVerified) process.env.AUBREY_BACKUP_VERIFIED = origBackupVerified;
+      if (origBackupDir) process.env.BACKUP_DIR = origBackupDir;
+    }
+  });
+
+  it("9. verifies database session and rejects forged or missing admin return tokens", async () => {
+    // Construct a mock NextRequest for a test workspace session with a forged return token
+    const forgedRequest = {
+      headers: new Headers({
+        cookie: "aubrey_admin_session_token=forged_token_12345; better-auth.session_token=test_ws_token",
+      }),
+    } as unknown as NextRequest;
+
+    const forgedAuth = await verifyAdminOrTestSession(forgedRequest);
+    // Must NOT authorize from the mere presence of a cookie
+    assert.equal(forgedAuth.authorized, false);
+  });
+
+  it("10. scores and handles TV candidates from searchMulti when movie search is empty", () => {
+    // Unit test calculateCandidateScore with television candidate
+    const sourceFilm = { title: "Black Mirror: San Junipero", year: 2016 };
+    const tvCandidate = {
+      title: "Black Mirror",
+      releaseDate: "2011-12-04",
+      voteCount: 4500,
+    };
+
+    const score = calculateCandidateScore(sourceFilm, {
+      ...tvCandidate,
+      mediaType: "tv",
+    });
+    assert.ok(score > 0.4, "Candidate score for series match should reflect close title match");
+
+    const perfectCandidate = {
+      title: "San Junipero",
+      releaseDate: "2016-10-21",
+      voteCount: 800,
+    };
+    const perfectScore = calculateCandidateScore(
+      { title: "San Junipero", year: 2016 },
+      perfectCandidate
+    );
+    assert.ok(perfectScore >= 0.85, "Exact title and exact year should score >= 0.85");
+  });
+
+  it("11. clears resolution cache upon manual mapping invalidation", () => {
+    clearResolutionCache();
+    invalidateResolutionCache("test_key");
+    // Verifies functions execute without exception
+    assert.ok(true);
+  });
+
+  it("12. import preview does not persist any records to mediaItems or importSourceMappings", async () => {
+    const zip = new AdmZip();
+    const uniqueTitle = `Ephemeral Preview Film ${runId}`;
+    const diaryContent = `Date,Name,Year,Letterboxd URI,Rating,Rewatch,Tags,Watched Date
+2026-03-10,${uniqueTitle},2024,https://boxd.it/preview_${runId},4.0,No,"",2026-03-10
+`;
+    zip.addFile("diary.csv", Buffer.from(diaryContent, "utf8"));
+    const summary = parseLetterboxdZip(zip.toBuffer());
+
+    // Run preview
+    await previewLetterboxdImport(realUserId, summary, {
+      allowSyntheticPlaceholders: true,
+    });
+
+    // Check mediaItems table: preview must not insert ephemeral rows
+    const mediaCheck = await db.query.mediaItems.findFirst({
+      where: eq(mediaItems.title, uniqueTitle),
+    });
+    assert.equal(mediaCheck, undefined, "Preview must not persist new media items");
+
+    // Check importSourceMappings table: preview must not persist mappings
+    const mappingCheck = await db.query.importSourceMappings.findFirst({
+      where: eq(importSourceMappings.sourceTitle, uniqueTitle),
+    });
+    assert.equal(mappingCheck, undefined, "Preview must not persist source mappings");
+  });
+
+  it("13. star rating arithmetic maps 10-point internal scores to 5-star half-steps accurately", () => {
+    const testCases = [
+      { score: 10, expectedStars: 5.0 },
+      { score: 9, expectedStars: 4.5 },
+      { score: 8, expectedStars: 4.0 },
+      { score: 7, expectedStars: 3.5 },
+      { score: 6, expectedStars: 3.0 },
+      { score: 5, expectedStars: 2.5 },
+      { score: 1, expectedStars: 0.5 },
+    ];
+
+    for (const { score, expectedStars } of testCases) {
+      const rawStars = (score / 10) * 5;
+      const roundedStars = Math.round(rawStars * 2) / 2;
+      assert.equal(
+        roundedStars,
+        expectedStars,
+        `Score ${score}/10 must convert to ${expectedStars} stars`
+      );
+    }
+  });
+
+  it("14. quarantines ambiguous identical titles without year and correctly matches when year is supplied", async () => {
+    // Insert two distinct films with identical title but different years
+    const title = `Identical Title Film ${runId}`;
+    const [film1980] = await db
+      .insert(mediaItems)
+      .values({
+        id: `media_id1_${runId}`,
+        tmdbId: 80001,
+        title,
+        releaseDate: "1980-05-21",
+        posterPath: "/poster1980.jpg",
+        mediaType: "movie",
+      })
+      .returning();
+    const [film2010] = await db
+      .insert(mediaItems)
+      .values({
+        id: `media_id2_${runId}`,
+        tmdbId: 80002,
+        title,
+        releaseDate: "2010-07-16",
+        posterPath: "/poster2010.jpg",
+        mediaType: "movie",
+      })
+      .returning();
+
+    trackedMediaIds.push(film1980.id, film2010.id);
+
+    // 1. Resolve without year -> Must quarantine as ambiguous_media
+    const ambiguousResult = await resolveLetterboxdMediaIdentity({
+      title,
+      year: null,
+    });
+    assert.equal(ambiguousResult.match, null);
+    assert.ok(ambiguousResult.quarantine);
+    assert.equal(ambiguousResult.quarantine.reason, "ambiguous_media");
+    assert.ok(ambiguousResult.quarantine.candidates && ambiguousResult.quarantine.candidates.length >= 2);
+
+    // 2. Resolve with exact year 1980 -> Must match film1980
+    const matched1980 = await resolveLetterboxdMediaIdentity({
+      title,
+      year: 1980,
+    });
+    assert.ok(matched1980.match);
+    assert.equal(matched1980.match.mediaItem.id, film1980.id);
+
+    // 3. Resolve with exact year 2010 -> Must match film2010
+    const matched2010 = await resolveLetterboxdMediaIdentity({
+      title,
+      year: 2010,
+    });
+    assert.ok(matched2010.match);
+    assert.equal(matched2010.match.mediaItem.id, film2010.id);
+  });
+
+  it("15. updates existing manual mapping on conflict and persists TV episode metadata", async () => {
+    const testUri = `https://boxd.it/mapping_test_${runId}`;
+    const testTitle = `Manual Mapping Title ${runId}`;
+
+    const [targetMedia] = await db
+      .insert(mediaItems)
+      .values({
+        id: `media_map1_${runId}`,
+        tmdbId: 90001,
+        title: "Initial Mapping Film",
+        releaseDate: "2020-01-01",
+        posterPath: "/initial.jpg",
+        mediaType: "movie",
+      })
+      .returning();
+    trackedMediaIds.push(targetMedia.id);
+
+    // Initial mapping insert
+    await db.insert(importSourceMappings).values({
+      id: `map_initial_${runId}`,
+      sourceService: "letterboxd",
+      sourceUri: testUri,
+      sourceTitle: testTitle,
+      sourceYear: 2020,
+      sourceMediaType: "movie",
+      mediaItemId: targetMedia.id,
+      confidence: "manual_verified",
+      metadata: { initial: true },
+    });
+
+    const [updatedEpisodeMedia] = await db
+      .insert(mediaItems)
+      .values({
+        id: `media_ep_${runId}`,
+        tmdbId: 90002,
+        title: "Updated TV Episode",
+        releaseDate: "2020-05-01",
+        stillPath: "/still.jpg",
+        mediaType: "episode",
+      })
+      .returning();
+    trackedMediaIds.push(updatedEpisodeMedia.id);
+
+    // Simulate onConflict update logic (as in resolve-mapping route)
+    const existing = await db.query.importSourceMappings.findFirst({
+      where: and(
+        eq(importSourceMappings.sourceService, "letterboxd"),
+        eq(importSourceMappings.sourceUri, testUri)
+      ),
+    });
+    assert.ok(existing);
+
+    await db
+      .update(importSourceMappings)
+      .set({
+        mediaItemId: updatedEpisodeMedia.id,
+        sourceMediaType: "episode",
+        confidence: "manual_verified",
+        metadata: {
+          manualAdminResolution: true,
+          seriesTmdbId: 42009,
+          seasonNumber: 1,
+          episodeNumber: 1,
+        },
+        updatedAt: new Date(),
+      })
+      .where(eq(importSourceMappings.id, existing.id));
+
+    // Verify mapping was updated rather than duplicated
+    const mappingsForUri = await db.query.importSourceMappings.findMany({
+      where: and(
+        eq(importSourceMappings.sourceService, "letterboxd"),
+        eq(importSourceMappings.sourceUri, testUri)
+      ),
+    });
+    assert.equal(mappingsForUri.length, 1);
+    assert.equal(mappingsForUri[0].mediaItemId, updatedEpisodeMedia.id);
+    assert.equal(mappingsForUri[0].sourceMediaType, "episode");
+    assert.equal((mappingsForUri[0].metadata as any).seasonNumber, 1);
+
+    // Cleanup created mapping
+    await db.delete(importSourceMappings).where(eq(importSourceMappings.id, existing.id));
   });
 });

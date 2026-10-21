@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "@/lib/server-session";
-import { checkIsAdmin } from "@/lib/admin";
 import { db } from "@/db";
 import { session as sessionTable, user } from "@/db/schema";
-import { ensureTestWorkspaceUser, TEST_WORKSPACE_USER_ID } from "@/lib/test-workspace";
+import {
+  ensureTestWorkspaceUser,
+  TEST_WORKSPACE_USER_ID,
+  verifyAdminOrTestSession,
+} from "@/lib/test-workspace";
 import { nanoid } from "@/lib/utils";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
@@ -11,24 +13,19 @@ import { cookies } from "next/headers";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(request);
+  const auth = await verifyAdminOrTestSession(request);
+  if (!auth.authorized) {
+    return NextResponse.json(
+      { error: auth.error || "Unauthorized. Admin privileges required." },
+      { status: auth.status || 403 }
+    );
+  }
+
   const cookieStore = await cookies();
   const currentToken =
     cookieStore.get("better-auth.session_token")?.value ||
     cookieStore.get("__Secure-better-auth.session_token")?.value;
   const adminReturnToken = cookieStore.get("aubrey_admin_session_token")?.value;
-
-  // Verify authorization: either currently an admin, OR currently in test workspace with a valid return token
-  const isDirectAdmin = session && checkIsAdmin(session);
-  const isInTestWorkspaceWithReturn =
-    session?.user.id === TEST_WORKSPACE_USER_ID && Boolean(adminReturnToken);
-
-  if (!isDirectAdmin && !isInTestWorkspaceWithReturn) {
-    return NextResponse.json(
-      { error: "Unauthorized. Admin privileges required." },
-      { status: 403 }
-    );
-  }
 
   const body = await request.json().catch(() => ({}));
   const targetActive = Boolean(body.active);

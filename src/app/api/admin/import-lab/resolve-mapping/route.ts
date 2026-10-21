@@ -1,34 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "@/lib/server-session";
-import { checkIsAdmin } from "@/lib/admin";
 import { db } from "@/db";
 import { importSourceMappings, unresolvedImportItems, mediaItems } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { resolveMediaItem } from "@/lib/media-resolution";
 import { randomUUID } from "crypto";
-import { TEST_WORKSPACE_USER_ID } from "@/lib/test-workspace";
-import { cookies } from "next/headers";
+import { verifyAdminOrTestSession } from "@/lib/test-workspace";
+import { clearResolutionCache } from "@/lib/letterboxd-matching";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession(request);
-  const cookieStore = await cookies();
-  const adminReturnToken = cookieStore.get("aubrey_admin_session_token")?.value;
-
-  const isDirectAdmin = session && checkIsAdmin(session);
-  const isInTestWorkspaceWithReturn =
-    session?.user.id === TEST_WORKSPACE_USER_ID && Boolean(adminReturnToken);
-
-  if (!isDirectAdmin && !isInTestWorkspaceWithReturn) {
+  const auth = await verifyAdminOrTestSession(request);
+  if (!auth.authorized) {
     return NextResponse.json(
-      { error: "Unauthorized. Admin privileges required." },
-      { status: 403 }
+      { error: auth.error || "Unauthorized. Admin privileges required." },
+      { status: auth.status || 403 }
     );
   }
 
   const body = await request.json().catch(() => ({}));
-  const { unresolvedItemId, tmdbId, mediaType = "movie" } = body;
+  const { unresolvedItemId, tmdbId, mediaType = "movie", seasonNumber, episodeNumber } = body;
 
   if (!unresolvedItemId || !tmdbId) {
     return NextResponse.json(
@@ -46,12 +37,32 @@ export async function POST(request: NextRequest) {
   }
 
   try {
+    const isEpisode =
+      mediaType === "episode" ||
+      (seasonNumber !== undefined && episodeNumber !== undefined && seasonNumber !== null && episodeNumber !== null);
+
     // 1. Resolve media item in Aubrey database
-    const identifier = mediaType === "tv" ? `tmdb-tv-${tmdbId}` : `tmdb-movie-${tmdbId}`;
+    let identifier: string;
+    let resolvedMediaType: string = mediaType;
+
+    if (isEpisode) {
+      identifier = `tv_${tmdbId}_s${seasonNumber}_e${episodeNumber}`;
+      resolvedMediaType = "episode";
+    } else if (mediaType === "tv") {
+      identifier = `tmdb-tv-${tmdbId}`;
+      resolvedMediaType = "tv";
+    } else {
+      identifier = `tmdb-movie-${tmdbId}`;
+      resolvedMediaType = "movie";
+    }
+
     const resolvedMediaId = await resolveMediaItem(identifier);
 
     if (!resolvedMediaId) {
-      return NextResponse.json({ error: "Failed to resolve media item from TMDB" }, { status: 500 });
+      return NextResponse.json(
+        { error: "Failed to resolve media item from TMDB" },
+        { status: 500 }
+      );
     }
 
     const resolvedRecord = await db.query.mediaItems.findFirst({
@@ -63,27 +74,73 @@ export async function POST(request: NextRequest) {
     const sourceYear = sourceData?.year || null;
     const sourceUri = sourceData?.uri || sourceData?.letterboxdUri || null;
 
-    // 2. Persist confirmed mapping in import_source_mappings
-    await db
-      .insert(importSourceMappings)
-      .values({
+    const metadataObj: Record<string, any> = {
+      manualAdminResolution: true,
+      tmdbId,
+      resolvedAt: new Date().toISOString(),
+      mediaTitle: resolvedRecord?.title,
+      posterPath: resolvedRecord?.posterPath,
+      stillPath: resolvedRecord?.stillPath,
+    };
+    if (isEpisode) {
+      metadataObj.seriesTmdbId = tmdbId;
+      metadataObj.seasonNumber = seasonNumber;
+      metadataObj.episodeNumber = episodeNumber;
+    }
+
+    // 2. Persist confirmed mapping in import_source_mappings with onConflictDoUpdate
+    let existingMapping = null;
+    if (sourceUri) {
+      existingMapping = await db.query.importSourceMappings.findFirst({
+        where: and(
+          eq(importSourceMappings.sourceService, "letterboxd"),
+          eq(importSourceMappings.sourceUri, sourceUri)
+        ),
+      });
+    }
+
+    if (!existingMapping) {
+      existingMapping = await db.query.importSourceMappings.findFirst({
+        where: and(
+          eq(importSourceMappings.sourceService, "letterboxd"),
+          sql`lower(trim(${importSourceMappings.sourceTitle})) = lower(${sourceTitle.trim()})`,
+          sourceYear
+            ? eq(importSourceMappings.sourceYear, sourceYear)
+            : sql`${importSourceMappings.sourceYear} IS NULL`
+        ),
+      });
+    }
+
+    if (existingMapping) {
+      // Update existing mapping with verified assignment
+      await db
+        .update(importSourceMappings)
+        .set({
+          mediaItemId: resolvedMediaId,
+          confidence: "manual_verified",
+          sourceMediaType: resolvedMediaType,
+          sourceUri: sourceUri || existingMapping.sourceUri,
+          metadata: metadataObj,
+          updatedAt: new Date(),
+        })
+        .where(eq(importSourceMappings.id, existingMapping.id));
+    } else {
+      // Insert new confirmed mapping
+      await db.insert(importSourceMappings).values({
         id: `map_${randomUUID()}`,
         sourceService: "letterboxd",
         sourceUri,
         sourceTitle,
         sourceYear,
-        sourceMediaType: mediaType,
+        sourceMediaType: resolvedMediaType,
         mediaItemId: resolvedMediaId,
         confidence: "manual_verified",
-        metadata: {
-          manualAdminResolution: true,
-          tmdbId,
-          resolvedAt: new Date().toISOString(),
-          mediaTitle: resolvedRecord?.title,
-          posterPath: resolvedRecord?.posterPath,
-        },
-      })
-      .onConflictDoNothing();
+        metadata: metadataObj,
+      });
+    }
+
+    // Invalidate in-memory cache so fresh mapping immediately takes effect
+    clearResolutionCache();
 
     // 3. Remove quarantined entry
     await db.delete(unresolvedImportItems).where(eq(unresolvedImportItems.id, unresolvedItemId));

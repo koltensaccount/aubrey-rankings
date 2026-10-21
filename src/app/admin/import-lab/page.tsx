@@ -359,11 +359,11 @@ export default function AdminImportLabPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-border pb-6">
         <div>
           <Link
-            href="/"
+            href="/admin"
             className="inline-flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors mb-2"
           >
             <ArrowLeft size={13} />
-            <span>Back to Application</span>
+            <span>Back to Admin Console</span>
           </Link>
           <div className="flex items-center gap-2.5">
             <Database size={24} className="text-primary" />

@@ -3,6 +3,7 @@ import { notifications, notificationPreferences, user } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { isBlocked } from "@/lib/safety";
+import { TEST_WORKSPACE_USER_ID } from "@/lib/test-workspace";
 
 export type NotificationType =
   | "follow"
@@ -50,6 +51,11 @@ export async function createNotification({
   metadata,
   returnExisting = true,
 }: CreateNotificationParams) {
+  // Test Workspace isolation: Never emit or receive notifications for the disposable test workspace account
+  if (actorUserId === TEST_WORKSPACE_USER_ID || recipientUserId === TEST_WORKSPACE_USER_ID) {
+    return null;
+  }
+
   // 1. Never notify a user about their own actions
   if (actorUserId && recipientUserId === actorUserId) {
     return null;

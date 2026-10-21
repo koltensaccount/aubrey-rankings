@@ -23,6 +23,7 @@ import {
   resolveLetterboxdMediaIdentity,
   type SourceFilmCandidate,
 } from "./letterboxd-matching";
+import { TEST_WORKSPACE_USER_ID } from "@/lib/test-workspace";
 
 export function filmIdentity(film: { title: string; year: number | null }) {
   return `${film.title.trim().toLowerCase()}::${film.year ?? ""}`;
@@ -88,9 +89,8 @@ export async function previewLetterboxdImport(
   const { resolvedMap, quarantineMap, stats: preResolveStats } = await batchResolveIdentities(
     Array.from(candidateMap.values()),
     5,
-    options
+    { ...options, persist: false, isTestWorkspace: userId === TEST_WORKSPACE_USER_ID }
   );
-
   // 1. Existing global ratings
   const existingRatings = await db.query.ratings.findMany({
     where: (r, { and, eq, isNull }) =>
@@ -305,9 +305,8 @@ export async function executeLetterboxdImport(
   const { resolvedMap, quarantineMap, stats: preResolveStats } = await batchResolveIdentities(
     Array.from(candidateMap.values()),
     5,
-    options
+    { ...options, persist: true, isTestWorkspace: userId === TEST_WORKSPACE_USER_ID }
   );
-
   return db.transaction(async (tx) => {
     // 1. Acquire transaction-scoped advisory lock to serialize imports
     await tx.execute(
