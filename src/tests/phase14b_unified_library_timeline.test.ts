@@ -642,4 +642,105 @@ describe("Phase 14B: Unified Library & Cinematic Viewing Timeline", () => {
     // Clean up temporary pagination test records
     await db.delete(diaryEntries).where(inArray(diaryEntries.id, [p1, p2, p3]));
   });
+
+  it("13. rewatches filter includes only entries marked isRewatch or with ordinal > 1, excluding first viewings", async () => {
+    // Film with 3 logged viewings
+    const testMovieId = `tmdb-movie-rewatch-filter-${suffix}`;
+    await db.insert(mediaItems).values({
+      id: testMovieId,
+      title: "Before Sunrise",
+      mediaType: "movie",
+      releaseDate: "1995-01-27",
+    });
+
+    const v1 = `diary_rw_test_${Date.now()}_1`;
+    const v2 = `diary_rw_test_${Date.now()}_2`;
+    const v3 = `diary_rw_test_${Date.now()}_3`;
+
+    await db.insert(diaryEntries).values([
+      {
+        id: v1,
+        userId: ownerId,
+        mediaItemId: testMovieId,
+        watchedDate: "2024-01-15",
+        isRewatch: false, // Initial viewing, NOT marked rewatch
+      },
+      {
+        id: v2,
+        userId: ownerId,
+        mediaItemId: testMovieId,
+        watchedDate: "2024-07-20",
+        isRewatch: false, // 2nd viewing chronologically (ordinal 2)
+      },
+      {
+        id: v3,
+        userId: ownerId,
+        mediaItemId: testMovieId,
+        watchedDate: "2025-02-10",
+        isRewatch: true, // 3rd viewing chronologically (ordinal 3)
+      },
+    ]);
+
+    // Fetch entries from API
+    const res = await getDiary(
+      new NextRequest(
+        `http://localhost:3000/api/diary?mediaItemId=${encodeURIComponent(testMovieId)}`,
+        {
+          headers: { cookie: ownerCookie },
+        }
+      )
+    );
+    assert.equal(res.status, 200);
+    const data = await res.json();
+    assert.equal(data.entries.length, 3);
+
+    const entry1 = data.entries.find((e: any) => e.id === v1);
+    const entry2 = data.entries.find((e: any) => e.id === v2);
+    const entry3 = data.entries.find((e: any) => e.id === v3);
+
+    assert.ok(entry1 && entry2 && entry3);
+    assert.equal(entry1.ordinal, 1);
+    assert.equal(entry2.ordinal, 2);
+    assert.equal(entry3.ordinal, 3);
+    assert.equal(entry1.totalViewings, 3);
+    assert.equal(entry2.totalViewings, 3);
+    assert.equal(entry3.totalViewings, 3);
+
+    // Apply Rewatches filter logic: entry.isRewatch || entry.ordinal > 1
+    // (Never using totalViewings > 1 by itself to classify individual entries)
+    const filterRewatches = (e: any) => Boolean(e.isRewatch || (e.ordinal ?? 1) > 1);
+
+    const rewatchEntries = data.entries.filter(filterRewatches);
+
+    // Entry 1 (original first viewing, isRewatch=false) must be excluded despite totalViewings=3
+    assert.equal(
+      rewatchEntries.some((e: any) => e.id === v1),
+      false,
+      "Entry 1 (original viewing) must be excluded from Rewatches"
+    );
+    // Entry 2 (ordinal 2) and Entry 3 (ordinal 3) must be included
+    assert.equal(
+      rewatchEntries.some((e: any) => e.id === v2),
+      true,
+      "Entry 2 (second viewing) must be included in Rewatches"
+    );
+    assert.equal(
+      rewatchEntries.some((e: any) => e.id === v3),
+      true,
+      "Entry 3 (third viewing) must be included in Rewatches"
+    );
+    assert.equal(rewatchEntries.length, 2);
+
+    // When Entry 1 is explicitly marked isRewatch=true, it is included
+    const explicitRewatchEntry1 = { ...entry1, isRewatch: true };
+    assert.equal(
+      filterRewatches(explicitRewatchEntry1),
+      true,
+      "Entry 1 explicitly marked isRewatch must be included in Rewatches"
+    );
+
+    // Clean up
+    await db.delete(diaryEntries).where(inArray(diaryEntries.id, [v1, v2, v3]));
+    await db.delete(mediaItems).where(eq(mediaItems.id, testMovieId));
+  });
 });

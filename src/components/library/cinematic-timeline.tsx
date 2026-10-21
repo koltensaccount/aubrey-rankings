@@ -163,12 +163,11 @@ export function CinematicTimeline({
       }
       if (filter === "rewatches") {
         const ordinal = e.ordinal ?? mediaOrdinalsMap.get(e.id) ?? 1;
-        const total = e.totalViewings ?? mediaTotalCountMap.get(e.mediaItemId) ?? 1;
-        return Boolean(e.isRewatch || ordinal > 1 || total > 1);
+        return Boolean(e.isRewatch || ordinal > 1);
       }
       return true;
     });
-  }, [entries, filter, mediaOrdinalsMap, mediaTotalCountMap]);
+  }, [entries, filter, mediaOrdinalsMap]);
 
   // Partition confirmed dated entries from undated entries
   // NEVER fabricate a viewing date from a database modification or activity timestamp
