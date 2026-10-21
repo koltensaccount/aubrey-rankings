@@ -66,7 +66,7 @@ if (!isExplicitTestDb) {
 
 const isSmokeMode = process.env.RESPONSIVE_SMOKE_MODE === "1" || process.argv.includes("--smoke");
 const PORT = 3016;
-const BASE_URL = `http://localhost:${PORT}`;
+const BASE_URL = `http://127.0.0.1:${PORT}`;
 const ARTIFACT_DIR =
   process.env.ARTIFACT_DIR ||
   "/Users/koltenbendickson/.gemini/antigravity/brain/8591bb2b-8368-419b-9f66-7b4f133406f9";
@@ -135,8 +135,7 @@ async function createAuthedContext(
       {
         name: "better-auth.session_token",
         value: tokenMatch[1],
-        domain: "localhost",
-        path: "/",
+        url: BASE_URL,
       },
     ]);
   }
@@ -309,15 +308,17 @@ async function setup() {
 
   // Start Next.js server
   console.log(`Starting Next.js server on port ${PORT}...`);
-  serverProcess = spawn("npx", ["next", "start", "-p", String(PORT)], {
+  serverProcess = spawn("npx", ["next", "start", "-H", "127.0.0.1", "-p", String(PORT)], {
     env: { ...process.env, PORT: String(PORT), DATABASE_URL: parsedUrl.toString() },
-    stdio: "pipe",
+    stdio: "inherit",
   });
 
   for (let i = 0; i < 40; i++) {
     await new Promise((r) => setTimeout(r, 500));
     try {
-      const ping = await fetch(`${BASE_URL}/api/health`);
+      const ping = await fetch(`${BASE_URL}/api/health`, {
+        signal: AbortSignal.timeout(3000),
+      });
       if (ping.ok) {
         console.log("Server is ready on port " + PORT);
         return;
@@ -379,27 +380,12 @@ async function runResponsiveVerification() {
     console.log("=======================================================");
 
     for (const width of targetWidths) {
-      const context = await browser.newContext({
-        viewport: { width, height: 900 },
-        colorScheme: "dark",
-      });
-
-      const tokenMatch = userCookie.match(/better-auth\.session_token=([^;]+)/);
-      if (tokenMatch) {
-        await context.addCookies([
-          {
-            name: "better-auth.session_token",
-            value: tokenMatch[1],
-            domain: "localhost",
-            path: "/",
-          },
-        ]);
-      }
-
+      const context = await createAuthedContext(browser, { width, height: 900 }, "dark");
       const page: Page = await context.newPage();
 
       for (const target of targetPages) {
-        await page.goto(`${BASE_URL}${target.path}`, { waitUntil: "networkidle" });
+        await page.goto(`${BASE_URL}${target.path}`, { waitUntil: "load" });
+        await page.waitForTimeout(300);
 
         // Assert absence of document-level horizontal scroll
         const scrollInfo = await page.evaluate(() => ({
@@ -430,10 +416,13 @@ async function runResponsiveVerification() {
     for (const testWidth of [320, 390, 640]) {
       const context = await createAuthedContext(browser, { width: testWidth, height: 844 }, "dark");
       const page = await context.newPage();
-      await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" });
+      await page.goto(`${BASE_URL}/`, { waitUntil: "load" });
 
       const bugBtn = page.locator("button[aria-label='Report an issue']");
       const bottomNav = page.locator("nav[aria-label='Mobile primary navigation']");
+
+      await bugBtn.waitFor({ state: "visible", timeout: 8000 });
+      await bottomNav.waitFor({ state: "visible", timeout: 8000 });
 
       assert.ok(await bugBtn.isVisible(), `Mobile ${testWidth}px: Bug report button must be visible`);
       assert.ok(await bottomNav.isVisible(), `Mobile ${testWidth}px: Mobile bottom nav must be visible`);
@@ -466,7 +455,7 @@ async function runResponsiveVerification() {
     {
       const context = await createAuthedContext(browser, { width: 1440, height: 900 }, "dark");
       const page = await context.newPage();
-      await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" });
+      await page.goto(`${BASE_URL}/`, { waitUntil: "load" });
 
       const brand = page.locator(".ar-brand");
       const primaryNav = page.locator("nav[aria-label='Primary navigation']");
@@ -477,6 +466,9 @@ async function runResponsiveVerification() {
       const avatarTrigger = page.locator("button[aria-label='User account menu']");
       const signOutBtn = page.locator("header button[aria-label='Sign out']");
       const bottomNav = page.locator("nav[aria-label='Mobile primary navigation']");
+
+      await brand.waitFor({ state: "visible", timeout: 8000 });
+      await avatarTrigger.waitFor({ state: "visible", timeout: 8000 });
 
       assert.ok(await brand.isVisible(), "Desktop: Brand must be visible");
       assert.ok(await primaryNav.isVisible(), "Desktop: Primary Nav must be visible");
@@ -513,11 +505,13 @@ async function runResponsiveVerification() {
     {
       const context = await createAuthedContext(browser, { width: 1024, height: 768 }, "dark");
       const page = await context.newPage();
-      await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" });
+      await page.goto(`${BASE_URL}/`, { waitUntil: "load" });
 
       const newRankingBtn = page.locator("a[aria-label='New ranking']");
       const settingsBtn = page.locator("header a[aria-label='Settings']");
       const signOutBtn = page.locator("header button[aria-label='Sign out']");
+
+      await newRankingBtn.waitFor({ state: "visible", timeout: 8000 });
 
       assert.ok(await newRankingBtn.isVisible(), "1024px: New ranking button remains visible");
       assert.ok(!(await settingsBtn.isVisible()), "1024px: Settings must remain inside dropdown to prevent crowding");
@@ -531,13 +525,16 @@ async function runResponsiveVerification() {
     {
       const context = await createAuthedContext(browser, { width: 768, height: 1024 }, "dark");
       const page = await context.newPage();
-      await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" });
+      await page.goto(`${BASE_URL}/`, { waitUntil: "load" });
 
       const brand = page.locator(".ar-brand");
       const primaryNav = page.locator("nav[aria-label='Primary navigation']");
       const journalBtn = page.locator("a[aria-label='Add to Journal']");
       const bell = page.locator("button[aria-label^='Notifications']");
       const avatarTrigger = page.locator("button[aria-label='User account menu']");
+
+      await brand.waitFor({ state: "visible", timeout: 8000 });
+      await avatarTrigger.waitFor({ state: "visible", timeout: 8000 });
 
       assert.ok(await brand.isVisible(), "Tablet 768px: Brand must be visible");
       assert.ok(await primaryNav.isVisible(), "Tablet 768px: Core nav must fit and remain visible");
@@ -591,9 +588,10 @@ async function runResponsiveVerification() {
     for (const testWidth of [390, 768]) {
       const context = await createAuthedContext(browser, { width: testWidth, height: 700 }, "dark");
       const page = await context.newPage();
-      await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" });
+      await page.goto(`${BASE_URL}/`, { waitUntil: "load" });
 
       const addBtn = page.locator("button:has-text('Add to Journal')");
+      await addBtn.waitFor({ state: "visible", timeout: 8000 });
       await addBtn.click();
       await page.waitForTimeout(300);
 
@@ -646,7 +644,7 @@ async function runResponsiveVerification() {
         );
 
         const page = await context.newPage();
-        await page.goto(`${BASE_URL}/?tab=${cfg.tab}`, { waitUntil: "networkidle" });
+        await page.goto(`${BASE_URL}/?tab=${cfg.tab}`, { waitUntil: "load" });
         if (cfg.theme === "light") {
           await page.evaluate(() => {
             document.documentElement.classList.remove("dark");
@@ -666,7 +664,7 @@ async function runResponsiveVerification() {
       {
         const context = await createAuthedContext(browser, { width: 768, height: 1024 }, "dark");
         const page = await context.newPage();
-        await page.goto(`${BASE_URL}/?tab=journal`, { waitUntil: "networkidle" });
+        await page.goto(`${BASE_URL}/?tab=journal`, { waitUntil: "load" });
         const historyBtn = page.locator("button:has-text('View history')").first();
         if (await historyBtn.isVisible()) {
           await historyBtn.click();
