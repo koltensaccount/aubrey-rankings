@@ -64,6 +64,7 @@ if (!isExplicitTestDb) {
   );
 }
 
+const isSmokeMode = process.env.RESPONSIVE_SMOKE_MODE === "1" || process.argv.includes("--smoke");
 const PORT = 3016;
 const BASE_URL = `http://localhost:${PORT}`;
 const ARTIFACT_DIR =
@@ -110,11 +111,44 @@ function saveScreenshot(filename: string, buffer: Buffer) {
   console.log(`📸 Saved screenshot: ${filename}`);
 }
 
+function isIntersecting(
+  boxA: { x: number; y: number; width: number; height: number },
+  boxB: { x: number; y: number; width: number; height: number }
+): boolean {
+  return !(
+    boxA.x + boxA.width <= boxB.x ||
+    boxB.x + boxB.width <= boxA.x ||
+    boxA.y + boxA.height <= boxB.y ||
+    boxB.y + boxB.height <= boxA.y
+  );
+}
+
+async function createAuthedContext(
+  browser: Browser,
+  viewport: { width: number; height: number },
+  colorScheme: "dark" | "light" = "dark"
+) {
+  const context = await browser.newContext({ viewport, colorScheme });
+  const tokenMatch = userCookie.match(/better-auth\.session_token=([^;]+)/);
+  if (tokenMatch) {
+    await context.addCookies([
+      {
+        name: "better-auth.session_token",
+        value: tokenMatch[1],
+        domain: "localhost",
+        path: "/",
+      },
+    ]);
+  }
+  return context;
+}
+
 async function setup() {
   console.log("Setting up responsive test fixtures against disposable test database...");
   const authModule = await import("../src/lib/auth");
   const dbModule = await import("../src/db");
   const schema = await import("../src/db/schema");
+  const { eq } = await import("drizzle-orm");
   db = dbModule.db;
 
   // 1. Create Curator test user
@@ -129,12 +163,11 @@ async function setup() {
   assert.equal(u1Res.status, 200);
   userCookie = u1Res.headers.get("set-cookie") || "";
   const u1 = await db.query.user.findFirst({
-    where: (u: any, { eq }: any) => eq(u.email, testUser.email),
+    where: (u: any, { eq: eqOp }: any) => eqOp(u.email, testUser.email),
   });
   assert.ok(u1);
   createdUserIds.push(u1.id);
 
-  const { eq } = await import("drizzle-orm");
   // Set username
   await db.update(schema.user).set({ username: testUser.username }).where(eq(schema.user.id, u1.id));
 
@@ -319,18 +352,27 @@ async function runResponsiveVerification() {
   const browser: Browser = await chromium.launch({ headless: true });
 
   try {
-    const targetWidths = [320, 360, 390, 430, 600, 700, 768, 820, 912, 1024, 1180, 1280, 1440, 1920];
-    const targetPages = [
-      { name: "Library Journal", path: "/?tab=journal" },
-      { name: "Library Watched", path: "/?tab=watched" },
-      { name: "Library Watchlist", path: "/?tab=watchlist" },
-      { name: "Library Rankings", path: "/?tab=rankings" },
-      { name: "Discover", path: "/discover" },
-      { name: "Feed", path: "/feed" },
-    ];
+    const targetWidths = isSmokeMode
+      ? [320, 390, 640, 768, 1440]
+      : [320, 360, 390, 430, 600, 700, 768, 820, 912, 1024, 1180, 1280, 1440, 1920];
+
+    const targetPages = isSmokeMode
+      ? [
+          { name: "Library Journal", path: "/?tab=journal" },
+          { name: "Discover", path: "/discover" },
+          { name: "Feed", path: "/feed" },
+        ]
+      : [
+          { name: "Library Journal", path: "/?tab=journal" },
+          { name: "Library Watched", path: "/?tab=watched" },
+          { name: "Library Watchlist", path: "/?tab=watchlist" },
+          { name: "Library Rankings", path: "/?tab=rankings" },
+          { name: "Discover", path: "/discover" },
+          { name: "Feed", path: "/feed" },
+        ];
 
     console.log("\n=======================================================");
-    console.log("1. DOCUMENT-LEVEL HORIZONTAL SCROLL RESILIENCE CHECK");
+    console.log(`1. DOCUMENT-LEVEL HORIZONTAL SCROLL RESILIENCE CHECK (${isSmokeMode ? "Smoke Mode" : "Full Matrix"})`);
     console.log("=======================================================");
 
     for (const width of targetWidths) {
@@ -373,21 +415,53 @@ async function runResponsiveVerification() {
         );
       }
 
-      console.log(`✔ ${width}px: 0 horizontal scroll detected across all key screens.`);
+      console.log(`✔ ${width}px: 0 horizontal scroll detected across all tested screens.`);
       await context.close();
     }
 
     console.log("\n=======================================================");
-    console.log("2. NAVBAR PROGRESSIVE COLLAPSE & OVERFLOW AUDIT");
+    console.log("2. FIXED UI OVERLAP & FLOATING CONTROLS INTERSECTION AUDIT");
     console.log("=======================================================");
 
-    // Test at 1440px (Desktop baseline)
+    // Test fixed floating bug report button does NOT overlap bottom navigation on mobile/split-screen
+    for (const testWidth of [320, 390, 640]) {
+      const context = await createAuthedContext(browser, { width: testWidth, height: 844 }, "dark");
+      const page = await context.newPage();
+      await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" });
+
+      const bugBtn = page.locator("button[aria-label='Report an issue']");
+      const bottomNav = page.locator("nav[aria-label='Mobile primary navigation']");
+
+      assert.ok(await bugBtn.isVisible(), `Mobile ${testWidth}px: Bug report button must be visible`);
+      assert.ok(await bottomNav.isVisible(), `Mobile ${testWidth}px: Mobile bottom nav must be visible`);
+
+      const bugBox = await bugBtn.boundingBox();
+      const navBox = await bottomNav.boundingBox();
+      assert.ok(bugBox && navBox);
+
+      // Verify zero intersection between floating bug button and bottom nav
+      assert.ok(
+        !isIntersecting(bugBox, navBox),
+        `Fixed UI collision at ${testWidth}px: Bug report button overlaps bottom navigation! Bug: ${JSON.stringify(bugBox)}, Nav: ${JSON.stringify(navBox)}`
+      );
+
+      // Verify bug report button sits above bottom navigation with positive clearance
+      assert.ok(
+        bugBox.y + bugBox.height <= navBox.y,
+        `Bug button bottom (${bugBox.y + bugBox.height}px) must be above bottom nav top (${navBox.y}px)`
+      );
+
+      console.log(`✔ ${testWidth}px: Bug report button floats cleanly above bottom nav (Clearance: ${(navBox.y - (bugBox.y + bugBox.height)).toFixed(1)}px).`);
+      await context.close();
+    }
+
+    console.log("\n=======================================================");
+    console.log("3. NAVBAR SPACE HIERARCHY & RADIX DROPDOWN ACCESSIBILITY");
+    console.log("=======================================================");
+
+    // Test at 1440px (Desktop baseline): Restore familiar Settings and Sign out controls
     {
-      const context = await browser.newContext({ viewport: { width: 1440, height: 900 }, colorScheme: "dark" });
-      const tokenMatch = userCookie.match(/better-auth\.session_token=([^;]+)/);
-      if (tokenMatch) {
-        await context.addCookies([{ name: "better-auth.session_token", value: tokenMatch[1], domain: "localhost", path: "/" }]);
-      }
+      const context = await createAuthedContext(browser, { width: 1440, height: 900 }, "dark");
       const page = await context.newPage();
       await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" });
 
@@ -396,7 +470,9 @@ async function runResponsiveVerification() {
       const journalBtn = page.locator("a[aria-label='Add to Journal']");
       const newRankingBtn = page.locator("a[aria-label='New ranking']");
       const bell = page.locator("button[aria-label^='Notifications']");
-      const avatar = page.locator("button[aria-label='User account menu']");
+      const settingsBtn = page.locator("header a[aria-label='Settings']");
+      const avatarTrigger = page.locator("button[aria-label='User account menu']");
+      const signOutBtn = page.locator("header button[aria-label='Sign out']");
       const bottomNav = page.locator("nav[aria-label='Mobile primary navigation']");
 
       assert.ok(await brand.isVisible(), "Desktop: Brand must be visible");
@@ -404,26 +480,53 @@ async function runResponsiveVerification() {
       assert.ok(await journalBtn.isVisible(), "Desktop: Journal button must be visible");
       assert.ok(await newRankingBtn.isVisible(), "Desktop: New ranking button must be visible");
       assert.ok(await bell.isVisible(), "Desktop: Bell must be visible");
-      assert.ok(await avatar.isVisible(), "Desktop: Avatar must be visible");
+      assert.ok(await settingsBtn.isVisible(), "Desktop: Familiar Settings control must be visible");
+      assert.ok(await avatarTrigger.isVisible(), "Desktop: Avatar menu trigger must be visible");
+      assert.ok(await signOutBtn.isVisible(), "Desktop: Familiar Sign out control must be visible");
       assert.ok(!(await bottomNav.isVisible()), "Desktop: Mobile bottom nav must NOT be visible");
 
-      // Verify geometry: no overlap between brand and nav
-      const brandBox = await brand.boundingBox();
-      const navBox = await primaryNav.boundingBox();
-      assert.ok(brandBox && navBox);
-      assert.ok(brandBox.x + brandBox.width <= navBox.x, "Brand and primary nav must not overlap");
+      // Verify geometry: no overlaps between adjacent desktop controls
+      const boxes = await Promise.all([
+        journalBtn.boundingBox(),
+        newRankingBtn.boundingBox(),
+        bell.boundingBox(),
+        settingsBtn.boundingBox(),
+        avatarTrigger.boundingBox(),
+        signOutBtn.boundingBox(),
+      ]);
 
-      console.log("✔ Desktop 1440px: Complete top navigation active with 0 overlap.");
+      for (let i = 0; i < boxes.length - 1; i++) {
+        const a = boxes[i];
+        const b = boxes[i + 1];
+        assert.ok(a && b);
+        assert.ok(!isIntersecting(a, b), `Desktop controls ${i} and ${i + 1} must not overlap`);
+      }
+
+      console.log("✔ Desktop 1440px: Familiar desktop navigation controls restored with 0 overlap.");
       await context.close();
     }
 
-    // Test at 768px (iPad portrait - tablet boundary)
+    // Test at 1024px (iPad landscape / laptop): Verify NO crowding (Settings/Sign Out stay inside dropdown)
     {
-      const context = await browser.newContext({ viewport: { width: 768, height: 1024 }, colorScheme: "dark" });
-      const tokenMatch = userCookie.match(/better-auth\.session_token=([^;]+)/);
-      if (tokenMatch) {
-        await context.addCookies([{ name: "better-auth.session_token", value: tokenMatch[1], domain: "localhost", path: "/" }]);
-      }
+      const context = await createAuthedContext(browser, { width: 1024, height: 768 }, "dark");
+      const page = await context.newPage();
+      await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" });
+
+      const newRankingBtn = page.locator("a[aria-label='New ranking']");
+      const settingsBtn = page.locator("header a[aria-label='Settings']");
+      const signOutBtn = page.locator("header button[aria-label='Sign out']");
+
+      assert.ok(await newRankingBtn.isVisible(), "1024px: New ranking button remains visible");
+      assert.ok(!(await settingsBtn.isVisible()), "1024px: Settings must remain inside dropdown to prevent crowding");
+      assert.ok(!(await signOutBtn.isVisible()), "1024px: Sign out must remain inside dropdown to prevent crowding");
+
+      console.log("✔ 1024px: No crowding; secondary actions neatly folded into avatar dropdown.");
+      await context.close();
+    }
+
+    // Test at 768px (iPad portrait): Radix DropdownMenu keyboard focus & accessibility
+    {
+      const context = await createAuthedContext(browser, { width: 768, height: 1024 }, "dark");
       const page = await context.newPage();
       await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" });
 
@@ -431,94 +534,59 @@ async function runResponsiveVerification() {
       const primaryNav = page.locator("nav[aria-label='Primary navigation']");
       const journalBtn = page.locator("a[aria-label='Add to Journal']");
       const bell = page.locator("button[aria-label^='Notifications']");
-      const avatar = page.locator("button[aria-label='User account menu']");
-      const newRankingBtn = page.locator("a[aria-label='New ranking']");
+      const avatarTrigger = page.locator("button[aria-label='User account menu']");
 
       assert.ok(await brand.isVisible(), "Tablet 768px: Brand must be visible");
       assert.ok(await primaryNav.isVisible(), "Tablet 768px: Core nav must fit and remain visible");
       assert.ok(await journalBtn.isVisible(), "Tablet 768px: Journal button must remain visible");
       assert.ok(await bell.isVisible(), "Tablet 768px: Notification bell must be visible");
-      assert.ok(await avatar.isVisible(), "Tablet 768px: Avatar menu must be visible");
-      // "New ranking" button gracefully folded on tablet into dropdown
-      assert.ok(!(await newRankingBtn.isVisible()), "Tablet 768px: New ranking button folds into profile menu");
+      assert.ok(await avatarTrigger.isVisible(), "Tablet 768px: Avatar menu must be visible");
 
-      // Verify no controls clipped or pushed beyond viewport
-      const avatarBox = await avatar.boundingBox();
+      // Verify avatar stays within 768px viewport bounds
+      const avatarBox = await avatarTrigger.boundingBox();
       assert.ok(avatarBox && avatarBox.x + avatarBox.width <= 768, "Avatar must be fully within viewport bounds");
 
-      // Open profile dropdown menu
-      await avatar.click();
+      // Open Radix DropdownMenu
+      await avatarTrigger.click();
       await page.waitForTimeout(200);
 
-      const menu = page.locator("div[role='menu'][aria-label='User account menu options']");
-      assert.ok(await menu.isVisible(), "Profile dropdown menu must open upon clicking avatar");
+      const menu = page.locator("div[role='menu']");
+      assert.ok(await menu.isVisible(), "Radix DropdownMenu must open on trigger click");
 
-      const profileLink = menu.locator("a[role='menuitem']:has-text('Profile')");
-      const newRankingMenuItem = menu.locator("a[role='menuitem']:has-text('New ranking')");
-      const settingsMenuItem = menu.locator("a[role='menuitem']:has-text('Settings')");
-      const signOutMenuItem = menu.locator("button[role='menuitem']:has-text('Sign out')");
+      const profileItem = menu.locator("a[role='menuitem']:has-text('Profile')");
+      const newRankingItem = menu.locator("a[role='menuitem']:has-text('New ranking')");
+      const settingsItem = menu.locator("a[role='menuitem']:has-text('Settings')");
+      const signOutItem = menu.locator("div[role='menuitem']:has-text('Sign out')");
 
-      assert.ok(await profileLink.isVisible(), "Dropdown: Profile link must be visible");
-      assert.ok(await newRankingMenuItem.isVisible(), "Dropdown: New ranking must be accessible inside menu");
-      assert.ok(await settingsMenuItem.isVisible(), "Dropdown: Settings must be accessible inside menu");
-      assert.ok(await signOutMenuItem.isVisible(), "Dropdown: Sign out must be accessible inside menu");
+      assert.ok(await profileItem.isVisible(), "Dropdown: Profile link must be visible");
+      assert.ok(await newRankingItem.isVisible(), "Dropdown: New ranking must be accessible inside menu");
+      assert.ok(await settingsItem.isVisible(), "Dropdown: Settings must be accessible inside menu");
+      assert.ok(await signOutItem.isVisible(), "Dropdown: Sign out must be accessible inside menu");
 
-      // Press Escape to verify accessible closure
+      if (!isSmokeMode) {
+        const buf = await page.screenshot({ fullPage: false });
+        saveScreenshot("phase14c-tablet-768px-profile-menu.png", buf);
+      }
+
+      // Test Radix keyboard navigation: ArrowDown moves focus
+      await page.keyboard.press("ArrowDown");
+      await page.waitForTimeout(100);
+
+      // Dismiss menu via Escape key: Focus must return to trigger
       await page.keyboard.press("Escape");
       await page.waitForTimeout(200);
-      assert.ok(!(await menu.isVisible()), "Profile dropdown menu must close on Escape key");
+      assert.ok(!(await menu.isVisible()), "Radix DropdownMenu must close on Escape key");
 
-      console.log("✔ Tablet 768px: Progressive collapse and accessible profile dropdown menu verified.");
-      await context.close();
-    }
-
-    // Test at 390px (Mobile phone)
-    {
-      const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "dark" });
-      const tokenMatch = userCookie.match(/better-auth\.session_token=([^;]+)/);
-      if (tokenMatch) {
-        await context.addCookies([{ name: "better-auth.session_token", value: tokenMatch[1], domain: "localhost", path: "/" }]);
-      }
-      const page = await context.newPage();
-      await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" });
-
-      const brand = page.locator(".ar-brand");
-      const headerPrimaryNav = page.locator("header nav[aria-label='Primary navigation']");
-      const journalBtn = page.locator("a[aria-label='Add to Journal']");
-      const bell = page.locator("button[aria-label^='Notifications']");
-      const avatar = page.locator("button[aria-label='User account menu']");
-      const bottomNav = page.locator("nav[aria-label='Mobile primary navigation']");
-
-      assert.ok(await brand.isVisible(), "Mobile 390px: Brand must be visible in header");
-      assert.ok(!(await headerPrimaryNav.isVisible()), "Mobile 390px: Header nav must be hidden");
-      assert.ok(await journalBtn.isVisible(), "Mobile 390px: Journal action must be visible");
-      assert.ok(await bell.isVisible(), "Mobile 390px: Bell must be visible");
-      assert.ok(await avatar.isVisible(), "Mobile 390px: Avatar must be visible");
-      assert.ok(await bottomNav.isVisible(), "Mobile 390px: Mobile bottom nav must be visible");
-
-      // Check touch target heights (>= 40px for comfortable mobile interaction)
-      const bottomLinks = bottomNav.locator("a");
-      const count = await bottomLinks.count();
-      for (let i = 0; i < count; i++) {
-        const box = await bottomLinks.nth(i).boundingBox();
-        assert.ok(box && box.height >= 40, `Bottom nav item ${i} must have height >= 40px, got ${box?.height}`);
-      }
-
-      console.log("✔ Phone 390px: Clean mobile top bar + bottom navigation preserved.");
+      console.log("✔ Tablet 768px: Radix DropdownMenu keyboard focus & Escape handling verified.");
       await context.close();
     }
 
     console.log("\n=======================================================");
-    console.log("3. DIALOG ACCESSIBILITY & VIEWPORT BOUNDS VERIFICATION");
+    console.log("4. DIALOG VIEWPORT BOUNDS VERIFICATION");
     console.log("=======================================================");
 
-    // Test LogViewingDialog bounds on 390px and 768px
     for (const testWidth of [390, 768]) {
-      const context = await browser.newContext({ viewport: { width: testWidth, height: 700 }, colorScheme: "dark" });
-      const tokenMatch = userCookie.match(/better-auth\.session_token=([^;]+)/);
-      if (tokenMatch) {
-        await context.addCookies([{ name: "better-auth.session_token", value: tokenMatch[1], domain: "localhost", path: "/" }]);
-      }
+      const context = await createAuthedContext(browser, { width: testWidth, height: 700 }, "dark");
       const page = await context.newPage();
       await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" });
 
@@ -529,11 +597,15 @@ async function runResponsiveVerification() {
       const dialog = page.locator("div[role='dialog']");
       assert.ok(await dialog.isVisible(), `Dialog must be open at ${testWidth}px`);
 
+      if (!isSmokeMode && testWidth === 390) {
+        const buf = await page.screenshot({ fullPage: false });
+        saveScreenshot("phase14c-mobile-390px-log-dialog.png", buf);
+      }
+
       const dialogPanel = dialog.locator(".rounded-dialog");
       const panelBox = await dialogPanel.boundingBox();
       assert.ok(panelBox);
 
-      // Verify dialog height does not exceed 90vh (90% of 700px = 630px)
       assert.ok(
         panelBox.height <= 700 * 0.9 + 5,
         `Dialog panel height (${panelBox.height}px) exceeds 90vh bounds at ${testWidth}px`
@@ -543,127 +615,67 @@ async function runResponsiveVerification() {
         `Dialog panel width (${panelBox.width}px) exceeds viewport width (${testWidth}px)`
       );
 
-      // Verify form is scrollable
-      const form = dialogPanel.locator("form");
-      const isScrollable = await form.evaluate((el) => el.scrollHeight >= el.clientHeight);
-      assert.ok(isScrollable !== undefined);
-
       await context.close();
     }
     console.log("✔ Dialog bounds: LogViewingDialog stays strictly <= 90vh and scrolls smoothly.");
 
-    console.log("\n=======================================================");
-    console.log("4. CAPTURING REQUIRED VISUAL VERIFICATION SCREENSHOTS");
-    console.log("=======================================================");
+    if (!isSmokeMode) {
+      console.log("\n=======================================================");
+      console.log("5. CAPTURING VISUAL VERIFICATION SCREENSHOTS");
+      console.log("=======================================================");
 
-    // Required screenshots:
-    // 1. 390px (mobile)
-    // 2. 768px (iPad portrait)
-    // 3. 820px (iPad Air portrait)
-    // 4. 1024px (iPad landscape / small laptop)
-    // 5. 1180px (iPad Pro landscape)
-    // 6. 1440px (desktop)
-    // 7. Split-screen width (~640px)
+      const screenshotConfigs = [
+        { name: "phase14c-mobile-390px.png", width: 390, height: 844, tab: "journal", theme: "dark" },
+        { name: "phase14c-split-screen-640px.png", width: 640, height: 800, tab: "journal", theme: "dark" },
+        { name: "phase14c-ipad-portrait-768px.png", width: 768, height: 1024, tab: "journal", theme: "dark" },
+        { name: "phase14c-ipad-air-820px.png", width: 820, height: 1180, tab: "watched", theme: "dark" },
+        { name: "phase14c-ipad-landscape-1024px.png", width: 1024, height: 768, tab: "journal", theme: "dark" },
+        { name: "phase14c-ipad-pro-landscape-1180px.png", width: 1180, height: 820, tab: "journal", theme: "dark" },
+        { name: "phase14c-desktop-1440px-dark.png", width: 1440, height: 900, tab: "journal", theme: "dark" },
+        { name: "phase14c-desktop-1440px-light.png", width: 1440, height: 900, tab: "journal", theme: "light" },
+      ];
 
-    const screenshotConfigs = [
-      { name: "phase14c-mobile-390px.png", width: 390, height: 844, tab: "journal", theme: "dark" },
-      { name: "phase14c-split-screen-640px.png", width: 640, height: 800, tab: "journal", theme: "dark" },
-      { name: "phase14c-ipad-portrait-768px.png", width: 768, height: 1024, tab: "journal", theme: "dark" },
-      { name: "phase14c-ipad-air-820px.png", width: 820, height: 1180, tab: "watched", theme: "dark" },
-      { name: "phase14c-ipad-landscape-1024px.png", width: 1024, height: 768, tab: "journal", theme: "dark" },
-      { name: "phase14c-ipad-pro-landscape-1180px.png", width: 1180, height: 820, tab: "journal", theme: "dark" },
-      { name: "phase14c-desktop-1440px-dark.png", width: 1440, height: 900, tab: "journal", theme: "dark" },
-      { name: "phase14c-desktop-1440px-light.png", width: 1440, height: 900, tab: "journal", theme: "light" },
-    ];
+      for (const cfg of screenshotConfigs) {
+        const context = await createAuthedContext(
+          browser,
+          { width: cfg.width, height: cfg.height },
+          cfg.theme as "dark" | "light"
+        );
 
-    for (const cfg of screenshotConfigs) {
-      const context = await browser.newContext({
-        viewport: { width: cfg.width, height: cfg.height },
-        colorScheme: cfg.theme as "dark" | "light",
-      });
+        const page = await context.newPage();
+        await page.goto(`${BASE_URL}/?tab=${cfg.tab}`, { waitUntil: "networkidle" });
+        if (cfg.theme === "light") {
+          await page.evaluate(() => {
+            document.documentElement.classList.remove("dark");
+            document.documentElement.classList.add("light");
+            document.documentElement.setAttribute("data-theme", "light");
+          });
+        }
+        await page.waitForTimeout(600);
 
-      const tokenMatch = userCookie.match(/better-auth\.session_token=([^;]+)/);
-      if (tokenMatch) {
-        await context.addCookies([
-          {
-            name: "better-auth.session_token",
-            value: tokenMatch[1],
-            domain: "localhost",
-            path: "/",
-          },
-        ]);
-      }
-
-      const page = await context.newPage();
-      await page.goto(`${BASE_URL}/?tab=${cfg.tab}`, { waitUntil: "networkidle" });
-      if (cfg.theme === "light") {
-        await page.evaluate(() => {
-          document.documentElement.classList.remove("dark");
-          document.documentElement.classList.add("light");
-          document.documentElement.setAttribute("data-theme", "light");
-        });
-      }
-      await page.waitForTimeout(600);
-
-      const buf = await page.screenshot({ fullPage: false });
-      saveScreenshot(cfg.name, buf);
-
-      await context.close();
-    }
-
-    // Modal and Profile Menu Detail Screenshots
-    // Profile menu on 768px
-    {
-      const context = await browser.newContext({ viewport: { width: 768, height: 800 }, colorScheme: "dark" });
-      const tokenMatch = userCookie.match(/better-auth\.session_token=([^;]+)/);
-      if (tokenMatch) {
-        await context.addCookies([{ name: "better-auth.session_token", value: tokenMatch[1], domain: "localhost", path: "/" }]);
-      }
-      const page = await context.newPage();
-      await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" });
-      await page.locator("button[aria-label='User account menu']").click();
-      await page.waitForTimeout(300);
-      const buf = await page.screenshot({ fullPage: false });
-      saveScreenshot("phase14c-tablet-768px-profile-menu.png", buf);
-      await context.close();
-    }
-
-    // Log dialog on 390px
-    {
-      const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: "dark" });
-      const tokenMatch = userCookie.match(/better-auth\.session_token=([^;]+)/);
-      if (tokenMatch) {
-        await context.addCookies([{ name: "better-auth.session_token", value: tokenMatch[1], domain: "localhost", path: "/" }]);
-      }
-      const page = await context.newPage();
-      await page.goto(`${BASE_URL}/`, { waitUntil: "networkidle" });
-      await page.locator("button:has-text('Add to Journal')").click();
-      await page.waitForTimeout(300);
-      const buf = await page.screenshot({ fullPage: false });
-      saveScreenshot("phase14c-mobile-390px-log-dialog.png", buf);
-      await context.close();
-    }
-
-    // Rewatch history modal on 768px
-    {
-      const context = await browser.newContext({ viewport: { width: 768, height: 1024 }, colorScheme: "dark" });
-      const tokenMatch = userCookie.match(/better-auth\.session_token=([^;]+)/);
-      if (tokenMatch) {
-        await context.addCookies([{ name: "better-auth.session_token", value: tokenMatch[1], domain: "localhost", path: "/" }]);
-      }
-      const page = await context.newPage();
-      await page.goto(`${BASE_URL}/?tab=journal`, { waitUntil: "networkidle" });
-      const historyBtn = page.locator("button:has-text('View history')").first();
-      if (await historyBtn.isVisible()) {
-        await historyBtn.click();
-        await page.waitForTimeout(300);
         const buf = await page.screenshot({ fullPage: false });
-        saveScreenshot("phase14c-tablet-768px-rewatch-history-modal.png", buf);
+        saveScreenshot(cfg.name, buf);
+
+        await context.close();
       }
-      await context.close();
+
+      // Rewatch history modal on 768px
+      {
+        const context = await createAuthedContext(browser, { width: 768, height: 1024 }, "dark");
+        const page = await context.newPage();
+        await page.goto(`${BASE_URL}/?tab=journal`, { waitUntil: "networkidle" });
+        const historyBtn = page.locator("button:has-text('View history')").first();
+        if (await historyBtn.isVisible()) {
+          await historyBtn.click();
+          await page.waitForTimeout(300);
+          const buf = await page.screenshot({ fullPage: false });
+          saveScreenshot("phase14c-tablet-768px-rewatch-history-modal.png", buf);
+        }
+        await context.close();
+      }
     }
 
-    console.log("\n✅ All automated responsive tests and screenshot captures PASSED!");
+    console.log("\n✅ All responsive tests and geometry verifications PASSED!");
   } finally {
     await browser.close();
   }

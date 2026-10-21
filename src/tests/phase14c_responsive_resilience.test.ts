@@ -37,21 +37,30 @@ test("Phase 14C: Defensive Responsive Design & Layout Resilience", async (t) => 
     // Priority 4: Notifications and Avatar
     assert.ok(navbarFile.includes("<NotificationBell />"), "NotificationBell must be present");
     assert.ok(navbarFile.includes('aria-label="User account menu"'), "Avatar trigger must have accessible account menu label");
+    assert.ok(navbarFile.includes("DropdownMenu"), "Navbar must integrate accessible Radix DropdownMenu");
 
-    // Priority 5: Secondary actions inside accessible menu
-    assert.ok(navbarFile.includes('role="menu"'), "Profile dropdown menu must have role='menu'");
-    assert.ok(navbarFile.includes('role="menuitem"'), "Menu items must have role='menuitem'");
+    // Priority 5: Secondary actions inside accessible Radix dropdown menu
+    assert.ok(navbarFile.includes("DropdownMenuContent"), "DropdownMenuContent must be present");
+    assert.ok(navbarFile.includes("DropdownMenuItem"), "DropdownMenuItem must be present");
     assert.ok(navbarFile.includes('href="/create"'), "New ranking must be accessible inside menu");
     assert.ok(navbarFile.includes('href="/settings"'), "Settings must be accessible inside menu");
     assert.ok(navbarFile.includes("handleSignOut"), "Sign out action must be accessible inside menu");
 
-    // Accessibility: Escape key and outside click handling
-    assert.ok(navbarFile.includes('event.key === "Escape"'), "Menu must support Escape key dismissal");
-    assert.ok(navbarFile.includes("handleClickOutside"), "Menu must support outside-click dismissal");
+    // Familiar desktop controls restored on xl viewports
+    assert.ok(navbarFile.includes("hidden xl:inline-flex"), "Desktop controls (Settings/Sign out) must be exposed at xl breakpoint");
 
     // Mobile bottom navigation preserved
     assert.ok(navbarFile.includes('aria-label={session ? "Mobile primary navigation" : "Mobile public navigation"}'), "Mobile bottom nav preserved");
     assert.ok(navbarFile.includes("env(safe-area-inset-bottom)"), "Mobile bottom nav must respect safe-area insets");
+  });
+
+  await t.test("2. Floating UI non-overlap: bug report button must clear mobile bottom navigation", async () => {
+    const bugBtnFile = fs.readFileSync(path.join(rootDir, "src/components/bug-report-button.tsx"), "utf8");
+
+    assert.ok(
+      bugBtnFile.includes("bottom-[calc(4.75rem+env(safe-area-inset-bottom,0px))] md:bottom-4"),
+      "Bug report button must sit safely above mobile bottom navigation on <md and bottom-4 on md+"
+    );
   });
 
   await t.test("2. Viewport-safe dialog sizing: dialogs must never exceed viewport height with min-h-0", async () => {
