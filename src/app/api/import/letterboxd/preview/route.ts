@@ -5,7 +5,7 @@ import { previewLetterboxdImport } from "@/lib/letterboxd-import";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession();
+    const session = await getServerSession(req);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -54,36 +54,31 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (summary.totalUniqueFilms === 0) {
+    const hasImportableData =
+      summary.totalUniqueFilms > 0 ||
+      summary.totalWatchlistItems > 0 ||
+      summary.totalCustomLists > 0 ||
+      summary.totalDiaryEntries > 0 ||
+      summary.totalReviews > 0;
+
+    if (!hasImportableData) {
       return NextResponse.json(
         {
           error:
-            "No valid film records, ratings, or watch history found in the ZIP archive.",
+            "No importable records found in the archive. The ZIP does not contain ratings, reviews, diary logs, a watchlist, or custom lists.",
         },
         { status: 400 },
       );
     }
 
-    const { newCount, existingCount } = await previewLetterboxdImport(
+    const previewResult = await previewLetterboxdImport(
       session.user.id,
-      summary.films,
+      summary,
     );
 
     return NextResponse.json({
       success: true,
-      totalFilms: summary.totalUniqueFilms,
-      totalRatings: summary.totalRatings,
-      totalReviews: summary.totalReviews,
-      totalWatched: summary.totalWatched,
-      newCount,
-      existingCount,
-      sampleFilms: summary.films.slice(0, 10).map((f) => ({
-        title: f.title,
-        year: f.year,
-        rating: f.rating ?? null,
-        hasReview: !!f.review,
-        watchDate: f.watchDate ?? null,
-      })),
+      ...previewResult,
     });
   } catch (error: any) {
     console.error("[Letterboxd Preview Error]", error);

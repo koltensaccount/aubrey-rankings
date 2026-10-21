@@ -202,12 +202,19 @@ export const collections = pgTable(
     backdropImage: text("backdrop_image"),
     isPinned: boolean("is_pinned").notNull().default(false),
     allowComments: boolean("allow_comments").notNull().default(true),
+    sourceService: text("source_service"),
+    sourceUri: text("source_uri"),
+    isRanked: boolean("is_ranked").notNull().default(true),
+    tags: jsonb("tags"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => [
     index("idx_collections_user").on(table.userId),
     index("idx_collections_public").on(table.isPublic, table.shareSlug),
+    uniqueIndex("uniq_collections_source_uri")
+      .on(table.userId, table.sourceService, table.sourceUri)
+      .where(sql`"source_uri" IS NOT NULL`),
   ]
 );
 
@@ -365,6 +372,10 @@ export const reviews = pgTable(
     isSpoiler: boolean("is_spoiler").notNull().default(false),
     isJournal: boolean("is_journal").notNull().default(false),
     shareRating: boolean("share_rating").notNull().default(false),
+    sourceService: text("source_service"),
+    sourceUri: text("source_uri"),
+    watchedDate: text("watched_date"),
+    tags: jsonb("tags"),
     publishedAt: timestamp("published_at"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
@@ -375,6 +386,93 @@ export const reviews = pgTable(
     index("idx_reviews_published").on(table.status, table.visibility, table.publishedAt),
     index("idx_reviews_user_media").on(table.userId, table.mediaItemId),
     index("idx_reviews_rating").on(table.ratingId),
+    uniqueIndex("uniq_reviews_source_uri")
+      .on(table.userId, table.sourceService, table.sourceUri)
+      .where(sql`"source_uri" IS NOT NULL`),
+  ]
+);
+
+// ==========================================
+// WATCHLIST, DIARY & IMPORT FOUNDATION (PHASE 14A)
+// ==========================================
+
+export const watchlistItems = pgTable(
+  "watchlist_items",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    mediaItemId: text("media_item_id")
+      .notNull()
+      .references(() => mediaItems.id, { onDelete: "cascade" }),
+    notes: text("notes"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uniq_user_watchlist_media").on(table.userId, table.mediaItemId),
+    index("idx_watchlist_user_created").on(table.userId, table.createdAt),
+    index("idx_watchlist_media").on(table.mediaItemId),
+  ]
+);
+
+export const diaryEntries = pgTable(
+  "diary_entries",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    mediaItemId: text("media_item_id")
+      .notNull()
+      .references(() => mediaItems.id, { onDelete: "cascade" }),
+    ratingId: text("rating_id").references(() => ratings.id, {
+      onDelete: "set null",
+    }),
+    reviewId: text("review_id").references(() => reviews.id, {
+      onDelete: "set null",
+    }),
+    watchedDate: text("watched_date"),
+    loggedDate: timestamp("logged_date"),
+    isRewatch: boolean("is_rewatch").notNull().default(false),
+    ratingValue: real("rating_value"),
+    tags: jsonb("tags"),
+    notes: text("notes"),
+    sourceService: text("source_service"),
+    sourceUri: text("source_uri"),
+    sourceEventKey: text("source_event_key"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_diary_user_watched").on(table.userId, table.watchedDate),
+    index("idx_diary_user_media").on(table.userId, table.mediaItemId),
+    index("idx_diary_review").on(table.reviewId),
+    index("idx_diary_rating").on(table.ratingId),
+    index("idx_diary_source_uri").on(table.userId, table.sourceUri),
+    uniqueIndex("uniq_diary_source_event")
+      .on(table.userId, table.sourceEventKey)
+      .where(sql`"source_event_key" IS NOT NULL`),
+  ]
+);
+
+export const unresolvedImportItems = pgTable(
+  "unresolved_import_items",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    sourceService: text("source_service").notNull(),
+    sourceType: text("source_type").notNull(),
+    sourceData: jsonb("source_data").notNull(),
+    reason: text("reason").notNull(),
+    details: text("details"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("idx_unresolved_user").on(table.userId, table.createdAt),
   ]
 );
 
@@ -569,6 +667,9 @@ export const userRelations = relations(user, ({ many }) => ({
   notifications: many(notifications, { relationName: "recipient" }),
   releaseTrackingSubscriptions: many(releaseTrackingSubscriptions),
   savedRankings: many(savedRankings),
+  watchlistItems: many(watchlistItems),
+  diaryEntries: many(diaryEntries),
+  unresolvedImportItems: many(unresolvedImportItems),
   blocksGiven: many(userBlocks, { relationName: "blocker" }),
   blocksReceived: many(userBlocks, { relationName: "blocked" }),
   reportsSubmitted: many(contentReports, { relationName: "reporter" }),
@@ -582,6 +683,8 @@ export const mediaItemsRelations = relations(mediaItems, ({ many, one }) => ({
   collectionEntries: many(collectionEntries),
   ratings: many(ratings),
   reviews: many(reviews),
+  watchlistItems: many(watchlistItems),
+  diaryEntries: many(diaryEntries),
   artworkOverrides: many(artworkOverrides),
 }));
 
@@ -676,6 +779,7 @@ export const ratingsRelations = relations(ratings, ({ one, many }) => ({
   }),
   categoryScores: many(categoryScores),
   reviews: many(reviews),
+  diaryEntries: many(diaryEntries),
 }));
 
 export const categoryScoresRelations = relations(categoryScores, ({ one }) => ({
@@ -996,10 +1100,58 @@ export const reviewsRelations = relations(reviews, ({ one, many }) => ({
   comments: many(comments),
   likes: many(likes),
   notifications: many(notifications),
+  diaryEntries: many(diaryEntries),
 }));
+
+export const watchlistItemsRelations = relations(watchlistItems, ({ one }) => ({
+  user: one(user, {
+    fields: [watchlistItems.userId],
+    references: [user.id],
+  }),
+  mediaItem: one(mediaItems, {
+    fields: [watchlistItems.mediaItemId],
+    references: [mediaItems.id],
+  }),
+}));
+
+export const diaryEntriesRelations = relations(diaryEntries, ({ one }) => ({
+  user: one(user, {
+    fields: [diaryEntries.userId],
+    references: [user.id],
+  }),
+  mediaItem: one(mediaItems, {
+    fields: [diaryEntries.mediaItemId],
+    references: [mediaItems.id],
+  }),
+  rating: one(ratings, {
+    fields: [diaryEntries.ratingId],
+    references: [ratings.id],
+  }),
+  review: one(reviews, {
+    fields: [diaryEntries.reviewId],
+    references: [reviews.id],
+  }),
+}));
+
+export const unresolvedImportItemsRelations = relations(
+  unresolvedImportItems,
+  ({ one }) => ({
+    user: one(user, {
+      fields: [unresolvedImportItems.userId],
+      references: [user.id],
+    }),
+  })
+);
 
 export type Review = typeof reviews.$inferSelect;
 export type NewReview = typeof reviews.$inferInsert;
+export type WatchlistItem = typeof watchlistItems.$inferSelect;
+export type NewWatchlistItem = typeof watchlistItems.$inferInsert;
+export type DiaryEntry = typeof diaryEntries.$inferSelect;
+export type NewDiaryEntry = typeof diaryEntries.$inferInsert;
+export type UnresolvedImportItem = typeof unresolvedImportItems.$inferSelect;
+export type NewUnresolvedImportItem = typeof unresolvedImportItems.$inferInsert;
+
 
 
 
