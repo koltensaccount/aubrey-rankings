@@ -1,36 +1,97 @@
+import path from "node:path";
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import AdmZip from "adm-zip";
 import { NextRequest } from "next/server";
-import { auth } from "../lib/auth";
-import { db } from "../db";
-import {
-  user,
-  mediaItems,
-  ratings,
-  reviews,
-  watchlistItems,
-  diaryEntries,
-  collections,
-  collectionEntries,
-  ratingSystems,
-  ratingCategories,
-  ratingTiers,
-  unresolvedImportItems,
-} from "../db/schema";
-import { eq, and, or } from "drizzle-orm";
 import { parseLetterboxdZip } from "../lib/letterboxd";
-import {
-  previewLetterboxdImport,
-  executeLetterboxdImport,
-} from "../lib/letterboxd-import";
-import { GET as exportData } from "../app/api/data/export/route";
-import {
-  GET as getWatchlist,
-  POST as postWatchlist,
-  DELETE as deleteWatchlist,
-} from "../app/api/watchlist/route";
-import { GET as getDiary } from "../app/api/diary/route";
+
+// =============================================================================
+// Safety Checks BEFORE Database / Authentication Modules Initialize
+// =============================================================================
+try {
+  process.loadEnvFile(path.resolve(process.cwd(), ".env.local"));
+} catch {}
+
+if (process.env.TEST_DATABASE_URL) {
+  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+}
+
+const isOptedIn =
+  process.env.AUBREY_TEST_MODE === "1" ||
+  process.env.ALLOW_TEST_DB_WRITES === "1";
+
+if (!isOptedIn) {
+  throw new Error(
+    "Phase 14A Test aborted: Refusing to run without explicit test execution opt-in. Set AUBREY_TEST_MODE=1 or ALLOW_TEST_DB_WRITES=1 to run against a dedicated disposable test database."
+  );
+}
+
+if (!process.env.DATABASE_URL) {
+  throw new Error("Phase 14A Test aborted: DATABASE_URL (or TEST_DATABASE_URL) is required.");
+}
+
+let parsedUrl: URL;
+try {
+  parsedUrl = new URL(process.env.DATABASE_URL);
+} catch {
+  throw new Error("Phase 14A Test aborted: DATABASE_URL is not a valid URL.");
+}
+
+if (!["localhost", "127.0.0.1"].includes(parsedUrl.hostname)) {
+  throw new Error(
+    `Phase 14A Test aborted: DATABASE_URL must be on loopback (localhost or 127.0.0.1), got: ${parsedUrl.hostname}`
+  );
+}
+
+const dbName = parsedUrl.pathname.replace(/^\//, "").toLowerCase().trim();
+if (!dbName) {
+  throw new Error("Phase 14A Test aborted: Database name is missing from DATABASE_URL.");
+}
+
+if (
+  dbName === "aubrey_rankings" ||
+  dbName === "aubrey" ||
+  dbName === "postgres" ||
+  dbName === "template1" ||
+  dbName === "template0"
+) {
+  throw new Error(
+    `Phase 14A Test aborted: Refusing to run against primary database "${dbName}". A dedicated disposable test database (e.g. aubrey_rankings_test) is strictly required.`
+  );
+}
+
+const isExplicitTestDb = dbName.endsWith("_test") || dbName.includes("test");
+if (!isExplicitTestDb) {
+  throw new Error(
+    `Phase 14A Test aborted: Database "${dbName}" is ambiguous. The dedicated test database name must explicitly contain "test" or end in "_test" (e.g. aubrey_rankings_test).`
+  );
+}
+
+// Module references dynamically loaded only after safety checks pass
+let auth: typeof import("../lib/auth").auth;
+let db: typeof import("../db").db;
+let user: typeof import("../db/schema").user;
+let mediaItems: typeof import("../db/schema").mediaItems;
+let ratings: typeof import("../db/schema").ratings;
+let reviews: typeof import("../db/schema").reviews;
+let watchlistItems: typeof import("../db/schema").watchlistItems;
+let diaryEntries: typeof import("../db/schema").diaryEntries;
+let collections: typeof import("../db/schema").collections;
+let collectionEntries: typeof import("../db/schema").collectionEntries;
+let ratingSystems: typeof import("../db/schema").ratingSystems;
+let ratingCategories: typeof import("../db/schema").ratingCategories;
+let ratingTiers: typeof import("../db/schema").ratingTiers;
+let unresolvedImportItems: typeof import("../db/schema").unresolvedImportItems;
+let eq: typeof import("drizzle-orm").eq;
+let and: typeof import("drizzle-orm").and;
+let or: typeof import("drizzle-orm").or;
+let previewLetterboxdImport: typeof import("../lib/letterboxd-import").previewLetterboxdImport;
+let executeLetterboxdImport: typeof import("../lib/letterboxd-import").executeLetterboxdImport;
+let exportData: typeof import("../app/api/data/export/route").GET;
+let getWatchlist: typeof import("../app/api/watchlist/route").GET;
+let postWatchlist: typeof import("../app/api/watchlist/route").POST;
+let deleteWatchlist: typeof import("../app/api/watchlist/route").DELETE;
+let getDiary: typeof import("../app/api/diary/route").GET;
 
 describe("Phase 14A: Personal Library Foundation & Letterboxd Importer", () => {
   const suffix = `${process.pid}_${Date.now()}`;
@@ -45,6 +106,47 @@ describe("Phase 14A: Personal Library Foundation & Letterboxd Importer", () => {
   const trackedMediaIds: string[] = [];
 
   before(async () => {
+    // Dynamic import of database and auth modules only after safety checks have validated the environment
+    const authModule = await import("../lib/auth");
+    auth = authModule.auth;
+
+    const dbModule = await import("../db");
+    db = dbModule.db;
+
+    const schemaModule = await import("../db/schema");
+    user = schemaModule.user;
+    mediaItems = schemaModule.mediaItems;
+    ratings = schemaModule.ratings;
+    reviews = schemaModule.reviews;
+    watchlistItems = schemaModule.watchlistItems;
+    diaryEntries = schemaModule.diaryEntries;
+    collections = schemaModule.collections;
+    collectionEntries = schemaModule.collectionEntries;
+    ratingSystems = schemaModule.ratingSystems;
+    ratingCategories = schemaModule.ratingCategories;
+    ratingTiers = schemaModule.ratingTiers;
+    unresolvedImportItems = schemaModule.unresolvedImportItems;
+
+    const ormModule = await import("drizzle-orm");
+    eq = ormModule.eq;
+    and = ormModule.and;
+    or = ormModule.or;
+
+    const importerModule = await import("../lib/letterboxd-import");
+    previewLetterboxdImport = importerModule.previewLetterboxdImport;
+    executeLetterboxdImport = importerModule.executeLetterboxdImport;
+
+    const exportRoute = await import("../app/api/data/export/route");
+    exportData = exportRoute.GET;
+
+    const watchlistRoute = await import("../app/api/watchlist/route");
+    getWatchlist = watchlistRoute.GET;
+    postWatchlist = watchlistRoute.POST;
+    deleteWatchlist = watchlistRoute.DELETE;
+
+    const diaryRoute = await import("../app/api/diary/route");
+    getDiary = diaryRoute.GET;
+
     // 1. Create primary test user
     const ownerRes = await auth.api.signUpEmail({
       body: {
