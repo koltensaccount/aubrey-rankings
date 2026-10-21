@@ -78,6 +78,7 @@ let collections: typeof import("../db/schema").collections;
 let eq: typeof import("drizzle-orm").eq;
 let and: typeof import("drizzle-orm").and;
 let desc: typeof import("drizzle-orm").desc;
+let inArray: typeof import("drizzle-orm").inArray;
 let getDiary: typeof import("../app/api/diary/route").GET;
 let postDiary: typeof import("../app/api/diary/route").POST;
 let deleteDiary: typeof import("../app/api/diary/route").DELETE;
@@ -118,6 +119,7 @@ describe("Phase 14B: Unified Library & Cinematic Viewing Timeline", () => {
     eq = ormModule.eq;
     and = ormModule.and;
     desc = ormModule.desc;
+    inArray = ormModule.inArray;
 
     const diaryRoute = await import("../app/api/diary/route");
     getDiary = diaryRoute.GET;
@@ -545,5 +547,99 @@ describe("Phase 14B: Unified Library & Cinematic Viewing Timeline", () => {
       categoryScores: [],
     };
     assert.equal(reviewScoreOnTen(watchedOnlyCandidate), null);
+  });
+
+  it("12. preserves accurate rewatch ordinals and total viewing counts across multiple paginated pages", async () => {
+    // Insert additional viewings for movie1Id (Interstellar) with staggered dates
+    // so that viewings span across multiple pages when paginated with limit=2
+    const p1 = `diary_page_test_${Date.now()}_1`;
+    const p2 = `diary_page_test_${Date.now()}_2`;
+    const p3 = `diary_page_test_${Date.now()}_3`;
+
+    await db.insert(diaryEntries).values([
+      {
+        id: p1,
+        userId: ownerId,
+        mediaItemId: movie1Id,
+        watchedDate: "2026-06-01",
+        isRewatch: true,
+      },
+      {
+        id: p2,
+        userId: ownerId,
+        mediaItemId: movie1Id,
+        watchedDate: "2026-07-01",
+        isRewatch: true,
+      },
+      {
+        id: p3,
+        userId: ownerId,
+        mediaItemId: movie1Id,
+        watchedDate: "2026-08-01",
+        isRewatch: true,
+      },
+    ]);
+
+    // Fetch Page 1 (limit=2, offset=0)
+    const page1Res = await getDiary(
+      new NextRequest("http://localhost:3000/api/diary?limit=2&offset=0", {
+        headers: { cookie: ownerCookie },
+      })
+    );
+    assert.equal(page1Res.status, 200);
+    const page1Data = await page1Res.json();
+    assert.equal(page1Data.entries.length, 2);
+    assert.equal(page1Data.hasMore, true);
+
+    // Each entry on page 1 must reflect true lifetime ordinal and total viewings across all records
+    const newestInterstellar = page1Data.entries.find((e: any) => e.id === p3);
+    assert.ok(newestInterstellar, "Page 1 contains the newest logged viewing");
+    assert.ok(
+      newestInterstellar.totalViewings >= 5,
+      `totalViewings (${newestInterstellar.totalViewings}) reflects all lifetime entries, not just 2 on this page`
+    );
+    assert.ok(
+      newestInterstellar.ordinal >= 5,
+      `ordinal (${newestInterstellar.ordinal}) reflects exact chronological position among all lifetime viewings`
+    );
+
+    // Fetch Page 2 (limit=2, offset=2)
+    const page2Res = await getDiary(
+      new NextRequest("http://localhost:3000/api/diary?limit=2&offset=2", {
+        headers: { cookie: ownerCookie },
+      })
+    );
+    assert.equal(page2Res.status, 200);
+    const page2Data = await page2Res.json();
+    assert.equal(page2Data.entries.length, 2);
+
+    const earlierInterstellar = page2Data.entries.find((e: any) => e.mediaItemId === movie1Id);
+    if (earlierInterstellar) {
+      assert.ok(
+        earlierInterstellar.totalViewings >= 5,
+        "Page 2 entry preserves full lifetime total count"
+      );
+      assert.ok(
+        earlierInterstellar.ordinal < newestInterstellar.ordinal,
+        "Page 2 earlier viewing has strictly lower ordinal"
+      );
+    }
+
+    // Verify rewatch history query for single title supports higher limits beyond 100
+    const historyRes = await getDiary(
+      new NextRequest(
+        `http://localhost:3000/api/diary?mediaItemId=${encodeURIComponent(movie1Id)}&limit=150`,
+        {
+          headers: { cookie: ownerCookie },
+        }
+      )
+    );
+    assert.equal(historyRes.status, 200);
+    const historyData = await historyRes.json();
+    assert.ok(historyData.totalCount >= 5);
+    assert.ok(historyData.entries.length >= 5);
+
+    // Clean up temporary pagination test records
+    await db.delete(diaryEntries).where(inArray(diaryEntries.id, [p1, p2, p3]));
   });
 });

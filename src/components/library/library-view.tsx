@@ -257,92 +257,97 @@ export function LibraryView({
 
       {/* 3. Sub-View Navigation for Journal Tab */}
       {activeTab === "journal" && (
-        <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
-          <div className="flex items-center gap-1.5 bg-surface p-1 rounded-button border border-border text-xs select-none">
-            <button
-              type="button"
-              onClick={() => handleJournalSubTabChange("timeline")}
-              className={`px-3 py-1.5 rounded-button font-semibold transition-colors cursor-pointer ${
-                journalSubTab === "timeline"
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              Viewing Timeline
-            </button>
-            <button
-              type="button"
-              onClick={() => handleJournalSubTabChange("reviews")}
-              className={`px-3 py-1.5 rounded-button font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                journalSubTab === "reviews"
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <span>Reviews &amp; Drafts</span>
-              {draftCount > 0 && (
-                <span className="px-1.5 py-0.2 rounded bg-background/40 text-[10px] font-mono">
-                  {draftCount} drafts
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleJournalSubTabChange("ratings")}
-              className={`px-3 py-1.5 rounded-button font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                journalSubTab === "ratings"
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <span>Standalone Ratings</span>
-              {standaloneRatings.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded bg-background/40 text-[10px] font-mono">
-                  {standaloneRatings.length}
-                </span>
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => handleJournalSubTabChange("watched")}
-              className={`px-3 py-1.5 rounded-button font-semibold transition-colors cursor-pointer flex items-center gap-1.5 ${
-                journalSubTab === "watched"
-                  ? "bg-primary text-primary-foreground shadow-xs"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              <span>Watched Only</span>
-              {watchedOnlyRecords.length > 0 && (
-                <span className="px-1.5 py-0.2 rounded bg-background/40 text-[10px] font-mono">
-                  {watchedOnlyRecords.length}
-                </span>
-              )}
-            </button>
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
+          {/* Scrollable sub-tab bar on mobile */}
+          <div className="overflow-x-auto scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
+            <div className="inline-flex items-center gap-1.5 bg-surface p-1 rounded-button border border-border text-xs select-none whitespace-nowrap min-w-max">
+              <button
+                type="button"
+                onClick={() => handleJournalSubTabChange("timeline")}
+                className={`px-3 py-1.5 rounded-button font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                  journalSubTab === "timeline"
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Viewing Timeline
+              </button>
+              <button
+                type="button"
+                onClick={() => handleJournalSubTabChange("reviews")}
+                className={`px-3 py-1.5 rounded-button font-semibold transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                  journalSubTab === "reviews"
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <span>Reviews &amp; Drafts</span>
+                {draftCount > 0 && (
+                  <span className="px-1.5 py-0.2 rounded bg-background/40 text-[10px] font-mono">
+                    {draftCount} drafts
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleJournalSubTabChange("ratings")}
+                className={`px-3 py-1.5 rounded-button font-semibold transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                  journalSubTab === "ratings"
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <span>Standalone Ratings</span>
+                {standaloneRatings.length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded bg-background/40 text-[10px] font-mono">
+                    {standaloneRatings.length}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleJournalSubTabChange("watched")}
+                className={`px-3 py-1.5 rounded-button font-semibold transition-colors cursor-pointer whitespace-nowrap flex items-center gap-1.5 ${
+                  journalSubTab === "watched"
+                    ? "bg-primary text-primary-foreground shadow-xs"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <span>Watched Only</span>
+                {watchedOnlyRecords.length > 0 && (
+                  <span className="px-1.5 py-0.2 rounded bg-background/40 text-[10px] font-mono">
+                    {watchedOnlyRecords.length}
+                  </span>
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Review Filter Pills (when reviews sub-tab is active) */}
           {journalSubTab === "reviews" && (
-            <div className="flex items-center gap-1 bg-surface p-0.5 rounded-button border border-border text-xs">
-              {(
-                [
-                  { id: "all", label: "All Reviews" },
-                  { id: "published", label: "Published" },
-                  { id: "drafts", label: `Drafts (${draftCount})` },
-                ] as const
-              ).map((f) => (
-                <button
-                  key={f.id}
-                  type="button"
-                  onClick={() => handleReviewFilterChange(f.id)}
-                  className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
-                    reviewFilter === f.id
-                      ? "bg-card text-foreground shadow-xs border border-border"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {f.label}
-                </button>
-              ))}
+            <div className="overflow-x-auto scrollbar-none -mx-4 px-4 sm:mx-0 sm:px-0">
+              <div className="inline-flex items-center gap-1 bg-surface p-0.5 rounded-button border border-border text-xs whitespace-nowrap min-w-max">
+                {(
+                  [
+                    { id: "all", label: "All Reviews" },
+                    { id: "published", label: "Published" },
+                    { id: "drafts", label: `Drafts (${draftCount})` },
+                  ] as const
+                ).map((f) => (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => handleReviewFilterChange(f.id)}
+                    className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                      reviewFilter === f.id
+                        ? "bg-card text-foreground shadow-xs border border-border"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>

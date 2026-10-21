@@ -102,12 +102,23 @@ export function CinematicTimeline({
   };
 
   // Compute total viewings and chronological ordinals per media item
-  // Ordinals strictly reflect known logged events in ascending order
+  // Ordinals strictly reflect known logged events in ascending order across lifetime history
   const { mediaOrdinalsMap, mediaTotalCountMap } = useMemo(() => {
     const ordinalsMap = new Map<string, number>(); // entry.id -> ordinal (1, 2, 3...)
     const totalCountMap = new Map<string, number>(); // mediaItemId -> total count
 
-    // Group all entries by mediaItemId
+    // 1. Populate from entry-level metadata if provided by the server/database
+    entries.forEach((e) => {
+      if (typeof e.ordinal === "number") {
+        ordinalsMap.set(e.id, e.ordinal);
+      }
+      if (typeof e.totalViewings === "number") {
+        const cur = totalCountMap.get(e.mediaItemId) || 0;
+        totalCountMap.set(e.mediaItemId, Math.max(cur, e.totalViewings));
+      }
+    });
+
+    // 2. For any entries without server ordinals, compute locally
     const byMedia = new Map<string, TimelineEntry[]>();
     entries.forEach((e) => {
       const list = byMedia.get(e.mediaItemId) || [];
@@ -115,9 +126,11 @@ export function CinematicTimeline({
       byMedia.set(e.mediaItemId, list);
     });
 
-    // For each media item, sort chronologically ascending to assign ordinals
+    // For each media item, sort chronologically ascending to assign ordinals if missing
     byMedia.forEach((mediaEntries, mediaId) => {
-      totalCountMap.set(mediaId, mediaEntries.length);
+      if (!totalCountMap.has(mediaId)) {
+        totalCountMap.set(mediaId, mediaEntries.length);
+      }
 
       const sortedAsc = [...mediaEntries].sort((a, b) => {
         const dateA = a.watchedDate || "";
@@ -126,7 +139,9 @@ export function CinematicTimeline({
       });
 
       sortedAsc.forEach((entry, idx) => {
-        ordinalsMap.set(entry.id, idx + 1);
+        if (!ordinalsMap.has(entry.id)) {
+          ordinalsMap.set(entry.id, idx + 1);
+        }
       });
     });
 
@@ -147,12 +162,13 @@ export function CinematicTimeline({
         return isEpisode || e.mediaItem.mediaType === "tv";
       }
       if (filter === "rewatches") {
-        const ordinal = mediaOrdinalsMap.get(e.id) || 1;
-        return Boolean(e.isRewatch || ordinal > 1);
+        const ordinal = e.ordinal ?? mediaOrdinalsMap.get(e.id) ?? 1;
+        const total = e.totalViewings ?? mediaTotalCountMap.get(e.mediaItemId) ?? 1;
+        return Boolean(e.isRewatch || ordinal > 1 || total > 1);
       }
       return true;
     });
-  }, [entries, filter, mediaOrdinalsMap]);
+  }, [entries, filter, mediaOrdinalsMap, mediaTotalCountMap]);
 
   // Partition confirmed dated entries from undated entries
   // NEVER fabricate a viewing date from a database modification or activity timestamp
@@ -406,8 +422,8 @@ export function CinematicTimeline({
                     {/* Timeline Entries */}
                     <div className="space-y-1">
                       {monthGroup.entries.map((entry) => {
-                        const ordinal = mediaOrdinalsMap.get(entry.id) || 1;
-                        const totalLogs = mediaTotalCountMap.get(entry.mediaItemId) || 1;
+                        const ordinal = entry.ordinal ?? mediaOrdinalsMap.get(entry.id) ?? 1;
+                        const totalLogs = entry.totalViewings ?? mediaTotalCountMap.get(entry.mediaItemId) ?? 1;
 
                         return (
                           <TimelineEntryCard
@@ -438,8 +454,8 @@ export function CinematicTimeline({
               </div>
               <div className="space-y-2">
                 {undatedTimelineEntries.map((entry) => {
-                  const ordinal = mediaOrdinalsMap.get(entry.id) || 1;
-                  const totalLogs = mediaTotalCountMap.get(entry.mediaItemId) || 1;
+                  const ordinal = entry.ordinal ?? mediaOrdinalsMap.get(entry.id) ?? 1;
+                  const totalLogs = entry.totalViewings ?? mediaTotalCountMap.get(entry.mediaItemId) ?? 1;
                   return (
                     <TimelineEntryCard
                       key={entry.id}

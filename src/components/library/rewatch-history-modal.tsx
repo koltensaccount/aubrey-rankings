@@ -11,6 +11,8 @@ export interface DiaryViewingEvent {
   watchedDate?: string | null;
   loggedDate?: string | Date | null;
   isRewatch: boolean;
+  ordinal?: number;
+  totalViewings?: number;
   ratingValue?: number | null;
   notes?: string | null;
   tags?: string[] | null;
@@ -81,26 +83,54 @@ export function RewatchHistoryModal({
 }: RewatchHistoryModalProps) {
   const [entries, setEntries] = useState<DiaryViewingEvent[]>(initialEntries || []);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!isOpen) return;
     if (initialEntries && initialEntries.length > 0) {
       setEntries(initialEntries);
+      setTotalCount(initialEntries.length);
+      setHasMore(false);
       return;
     }
-    // Fetch all entries for this media item
+    // Fetch all entries for this media item (supports accessing beyond 100 entries via pagination)
     setLoading(true);
     fetch(`/api/diary?mediaItemId=${encodeURIComponent(mediaItem.id)}&limit=100`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success && Array.isArray(data.entries)) {
           setEntries(data.entries);
+          setTotalCount(data.totalCount ?? data.entries.length);
+          setHasMore(Boolean(data.hasMore));
         }
       })
       .catch((err) => console.error("Failed to load viewing history:", err))
       .finally(() => setLoading(false));
   }, [isOpen, mediaItem.id, initialEntries]);
+
+  const handleLoadMore = async () => {
+    if (loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const offset = entries.length;
+      const res = await fetch(
+        `/api/diary?mediaItemId=${encodeURIComponent(mediaItem.id)}&limit=100&offset=${offset}`
+      );
+      const data = await res.json();
+      if (data.success && Array.isArray(data.entries)) {
+        setEntries((prev) => [...prev, ...data.entries]);
+        setTotalCount(data.totalCount ?? entries.length + data.entries.length);
+        setHasMore(Boolean(data.hasMore));
+      }
+    } catch (err) {
+      console.error("Failed to load additional viewings:", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   if (!isOpen) return null;
 
@@ -163,7 +193,10 @@ export function RewatchHistoryModal({
                 <span>Rewatch History</span>
                 <span className="text-muted-foreground/60">·</span>
                 <span>
-                  {entries.length} {entries.length === 1 ? "Logged Viewing" : "Logged Viewings"}
+                  {typeof totalCount === "number" ? totalCount : entries.length}{" "}
+                  {(typeof totalCount === "number" ? totalCount : entries.length) === 1
+                    ? "Logged Viewing"
+                    : "Logged Viewings"}
                 </span>
               </div>
               <h2
@@ -333,7 +366,8 @@ export function RewatchHistoryModal({
               <div className="space-y-3">
                 {[...sortedAscending].reverse().map((entry) => {
                   const ascIndex = sortedAscending.findIndex((e) => e.id === entry.id);
-                  const viewingNumber = ascIndex + 1;
+                  const viewingNumber = entry.ordinal ?? (ascIndex + 1);
+                  const totalKnown = entry.totalViewings ?? totalCount ?? entries.length;
                   const isRewatch = Boolean(entry.isRewatch || viewingNumber > 1);
 
                   const ordinalSuffix =
@@ -347,7 +381,7 @@ export function RewatchHistoryModal({
 
                   let badgeLabel = "1st logged viewing";
                   if (isRewatch) {
-                    if (entries.length > 1 && viewingNumber > 1) {
+                    if (totalKnown > 1 && viewingNumber > 1) {
                       badgeLabel = `Rewatch · ${ordinalSuffix} logged viewing`;
                     } else {
                       badgeLabel = "Rewatch";
@@ -443,6 +477,28 @@ export function RewatchHistoryModal({
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {hasMore && (
+              <div className="pt-3 text-center">
+                <button
+                  type="button"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-button bg-surface hover:bg-card border border-border text-xs font-semibold text-foreground transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {loadingMore ? (
+                    <span>Loading earlier viewings...</span>
+                  ) : (
+                    <span>
+                      Load earlier viewings{" "}
+                      {typeof totalCount === "number" && totalCount > entries.length
+                        ? `(${totalCount - entries.length} remaining)`
+                        : ""}
+                    </span>
+                  )}
+                </button>
               </div>
             )}
           </div>

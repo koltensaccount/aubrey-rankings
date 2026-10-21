@@ -8,8 +8,9 @@ import {
   reviews,
   diaryEntries,
   watchlistItems,
+  mediaItems,
 } from "@/db/schema";
-import { desc, eq, and, isNull, inArray, count } from "drizzle-orm";
+import { desc, eq, and, isNull, inArray, count, isNotNull, sql } from "drizzle-orm";
 import { getRatingSummary } from "@/lib/scoring";
 import { reviewScoreOnTen } from "@/lib/review-rating";
 import { LibraryView, type LibraryTab } from "@/components/library/library-view";
@@ -153,8 +154,48 @@ export default async function HomePage({
     db.select({ count: count() }).from(diaryEntries).where(eq(diaryEntries.userId, session.user.id)),
   ]);
 
-  const userDiaryEntries = rawDiaryEntries as TimelineEntry[];
   const totalDiaryCount = diaryTotalCountRows[0]?.count ?? 0;
+
+  // Calculate lifetime chronological ordinals and total viewing counts per media item
+  const ordinalsMap = new Map<string, number>();
+  const mediaTotalsMap = new Map<string, number>();
+
+  if (rawDiaryEntries.length > 0) {
+    const userOrdinals = await db.execute(sql`
+      SELECT 
+        id,
+        media_item_id as "mediaItemId",
+        ROW_NUMBER() OVER (
+          PARTITION BY media_item_id 
+          ORDER BY 
+            CASE WHEN watched_date IS NOT NULL AND watched_date != '' THEN 0 ELSE 1 END ASC,
+            watched_date ASC,
+            created_at ASC,
+            id ASC
+        )::int as ordinal,
+        COUNT(*) OVER (
+          PARTITION BY media_item_id
+        )::int as "totalViewings"
+      FROM diary_entries
+      WHERE user_id = ${session.user.id}
+    `);
+
+    for (const row of userOrdinals.rows as Array<{
+      id: string;
+      mediaItemId: string;
+      ordinal: number;
+      totalViewings: number;
+    }>) {
+      ordinalsMap.set(row.id, row.ordinal);
+      mediaTotalsMap.set(row.mediaItemId, row.totalViewings);
+    }
+  }
+
+  const userDiaryEntries = rawDiaryEntries.map((e) => ({
+    ...e,
+    ordinal: ordinalsMap.get(e.id) ?? 1,
+    totalViewings: mediaTotalsMap.get(e.mediaItemId) ?? 1,
+  })) as TimelineEntry[];
 
   // 2. Fetch User Reviews & Standalone Ratings
   const userReviews = await db.query.reviews.findMany({
@@ -189,10 +230,12 @@ export default async function HomePage({
     (r) => reviewScoreOnTen(r) === null && r.isWatched
   );
 
-  // Filter out reviews that already have an associated diary entry
-  const diaryReviewIds = new Set(
-    userDiaryEntries.map((e) => (e as any).reviewId || e.review?.id).filter(Boolean),
-  );
+  // Filter out reviews that already have an associated diary entry across all lifetime records
+  const linkedDiaryReviewRows = await db
+    .select({ reviewId: diaryEntries.reviewId })
+    .from(diaryEntries)
+    .where(and(eq(diaryEntries.userId, session.user.id), isNotNull(diaryEntries.reviewId)));
+  const diaryReviewIds = new Set(linkedDiaryReviewRows.map((r) => r.reviewId).filter(Boolean));
 
   const undatedReviews = userReviews
     .filter((r) => !diaryReviewIds.has(r.id) && !r.watchedDate)
@@ -204,45 +247,57 @@ export default async function HomePage({
       content: r.draftContent || r.content,
     }));
 
-  // 3. Fetch Watched Titles
-  // A title is watched if marked in ratings (isWatched = true) or has a diary entry
-  // Map of unique watched items
+  // 3. Fetch Watched Titles (All Lifetime History)
+  // Query all media items ever logged in diary entries by this user with exact viewing counts
+  const diaryWatchedRows = await db
+    .select({
+      mediaItemId: diaryEntries.mediaItemId,
+      viewingCount: count(),
+      lastWatchedDate: sql<string | null>`max(${diaryEntries.watchedDate})`,
+      id: mediaItems.id,
+      title: mediaItems.title,
+      releaseDate: mediaItems.releaseDate,
+      mediaType: mediaItems.mediaType,
+      seasonNumber: mediaItems.seasonNumber,
+      episodeNumber: mediaItems.episodeNumber,
+      posterPath: mediaItems.posterPath,
+      stillPath: mediaItems.stillPath,
+    })
+    .from(diaryEntries)
+    .innerJoin(mediaItems, eq(diaryEntries.mediaItemId, mediaItems.id))
+    .where(eq(diaryEntries.userId, session.user.id))
+    .groupBy(
+      diaryEntries.mediaItemId,
+      mediaItems.id,
+      mediaItems.title,
+      mediaItems.releaseDate,
+      mediaItems.mediaType,
+      mediaItems.seasonNumber,
+      mediaItems.episodeNumber,
+      mediaItems.posterPath,
+      mediaItems.stillPath,
+    );
+
   const watchedMap = new Map<string, WatchedItem>();
 
-  // Add all mediaItems from diary entries
-  userDiaryEntries.forEach((entry) => {
-    const m = entry.mediaItem;
-    const year = m.releaseDate ? parseInt(m.releaseDate.slice(0, 4), 10) : null;
-    const entryScore =
-      typeof entry.ratingValue === "number"
-        ? entry.ratingValue
-        : entry.rating
-        ? reviewScoreOnTen(entry.rating as any)
-        : null;
-
-    if (!watchedMap.has(m.id)) {
-      watchedMap.set(m.id, {
-        id: m.id,
-        title: m.title,
-        year,
-        mediaType: m.mediaType,
-        seasonNumber: m.seasonNumber,
-        episodeNumber: m.episodeNumber,
-        posterPath: m.posterPath,
-        stillPath: m.stillPath,
-        viewingCount: 0,
-        userRating: entryScore,
-        lastWatchedDate: entry.watchedDate,
-      });
-    }
-    const item = watchedMap.get(m.id)!;
-    item.viewingCount += 1;
-    if (entry.watchedDate && (!item.lastWatchedDate || entry.watchedDate > item.lastWatchedDate)) {
-      item.lastWatchedDate = entry.watchedDate;
-    }
+  diaryWatchedRows.forEach((row) => {
+    const year = row.releaseDate ? parseInt(row.releaseDate.slice(0, 4), 10) : null;
+    watchedMap.set(row.id, {
+      id: row.id,
+      title: row.title,
+      year,
+      mediaType: row.mediaType,
+      seasonNumber: row.seasonNumber,
+      episodeNumber: row.episodeNumber,
+      posterPath: row.posterPath,
+      stillPath: row.stillPath,
+      viewingCount: row.viewingCount,
+      userRating: null,
+      lastWatchedDate: row.lastWatchedDate,
+    });
   });
 
-  // Add ratings where isWatched is true
+  // Add ratings where isWatched is true or attach scores
   userRatings.forEach((rating) => {
     if (!rating.mediaItem) return;
     const m = rating.mediaItem;
@@ -267,6 +322,26 @@ export default async function HomePage({
       const item = watchedMap.get(m.id)!;
       if (item.userRating === null || item.userRating === undefined) {
         item.userRating = normalizedScore;
+      }
+      if (rating.watchDate) {
+        const ratingDateStr = rating.watchDate.toISOString().slice(0, 10);
+        if (!item.lastWatchedDate || ratingDateStr > item.lastWatchedDate) {
+          item.lastWatchedDate = ratingDateStr;
+        }
+      }
+    }
+  });
+
+  // Also check if any loaded diary entry has a rating to attach if userRating is still null
+  rawDiaryEntries.forEach((entry) => {
+    if (watchedMap.has(entry.mediaItemId)) {
+      const item = watchedMap.get(entry.mediaItemId)!;
+      if (item.userRating === null || item.userRating === undefined) {
+        if (typeof entry.ratingValue === "number") {
+          item.userRating = entry.ratingValue;
+        } else if (entry.rating) {
+          item.userRating = reviewScoreOnTen(entry.rating as any);
+        }
       }
     }
   });

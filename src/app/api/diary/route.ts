@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
 import { diaryEntries, ratings, mediaItems } from "@/db/schema";
-import { and, desc, eq, isNull, count } from "drizzle-orm";
+import { and, desc, eq, isNull, count, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { resolveMediaItem } from "@/lib/media-resolution";
 
@@ -15,7 +15,10 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url);
     const mediaItemId = searchParams.get("mediaItemId");
-    const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
+    const limitParam = parseInt(searchParams.get("limit") || "50", 10);
+    // Allow higher limit when querying single title history (up to 500)
+    const maxLimit = mediaItemId ? 500 : 100;
+    const limit = Math.min(Math.max(limitParam, 1), maxLimit);
     const offset = Math.max(parseInt(searchParams.get("offset") || "0", 10), 0);
 
     const conditions = [eq(diaryEntries.userId, session.user.id)];
@@ -40,12 +43,54 @@ export async function GET(req: NextRequest) {
 
     const totalCount = totalRows[0]?.count ?? 0;
 
+    // Calculate lifetime chronological ordinals and total viewing counts per media item
+    // Chronologically ascending: earliest confirmed viewing = 1, next = 2, etc.
+    const ordinalsMap = new Map<string, number>();
+    const mediaTotalsMap = new Map<string, number>();
+
+    if (entries.length > 0) {
+      const userOrdinals = await db.execute(sql`
+        SELECT 
+          id,
+          media_item_id as "mediaItemId",
+          ROW_NUMBER() OVER (
+            PARTITION BY media_item_id 
+            ORDER BY 
+              CASE WHEN watched_date IS NOT NULL AND watched_date != '' THEN 0 ELSE 1 END ASC,
+              watched_date ASC,
+              created_at ASC,
+              id ASC
+          )::int as ordinal,
+          COUNT(*) OVER (
+            PARTITION BY media_item_id
+          )::int as "totalViewings"
+        FROM diary_entries
+        WHERE user_id = ${session.user.id}
+      `);
+
+      for (const row of userOrdinals.rows as Array<{
+        id: string;
+        mediaItemId: string;
+        ordinal: number;
+        totalViewings: number;
+      }>) {
+        ordinalsMap.set(row.id, row.ordinal);
+        mediaTotalsMap.set(row.mediaItemId, row.totalViewings);
+      }
+    }
+
+    const enrichedEntries = entries.map((entry) => ({
+      ...entry,
+      ordinal: ordinalsMap.get(entry.id) ?? 1,
+      totalViewings: mediaTotalsMap.get(entry.mediaItemId) ?? 1,
+    }));
+
     return NextResponse.json({
       success: true,
-      entries,
-      count: entries.length,
+      entries: enrichedEntries,
+      count: enrichedEntries.length,
       totalCount,
-      hasMore: offset + entries.length < totalCount,
+      hasMore: offset + enrichedEntries.length < totalCount,
     });
   } catch (error: any) {
     console.error("[Diary GET Error]", error);

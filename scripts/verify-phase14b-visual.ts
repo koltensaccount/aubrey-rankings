@@ -169,8 +169,8 @@ async function setup() {
       title: "Arrival",
       mediaType: "movie",
       releaseDate: "2016-11-11",
-      posterPath: "/x2OAHu29XZSuIaFjAGy59w24E48.jpg",
-      backdropPath: "/p2f22hUgzH7vVfKcu9h6L7574.jpg",
+      posterPath: "/pEzNVQfdzYDzVK0XqxERIw2x2se.jpg",
+      backdropPath: "/hA0e5HjVp550L9jF70iP00a0E0y.jpg",
     },
     {
       id: testMovie3Id,
@@ -195,8 +195,8 @@ async function setup() {
       seasonNumber: 1,
       episodeNumber: 1,
       releaseDate: "2011-12-04",
-      stillPath: "/oTuhpQ9fG5xXW3r7U2tW4F0B7H0.jpg",
-      posterPath: "/oTuhpQ9fG5xXW3r7U2tW4F0B7H0.jpg",
+      stillPath: "/ztdy1f1cAjwsO0GpVKzNuqZ0PMv.jpg",
+      posterPath: "/ztdy1f1cAjwsO0GpVKzNuqZ0PMv.jpg",
     },
   ]);
   createdMediaIds.push(testMovie1Id, testMovie2Id, testMovie3Id, testMovie4Id, testEpisodeId);
