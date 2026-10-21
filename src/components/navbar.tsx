@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "@/lib/auth-client";
-import { Plus, Settings, LogOut, Library, Compass, Rss, PenLine, User } from "lucide-react";
+import { Plus, Settings, LogOut, Library, Compass, Rss, PenLine, User, Database } from "lucide-react";
 import { NotificationBell } from "@/components/notification-bell";
 import {
   DropdownMenu,
@@ -40,8 +40,42 @@ export function Navbar() {
     ? primaryNavigation
     : primaryNavigation.filter(({ href }) => href !== "/");
 
+  const isTestMode = Boolean(
+    (session?.user as any)?.isTestWorkspace ||
+    session?.user?.id === "usr_test_import_workspace"
+  );
+
   return (
     <>
+      {isTestMode && (
+        <aside
+          role="region"
+          aria-label="Test Workspace Active Banner"
+          className="bg-primary/10 border-b border-primary/30 text-primary py-2 px-4 sm:px-6 flex items-center justify-between gap-3 sticky top-0 z-40 backdrop-blur-md"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-primary/20 text-foreground shrink-0 border border-primary/40">
+              Test Mode
+            </span>
+            <span className="truncate text-[11px] sm:text-xs text-foreground">
+              Active workspace: <strong className="font-mono text-primary">usr_test_import_workspace</strong> (isolated from production accounts & feed)
+            </span>
+          </div>
+          <button
+            onClick={async () => {
+              await fetch("/api/admin/import-lab/workspace/switch", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ active: false }),
+              });
+              window.location.href = "/admin/import-lab";
+            }}
+            className="shrink-0 px-2.5 py-1 rounded bg-primary/20 hover:bg-primary/30 text-foreground border border-primary/40 font-medium text-[11px] transition-colors cursor-pointer"
+          >
+            Exit Test Mode
+          </button>
+        </aside>
+      )}
       <header className="sticky top-0 z-30 w-full border-b border-border bg-background/90 backdrop-blur-md transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
           {/* Priority 1 & 2: Branding + Core Navigation */}
@@ -153,6 +187,12 @@ export function Navbar() {
                       <Link href="/settings">
                         <Settings size={14} className="text-muted-foreground" />
                         <span>Settings</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin/import-lab">
+                        <Database size={14} className="text-muted-foreground" />
+                        <span>Import Lab</span>
                       </Link>
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />

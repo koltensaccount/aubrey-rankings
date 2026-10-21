@@ -80,10 +80,18 @@ export async function PATCH(
     }
 
     if (body.ratingValue !== undefined) {
-      updateData.ratingValue =
+      const parsed =
         typeof body.ratingValue === "number" && !isNaN(body.ratingValue)
           ? Math.max(0, Math.min(10, body.ratingValue))
           : null;
+      updateData.ratingValue = parsed;
+      updateData.sourceRating =
+        typeof body.sourceRating === "number" && !isNaN(body.sourceRating)
+          ? Math.max(0.5, Math.min(5, body.sourceRating))
+          : parsed !== null
+            ? parsed / 2
+            : null;
+      updateData.sourceScale = updateData.sourceRating !== null ? 5 : null;
     }
 
     if (body.notes !== undefined) {

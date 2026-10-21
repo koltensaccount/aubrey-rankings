@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { X, Calendar, Star, Trash2, Edit2, Plus, History } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
+import { StarRating } from "@/components/rating/star-rating";
 
 export interface DiaryViewingEvent {
   id: string;
@@ -419,10 +420,7 @@ export function RewatchHistoryModal({
                             <span>{formattedDate}</span>
                           </span>
                           {scoreOnTen !== null && (
-                            <span className="inline-flex items-center gap-1 text-xs font-semibold text-primary">
-                              <Star size={12} className="fill-primary" />
-                              <span>{scoreOnTen.toFixed(1)} / 10</span>
-                            </span>
+                            <StarRating score={scoreOnTen} scale={10} size="xs" numericFormat="fraction" />
                           )}
                         </div>
 

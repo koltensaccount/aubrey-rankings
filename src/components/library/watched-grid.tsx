@@ -181,7 +181,7 @@ export function WatchedGrid({ initialItems }: WatchedGridProps) {
                     {item.userRating !== null && item.userRating !== undefined && (
                       <span className="px-1.5 py-0.5 rounded bg-background/90 backdrop-blur-md border border-border text-primary text-[10px] font-bold flex items-center gap-0.5">
                         <Star size={10} className="fill-primary" />
-                        <span>{item.userRating.toFixed(1)}</span>
+                        <span>{(item.userRating <= 5 ? item.userRating : item.userRating / 2).toFixed(1)}</span>
                       </span>
                     )}
                   </div>

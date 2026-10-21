@@ -172,6 +172,14 @@ export async function POST(req: NextRequest) {
         ? Math.max(0, Math.min(10, ratingValue))
         : null;
 
+    const sourceRating =
+      typeof body.sourceRating === "number" && !isNaN(body.sourceRating)
+        ? Math.max(0.5, Math.min(5, body.sourceRating))
+        : parsedRating !== null
+          ? parsedRating / 2
+          : null;
+    const sourceScale = sourceRating !== null ? 5 : null;
+
     // Create diary entry
     await db.insert(diaryEntries).values({
       id: entryId,
@@ -181,6 +189,8 @@ export async function POST(req: NextRequest) {
       loggedDate: new Date(),
       isRewatch: finalIsRewatch,
       ratingValue: parsedRating,
+      sourceRating,
+      sourceScale,
       notes: typeof notes === "string" ? notes.trim() : null,
       tags: Array.isArray(tags) ? tags : null,
     });
