@@ -12,7 +12,8 @@ export interface SourceFilmCandidate {
 }
 
 export interface MatchedMediaResult {
-  mediaItem: any;
+  mediaItem?: any;
+  isSyntheticFallback?: boolean;
   confidence: "manual" | "tmdb_verified" | "exact" | "cached";
   isTvException?: boolean;
   parentShowTitle?: string;
@@ -358,7 +359,13 @@ export async function resolveLetterboxdMediaIdentity(
   const year = film.year;
   const uri = film.letterboxdUri?.trim() || null;
   const cacheKey = `${cleanTitle.toLowerCase()}::${year ?? ""}`;
-  const allowSynthetic = options?.allowSyntheticPlaceholders ?? (process.env.AUBREY_ALLOW_SYNTHETIC_MEDIA === "1");
+  const hasTmdbCredentials = Boolean(
+    process.env.TMDB_API_READ_ACCESS_TOKEN || process.env.TMDB_API_KEY
+  );
+  const allowSynthetic =
+    options?.allowSyntheticPlaceholders ??
+    (process.env.AUBREY_ALLOW_SYNTHETIC_MEDIA === "1" ||
+      (!hasTmdbCredentials && (process.env.CI === "true" || process.env.AUBREY_TEST_MODE === "1")));
 
   if (resolutionCache.has(cacheKey)) {
     const cached = resolutionCache.get(cacheKey)!;
@@ -636,18 +643,9 @@ export async function resolveLetterboxdMediaIdentity(
 
     // Best candidate is below confidence threshold -> Quarantine without guessing (or fallback if synthetic allowed)
     if (allowSynthetic) {
-      const fallbackReleaseDate = year ? `${year}-01-01` : null;
-      const [fallback] = await db
-        .insert(mediaItems)
-        .values({
-          id: `media_${randomUUID()}`,
-          mediaType: "movie",
-          title: cleanTitle,
-          releaseDate: fallbackReleaseDate,
-        })
-        .returning();
       const result: MatchedMediaResult = {
-        mediaItem: fallback,
+        mediaItem: null,
+        isSyntheticFallback: true,
         confidence: "exact",
         isTvException: false,
       };
@@ -673,18 +671,9 @@ export async function resolveLetterboxdMediaIdentity(
   } catch (err: any) {
     console.warn(`[TMDB Resolution Error] Failed to search for "${cleanTitle}":`, err?.message || err);
     if (allowSynthetic) {
-      const fallbackReleaseDate = year ? `${year}-01-01` : null;
-      const [fallback] = await db
-        .insert(mediaItems)
-        .values({
-          id: `media_${randomUUID()}`,
-          mediaType: "movie",
-          title: cleanTitle,
-          releaseDate: fallbackReleaseDate,
-        })
-        .returning();
       const result: MatchedMediaResult = {
-        mediaItem: fallback,
+        mediaItem: null,
+        isSyntheticFallback: true,
         confidence: "exact",
         isTvException: false,
       };

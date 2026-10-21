@@ -379,12 +379,52 @@ export async function executeLetterboxdImport(
         resolvedMap.get(identityKey) ||
         resolvedMap.get(canonKey) ||
         (uriKey ? resolvedMap.get(uriKey) : null);
-      if (preResolved?.mediaItem) {
-        mediaCache.set(identityKey, preResolved.mediaItem);
-        mediaCache.set(canonKey, preResolved.mediaItem);
-        if (uriKey) mediaCache.set(uriKey, preResolved.mediaItem);
-        resolvedMediaMap.set(identityKey, preResolved.mediaItem.id);
-        return preResolved.mediaItem;
+      if (preResolved) {
+        if (preResolved.mediaItem) {
+          mediaCache.set(identityKey, preResolved.mediaItem);
+          mediaCache.set(canonKey, preResolved.mediaItem);
+          if (uriKey) mediaCache.set(uriKey, preResolved.mediaItem);
+          resolvedMediaMap.set(identityKey, preResolved.mediaItem.id);
+          return preResolved.mediaItem;
+        }
+
+        if (preResolved.isSyntheticFallback) {
+          // Check DB first under transaction lock to prevent duplicate creation
+          const existingMedia = await tx.query.mediaItems.findFirst({
+            where: (m, { and, eq, isNull }) =>
+              and(
+                sql`lower(trim(${m.title})) = lower(${cleanTitle})`,
+                year
+                  ? sql`substring(${m.releaseDate}, 1, 4) = ${String(year)}`
+                  : isNull(m.releaseDate),
+              ),
+          });
+
+          if (existingMedia) {
+            mediaCache.set(identityKey, existingMedia);
+            mediaCache.set(canonKey, existingMedia);
+            if (uriKey) mediaCache.set(uriKey, existingMedia);
+            resolvedMediaMap.set(identityKey, existingMedia.id);
+            return existingMedia;
+          }
+
+          const fallbackReleaseDate = year ? `${year}-01-01` : null;
+          const [fallback] = await tx
+            .insert(mediaItems)
+            .values({
+              id: `media_${randomUUID()}`,
+              mediaType: "movie",
+              title: cleanTitle,
+              releaseDate: fallbackReleaseDate,
+            })
+            .returning();
+
+          mediaCache.set(identityKey, fallback);
+          mediaCache.set(canonKey, fallback);
+          if (uriKey) mediaCache.set(uriKey, fallback);
+          resolvedMediaMap.set(identityKey, fallback.id);
+          return fallback;
+        }
       }
 
       // Check pre-resolved quarantines
@@ -473,8 +513,14 @@ export async function executeLetterboxdImport(
         return null;
       }
 
-      // If synthetic placeholders are explicitly allowed (e.g. synthetic test suites):
-      const allowSynthetic = options?.allowSyntheticPlaceholders ?? (process.env.AUBREY_ALLOW_SYNTHETIC_MEDIA === "1");
+      // If synthetic placeholders are explicitly allowed (e.g. synthetic test suites without external TMDB credentials):
+      const hasTmdbCredentials = Boolean(
+        process.env.TMDB_API_READ_ACCESS_TOKEN || process.env.TMDB_API_KEY
+      );
+      const allowSynthetic =
+        options?.allowSyntheticPlaceholders ??
+        (process.env.AUBREY_ALLOW_SYNTHETIC_MEDIA === "1" ||
+          (!hasTmdbCredentials && (process.env.CI === "true" || process.env.AUBREY_TEST_MODE === "1")));
       if (allowSynthetic) {
         const releaseDate = year ? `${year}-01-01` : null;
         const [newMedia] = await tx
