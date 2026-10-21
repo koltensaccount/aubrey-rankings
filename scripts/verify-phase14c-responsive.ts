@@ -349,7 +349,10 @@ async function teardown() {
 }
 
 async function runResponsiveVerification() {
-  const browser: Browser = await chromium.launch({ headless: true });
+  const browser: Browser = await chromium.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
+  });
 
   try {
     const targetWidths = isSmokeMode
