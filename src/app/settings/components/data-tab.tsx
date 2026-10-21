@@ -7,6 +7,14 @@ import {
   UploadCloud,
   FileSpreadsheet,
   Download,
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  BookOpen,
+  Bookmark,
+  ListOrdered,
+  Heart,
+  Loader2,
 } from "lucide-react";
 
 export function DataTab() {
@@ -14,8 +22,12 @@ export function DataTab() {
   const [lbPreviewLoading, setLbPreviewLoading] = useState(false);
   const [lbPreviewData, setLbPreviewData] = useState<any | null>(null);
   const [lbImporting, setLbImporting] = useState(false);
+  const [lbReconciliation, setLbReconciliation] = useState<any | null>(null);
   const [lbSuccessMsg, setLbSuccessMsg] = useState<string | null>(null);
   const [lbErrorMsg, setLbErrorMsg] = useState<string | null>(null);
+
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
 
   const handleLbFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -24,6 +36,7 @@ export function DataTab() {
     setLbFile(file);
     setLbErrorMsg(null);
     setLbSuccessMsg(null);
+    setLbReconciliation(null);
     setLbPreviewLoading(true);
 
     try {
@@ -71,12 +84,47 @@ export function DataTab() {
       }
 
       setLbSuccessMsg(json.message || "Import completed successfully!");
+      setLbReconciliation(json.reconciliation || json);
       setLbPreviewData(null);
       setLbFile(null);
     } catch (err: any) {
       setLbErrorMsg(err?.message || "Import failed.");
     } finally {
       setLbImporting(false);
+    }
+  };
+
+  const handleExportJson = async () => {
+    setExportLoading(true);
+    setExportError(null);
+
+    try {
+      const res = await fetch("/api/data/export");
+      if (!res.ok) {
+        const json = await res.json().catch(() => null);
+        throw new Error(json?.error || "Failed to export data.");
+      }
+
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition");
+      let filename = "aubrey-data-export.json";
+      if (disposition && disposition.includes("filename=")) {
+        const match = disposition.match(/filename="?([^"]+)"?/);
+        if (match?.[1]) filename = match[1];
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err: any) {
+      setExportError(err?.message || "Export download failed.");
+    } finally {
+      setExportLoading(false);
     }
   };
 
@@ -94,7 +142,7 @@ export function DataTab() {
                 Import from Letterboxd
               </h3>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Repeatable, non-destructive import of your watched films, star ratings, diary dates, and reviews.
+                Full-fidelity migration of diary entries, watch history, ratings, private reviews, watchlists, and custom lists.
               </p>
             </div>
           </div>
@@ -110,14 +158,76 @@ export function DataTab() {
         </div>
 
         {lbErrorMsg && (
-          <div className="p-3 rounded-card bg-red-500/10 border border-red-500/20 text-red-400 text-xs">
-            {lbErrorMsg}
+          <div className="p-3 rounded-card bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-center gap-2">
+            <AlertCircle size={15} className="shrink-0" />
+            <span>{lbErrorMsg}</span>
           </div>
         )}
 
         {lbSuccessMsg && (
-          <div className="p-3 rounded-card bg-primary/10 border border-primary/30 text-primary text-xs">
-            {lbSuccessMsg}
+          <div className="p-3 rounded-card bg-primary/10 border border-primary/30 text-primary text-xs flex items-center gap-2">
+            <CheckCircle2 size={15} className="shrink-0" />
+            <span>{lbSuccessMsg}</span>
+          </div>
+        )}
+
+        {/* Post-Import Reconciliation Report */}
+        {lbReconciliation && (
+          <div className="p-5 rounded-card border border-primary/30 bg-surface space-y-4">
+            <div className="flex items-center justify-between border-b border-border pb-2.5">
+              <div className="flex items-center gap-2 text-primary font-display font-bold text-sm uppercase">
+                <CheckCircle2 size={16} />
+                <span>Reconciliation Report</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setLbReconciliation(null)}
+                className="text-xs text-muted-foreground hover:text-foreground cursor-pointer"
+              >
+                Dismiss
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center text-xs">
+              <div className="p-2.5 rounded-card bg-card border border-border">
+                <div className="font-display text-lg font-bold text-foreground">
+                  {lbReconciliation.films?.new ?? 0}
+                </div>
+                <div className="text-[10px] uppercase text-muted-foreground">New Titles</div>
+              </div>
+              <div className="p-2.5 rounded-card bg-card border border-border">
+                <div className="font-display text-lg font-bold text-foreground">
+                  {lbReconciliation.films?.updated ?? 0}
+                </div>
+                <div className="text-[10px] uppercase text-muted-foreground">Updated</div>
+              </div>
+              <div className="p-2.5 rounded-card bg-card border border-border">
+                <div className="font-display text-lg font-bold text-primary">
+                  {lbReconciliation.diary?.created ?? 0}
+                </div>
+                <div className="text-[10px] uppercase text-muted-foreground">Diary Logs</div>
+              </div>
+              <div className="p-2.5 rounded-card bg-card border border-border">
+                <div className="font-display text-lg font-bold text-foreground">
+                  {lbReconciliation.reviews?.created ?? 0}
+                </div>
+                <div className="text-[10px] uppercase text-muted-foreground">Private Reviews</div>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-card bg-card border border-border text-[11px] text-muted-foreground space-y-1">
+              <p>
+                • <strong>Privacy Preserved:</strong> All imported reviews and custom lists are stored with <em>Private</em> visibility. They are not visible to other users until deliberately shared.
+              </p>
+              <p>
+                • <strong>Aubrey Data Integrity:</strong> Any pre-existing Aubrey custom rubrics, weights, or scores were preserved and not overwritten.
+              </p>
+              {lbReconciliation.unresolved?.length > 0 && (
+                <p className="text-muted-foreground">
+                  • <strong>Unresolved Items:</strong> {lbReconciliation.unresolved.length} entries with missing titles or ambiguous matches were archived in your unresolved import log for safe review.
+                </p>
+              )}
+            </div>
           </div>
         )}
 
@@ -130,7 +240,7 @@ export function DataTab() {
                 Upload your Letterboxd export ZIP
               </p>
               <p className="text-[11px] text-muted-foreground">
-                Download your data ZIP from Letterboxd Settings → Export, then drop it here.
+                Download your data ZIP from Letterboxd Settings → Export, then select it here.
               </p>
             </div>
             <input
@@ -141,8 +251,9 @@ export function DataTab() {
               className="block w-full text-xs text-muted-foreground file:mr-4 file:py-2 file:px-4 file:rounded-button file:border file:border-border file:text-xs file:font-semibold file:bg-surface-elevated file:text-foreground hover:file:bg-muted file:cursor-pointer cursor-pointer"
             />
             {lbPreviewLoading && (
-              <p className="text-xs text-primary animate-pulse">
-                Analyzing Letterboxd archive contents and matching records...
+              <p className="text-xs text-primary animate-pulse flex items-center justify-center gap-1.5 pt-1">
+                <Loader2 size={13} className="animate-spin" />
+                <span>Analyzing Letterboxd archive contents, diary history, and custom lists...</span>
               </p>
             )}
           </div>
@@ -155,7 +266,7 @@ export function DataTab() {
                   Archive Preview: {lbPreviewData.totalFilms} Films
                 </h4>
                 <p className="text-[11px] text-muted-foreground">
-                  Found {lbPreviewData.totalRatings} star ratings and {lbPreviewData.totalReviews} written reviews.
+                  Found {lbPreviewData.totalWatched} watched films, {lbPreviewData.totalRatings} star ratings, {lbPreviewData.totalReviews} written reviews, and {lbPreviewData.totalDiaryEntries} diary entries.
                 </p>
               </div>
               <button
@@ -170,44 +281,98 @@ export function DataTab() {
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 text-center">
-              <div className="p-3 rounded-card bg-card border border-border">
-                <div className="font-display text-xl font-bold text-primary">
+            {/* Metrics Breakdown Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-center">
+              <div className="p-2.5 rounded-card bg-card border border-border">
+                <div className="font-display text-lg font-bold text-primary">
                   {lbPreviewData.newCount}
                 </div>
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  New to Library
+                  New Titles
                 </div>
               </div>
-              <div className="p-3 rounded-card bg-card border border-border">
-                <div className="font-display text-xl font-bold text-foreground">
+              <div className="p-2.5 rounded-card bg-card border border-border">
+                <div className="font-display text-lg font-bold text-foreground">
                   {lbPreviewData.existingCount}
                 </div>
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Existing / Updated
+                  Existing / Update
                 </div>
               </div>
-              <div className="p-3 rounded-card bg-card border border-border col-span-2 sm:col-span-1">
-                <div className="font-display text-xl font-bold text-foreground">
-                  {lbPreviewData.totalReviews}
+              <div className="p-2.5 rounded-card bg-card border border-border">
+                <div className="font-display text-lg font-bold text-foreground">
+                  {lbPreviewData.totalDiaryEntries}
                 </div>
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Reviews to Sync
+                  Diary Events
+                </div>
+              </div>
+              <div className="p-2.5 rounded-card bg-card border border-border">
+                <div className="font-display text-lg font-bold text-foreground">
+                  {lbPreviewData.totalWatchlistItems}
+                </div>
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                  Watchlist
                 </div>
               </div>
             </div>
 
+            {/* Detailed Categories Preview */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div className="p-3 rounded-card bg-card border border-border flex items-center justify-between">
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <BookOpen size={14} className="text-primary" />
+                  <span>Written Reviews (Private)</span>
+                </span>
+                <span className="font-bold text-foreground">{lbPreviewData.totalReviews}</span>
+              </div>
+              <div className="p-3 rounded-card bg-card border border-border flex items-center justify-between">
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <ListOrdered size={14} className="text-primary" />
+                  <span>Custom Lists</span>
+                </span>
+                <span className="font-bold text-foreground">
+                  {lbPreviewData.totalCustomLists} ({lbPreviewData.totalCustomListEntries} entries)
+                </span>
+              </div>
+              <div className="p-3 rounded-card bg-card border border-border flex items-center justify-between">
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <Heart size={14} className="text-primary" />
+                  <span>Liked Films (Favorites)</span>
+                </span>
+                <span className="font-bold text-foreground">{lbPreviewData.totalLikes}</span>
+              </div>
+              <div className="p-3 rounded-card bg-card border border-border flex items-center justify-between">
+                <span className="flex items-center gap-2 text-muted-foreground">
+                  <Clock size={14} className="text-primary" />
+                  <span>Preserved Aubrey Edits</span>
+                </span>
+                <span className="font-bold text-foreground">
+                  {lbPreviewData.breakdown?.ratings?.preservedAubreyEdits ?? 0}
+                </span>
+              </div>
+            </div>
+
+            {/* Unsupported / Warnings notice */}
+            {lbPreviewData.unsupportedReasons?.length > 0 && (
+              <div className="p-3 rounded-card bg-surface-elevated border border-border text-[11px] text-muted-foreground space-y-1">
+                {lbPreviewData.unsupportedReasons.map((r: string, idx: number) => (
+                  <p key={idx}>⚠️ {r}</p>
+                ))}
+              </div>
+            )}
+
             {/* Sample items */}
             {lbPreviewData.sampleFilms?.length > 0 && (
-              <div className="space-y-1.5 pt-2">
+              <div className="space-y-1.5 pt-1">
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground">
-                  Sample Archive Items:
+                  Sample Archive Films:
                 </div>
                 <div className="space-y-1">
-                  {lbPreviewData.sampleFilms.slice(0, 5).map((f: any, idx: number) => (
+                  {lbPreviewData.sampleFilms.slice(0, 4).map((f: any, idx: number) => (
                     <div
                       key={idx}
-                      className="flex items-center justify-between text-xs py-1 px-2 rounded-card bg-card border border-border"
+                      className="flex items-center justify-between text-xs py-1 px-2.5 rounded-card bg-card border border-border"
                     >
                       <span className="text-foreground font-medium">
                         {f.title} {f.year ? `(${f.year})` : ""}
@@ -226,9 +391,10 @@ export function DataTab() {
                 type="button"
                 onClick={handleLbExecuteImport}
                 disabled={lbImporting}
-                className="px-5 py-2.5 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground font-display text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shadow-sm"
+                className="px-5 py-2.5 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground font-display text-xs font-bold uppercase tracking-wider transition-all disabled:opacity-50 cursor-pointer shadow-sm flex items-center gap-1.5"
               >
-                {lbImporting ? "Importing Archive..." : "Confirm & Sync into Library"}
+                {lbImporting && <Loader2 size={13} className="animate-spin" />}
+                <span>{lbImporting ? "Importing Archive..." : "Confirm & Sync into Library"}</span>
               </button>
             </div>
           </div>
@@ -268,18 +434,41 @@ export function DataTab() {
         </div>
       </div>
 
-      {/* SECTION 3: EXPORT */}
+      {/* SECTION 3: EXPORT YOUR DATA */}
       <div className="p-6 rounded-card border border-border-card bg-card space-y-3 shadow-card">
-        <h3 className="font-display text-xl uppercase font-bold text-foreground">
-          Export Your Data
-        </h3>
-        <p className="text-xs text-muted-foreground">
-          Download your complete library, rating histories, and reviews in JSON format.
-        </p>
-        <button className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-surface-elevated hover:bg-muted text-foreground border border-border text-xs font-semibold transition-colors cursor-pointer">
-          <Download size={14} />
-          <span>Export JSON</span>
-        </button>
+        <div className="flex items-start justify-between">
+          <div>
+            <h3 className="font-display text-xl uppercase font-bold text-foreground">
+              Export Your Data
+            </h3>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Download your complete personal media history, viewing diary, ratings, reviews, watchlists, and custom lists in standard JSON format.
+            </p>
+          </div>
+        </div>
+
+        {exportError && (
+          <div className="p-3 rounded-card bg-destructive/10 border border-destructive/20 text-destructive text-xs flex items-center gap-2">
+            <AlertCircle size={14} className="shrink-0" />
+            <span>{exportError}</span>
+          </div>
+        )}
+
+        <div className="pt-1">
+          <button
+            type="button"
+            onClick={handleExportJson}
+            disabled={exportLoading}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-button bg-surface-elevated hover:bg-muted text-foreground border border-border text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+          >
+            {exportLoading ? (
+              <Loader2 size={14} className="animate-spin text-primary" />
+            ) : (
+              <Download size={14} className="text-primary" />
+            )}
+            <span>{exportLoading ? "Preparing Export..." : "Export Complete JSON Archive"}</span>
+          </button>
+        </div>
       </div>
     </div>
   );

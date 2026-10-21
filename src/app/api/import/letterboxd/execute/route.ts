@@ -5,7 +5,7 @@ import { executeLetterboxdImport } from "@/lib/letterboxd-import";
 
 export async function POST(req: NextRequest) {
   try {
-    const session = await getServerSession();
+    const session = await getServerSession(req);
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -53,17 +53,14 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const { newCount, updatedCount } = await executeLetterboxdImport(
+    const result = await executeLetterboxdImport(
       session.user.id,
-      summary.films,
+      summary,
     );
 
     return NextResponse.json({
       success: true,
-      importedTotal: summary.films.length,
-      newCount,
-      updatedCount,
-      message: `Successfully processed ${summary.films.length} films (${newCount} new, ${updatedCount} updated).`,
+      ...result,
     });
   } catch (error: any) {
     console.error("[Letterboxd Execute Error]", error);
