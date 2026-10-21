@@ -318,8 +318,8 @@ export function CommunityFeed({
                   className="rounded-card border border-border-card bg-card p-5 sm:p-6 space-y-4 hover:border-border transition-colors shadow-sm"
                 >
                   {/* Author Header */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       {profileHref ? (
                         <Link
                           href={profileHref}
@@ -341,31 +341,31 @@ export function CommunityFeed({
                         </div>
                       )}
 
-                      <div className="text-xs">
-                        <div className="flex items-center gap-1.5">
+                      <div className="text-xs min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           {profileHref ? (
                             <Link
                               href={profileHref}
-                              className="font-semibold text-foreground hover:text-primary-text transition-colors"
+                              className="font-semibold text-foreground hover:text-primary-text transition-colors truncate"
                             >
                               {item.author.name || `@${item.author.username}`}
                             </Link>
                           ) : (
-                            <span className="font-semibold text-foreground">
+                            <span className="font-semibold text-foreground truncate">
                               {item.author.name || "Critic"}
                             </span>
                           )}
                           {item.author.username && (
-                            <span className="text-muted-foreground">@{item.author.username}</span>
+                            <span className="text-muted-foreground truncate">@{item.author.username}</span>
                           )}
                         </div>
-                        <span className="text-[11px] text-muted-foreground">
+                        <span className="text-[11px] text-muted-foreground block truncate">
                           published a ranking · {formatFeedTime(item.timestamp)}
                         </span>
                       </div>
                     </div>
 
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-surface border border-border text-muted-foreground">
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-surface border border-border text-muted-foreground shrink-0">
                       {rk.collectionType === "tv_show" ? "TV Series" : "Franchise"}
                     </span>
                   </div>
@@ -468,8 +468,8 @@ export function CommunityFeed({
                   className="rounded-card border border-border-card bg-card p-5 sm:p-6 space-y-3.5 hover:border-border transition-colors shadow-sm"
                 >
                   {/* Author Header */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
                       {profileHref ? (
                         <Link
                           href={profileHref}
@@ -491,25 +491,25 @@ export function CommunityFeed({
                         </div>
                       )}
 
-                      <div className="text-xs">
-                        <div className="flex items-center gap-1.5">
+                      <div className="text-xs min-w-0">
+                        <div className="flex items-center gap-1.5 min-w-0">
                           {profileHref ? (
                             <Link
                               href={profileHref}
-                              className="font-semibold text-foreground hover:text-primary-text transition-colors"
+                              className="font-semibold text-foreground hover:text-primary-text transition-colors truncate"
                             >
                               {item.author.name || `@${item.author.username}`}
                             </Link>
                           ) : (
-                            <span className="font-semibold text-foreground">
+                            <span className="font-semibold text-foreground truncate">
                               {item.author.name || "Critic"}
                             </span>
                           )}
                           {item.author.username && (
-                            <span className="text-muted-foreground">@{item.author.username}</span>
+                            <span className="text-muted-foreground truncate">@{item.author.username}</span>
                           )}
                         </div>
-                        <span className="text-[11px] text-muted-foreground">
+                        <span className="text-[11px] text-muted-foreground block truncate">
                           {isIndependent
                             ? "published a review"
                             : isTvEp
@@ -522,7 +522,7 @@ export function CommunityFeed({
 
                     <Link
                       href={`/media/${md.id}`}
-                      className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-surface border border-border text-primary-text hover:border-primary/50 transition-colors"
+                      className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-surface border border-border text-primary-text hover:border-primary/50 transition-colors shrink-0"
                     >
                       {isTvEp ? "Episode" : "Film"}
                     </Link>

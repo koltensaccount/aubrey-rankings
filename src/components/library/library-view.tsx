@@ -192,7 +192,7 @@ export function LibraryView({
         </div>
 
         {/* Global Personal Quick Actions */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5 shrink-0">
           <button
             type="button"
             onClick={() => setIsLogDialogOpen(true)}
@@ -215,7 +215,7 @@ export function LibraryView({
       <div className="border-b border-border">
         <nav
           aria-label="Library sections"
-          className="flex items-center gap-6 sm:gap-8 -mb-px overflow-x-auto select-none"
+          className="flex items-center gap-6 sm:gap-8 -mb-px overflow-x-auto select-none scrollbar-none"
         >
           {tabs.map((tab) => {
             const isActive = activeTab === tab.id;

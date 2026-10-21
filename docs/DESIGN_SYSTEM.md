@@ -146,3 +146,25 @@ All range inputs and slider controls across Aubrey Rankings MUST use `CinematicS
    - General Chrome: `bg-primary`, `hover:bg-primary-hover`, `text-primary`, `text-primary-foreground`, `text-primary-text`, `bg-surface`, `bg-surface-elevated`, `border-border`, `bg-card`
 3. **Automated Verification & Baseline Enforcement**: Run `npx tsx scripts/check-design-system.ts` (or `npm run check:design-system`). The script scans all UI code in `src/app` and `src/components`, checking against `scripts/design-system-baseline.json`. Any newly introduced hardcoded color or arbitrary hex fails the build immediately. Enforced in CI before container deployment.
 4. **Preserve Functional Formulas**: Never alter weighted average calculations, Better Auth flows, database migrations, or real user accounts.
+
+---
+
+## 6. Responsive Resilience Architecture
+
+Aubrey Rankings enforces defensive responsive design principles to guarantee seamless presentation across standard desktops, iPads (portrait and landscape), split-screen workflows, zoomed viewports, and mobile phones (320px–1920px).
+
+### 1. Progressive Navigation Space Hierarchy
+Navbar real estate is managed in strict 5-tier priority order:
+1. **Aubrey Branding**: Fixed `shrink-0` anchor with Barlow Condensed typography.
+2. **Core Navigation (Library, Discover, Feed)**: Always visible when adequate space exists (`md:flex` at $\ge 768\text{px}$). Spacing scales progressively (`gap-4 lg:gap-6`).
+3. **Main Add/Log Action**: Prominent `+ Journal` / `PenLine` button retained across all screens (icon-only on mobile `< sm`).
+4. **Notifications & Account Trigger**: Persistent notification bell and avatar button with accessible keyboard focus states.
+5. **Secondary Actions in Accessible Overflow Menu**: Secondary controls (`Profile`, `New ranking`, `Settings`, `Sign out`) live in an accessible, keyboard-dismissible (`Escape`, outside click) profile dropdown menu. On large desktops ($\ge 1024\text{px}$), `New ranking` is promoted to a visible shortcut button while remaining accessible in the menu.
+6. **Phone Bottom Navigation**: On screens $< 768\text{px}$, primary navigation lives in the fixed bottom bar with safe-area insets (`env(safe-area-inset-bottom)`).
+
+### 2. Defensive Layout Safeguards
+1. **Zero Global Overflow Masking**: Never use `overflow: hidden` on `html` or `body` to suppress layout defects. Component boundaries must naturally respect the document viewport (`scrollWidth <= innerWidth`).
+2. **Flex Containment (`min-w-0`)**: All flex children containing dynamic text, titles, or badges specify `min-w-0` alongside `truncate` or `line-clamp` to prevent flex container blowout.
+3. **Viewport-Safe Modals**: Dialogs and sheets use `max-h-[90vh]` with internal `flex-1 min-h-0 overflow-y-auto` to ensure scrollability on constrained heights (mobile landscape or active on-screen keyboards).
+4. **Adaptive Media Grids**: Poster and card grids employ 6 progressive tiers (`grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6`) to prevent cramped posters or stretched card ratios.
+5. **Local Horizontal Scrolling**: Sub-navigation bars, filter chips, and table lists use unobtrusive, discoverable local horizontal scrolling (`overflow-x-auto scrollbar-none`) with `whitespace-nowrap shrink-0` pills.

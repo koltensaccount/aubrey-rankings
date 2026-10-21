@@ -237,7 +237,7 @@ export function LogViewingDialog({
         </div>
 
         {/* Content */}
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-5 space-y-5">
+        <form onSubmit={handleSubmit} className="flex-1 min-h-0 overflow-y-auto p-5 space-y-5">
           {error && (
             <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-xs text-destructive">
               {error}
@@ -256,13 +256,13 @@ export function LogViewingDialog({
                   placeholder="Search movie or TV title..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="flex-1 px-3 py-2 rounded-input bg-surface border border-border text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-primary"
+                  className="flex-1 min-w-0 px-3 py-2 rounded-input bg-surface border border-border text-foreground text-xs focus:outline-none focus:ring-1 focus:ring-primary"
                 />
                 <button
                   type="button"
                   onClick={handleSearch}
                   disabled={searching || !searchQuery.trim()}
-                  className="px-3.5 py-2 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  className="px-3.5 py-2 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold flex items-center gap-1.5 cursor-pointer disabled:opacity-50 shrink-0"
                 >
                   <Search size={14} />
                   <span>{searching ? "..." : "Search"}</span>
