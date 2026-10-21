@@ -22,6 +22,7 @@ export interface ParsedDiaryEntry {
   isRewatch: boolean;
   rating?: number;
   tags: string[];
+  occurrenceIndex: number;
 }
 
 export interface ParsedReview {
@@ -67,6 +68,13 @@ export interface UnresolvedSourceItem {
   details?: string;
 }
 
+export interface UnsupportedSourceItem {
+  filename: string;
+  category: "external_social_activity" | "unsupported_file" | "malformed_data";
+  details: string;
+  count?: number;
+}
+
 export interface LetterboxdExportSummary {
   totalUniqueFilms: number;
   totalRatings: number;
@@ -84,6 +92,7 @@ export interface LetterboxdExportSummary {
   customLists: ParsedCustomList[];
   likedFilms: Array<{ title: string; year: number | null; letterboxdUri: string }>;
   unresolved: UnresolvedSourceItem[];
+  unsupportedItems: UnsupportedSourceItem[];
 }
 
 /**
@@ -198,6 +207,8 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
   const customLists: ParsedCustomList[] = [];
   const likedFilms: Array<{ title: string; year: number | null; letterboxdUri: string }> = [];
   const unresolved: UnresolvedSourceItem[] = [];
+  const unsupportedItems: UnsupportedSourceItem[] = [];
+  const diaryOccurrenceTracker = new Map<string, number>();
   let otherLikesCount = 0;
 
   const getOrCreateFilm = (
@@ -238,11 +249,12 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
     const pathParts = lowerName.split("/").filter(Boolean);
     const fileName = pathParts[pathParts.length - 1] ?? "";
     const isInsideLists = pathParts.slice(0, -1).includes("lists");
+    const isInsideLikes = pathParts.slice(0, -1).includes("likes");
 
     // ----------------------------------------------------
     // 1. ratings.csv
     // ----------------------------------------------------
-    if (fileName === "ratings.csv" && !isInsideLists) {
+    if (fileName === "ratings.csv" && !isInsideLists && !isInsideLikes) {
       const csvText = entry.getData().toString("utf8");
       const rows = parseCSV(csvText);
       if (rows.length > 1) {
@@ -258,9 +270,9 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
           if (!name.trim()) {
             unresolved.push({
               sourceType: "film",
-              rawRow: { raw: row.join(",") },
+              rawRow: { file: "ratings.csv", row: String(i), raw: row.join(",") },
               reason: "missing_metadata",
-              details: "Missing film title in ratings.csv",
+              details: `Row ${i} in ratings.csv is missing a film title.`,
             });
             continue;
           }
@@ -283,7 +295,7 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
     // ----------------------------------------------------
     // 2. watched.csv
     // ----------------------------------------------------
-    if (fileName === "watched.csv" && !isInsideLists) {
+    if (fileName === "watched.csv" && !isInsideLists && !isInsideLikes) {
       const csvText = entry.getData().toString("utf8");
       const rows = parseCSV(csvText);
       if (rows.length > 1) {
@@ -291,22 +303,27 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
         const nameIdx = header.indexOf("name");
         const yearIdx = header.indexOf("year");
         const uriIdx = header.indexOf("letterboxd uri");
-        const dateIdx = header.indexOf("date");
 
         for (let i = 1; i < rows.length; i++) {
           const row = rows[i];
           const name = row[nameIdx] || "";
-          if (!name.trim()) continue;
+          if (!name.trim()) {
+            unresolved.push({
+              sourceType: "film",
+              rawRow: { file: "watched.csv", row: String(i), raw: row.join(",") },
+              reason: "missing_metadata",
+              details: `Row ${i} in watched.csv is missing a film title.`,
+            });
+            continue;
+          }
           const year = row[yearIdx] || "";
           const uri = row[uriIdx] || "";
-          const date = row[dateIdx] || "";
 
           const film = getOrCreateFilm(name, year, uri);
           if (film) {
+            // watched.csv confirms the film was watched, but its Date column is only an activity date
+            // not an actual viewing date. We do NOT set film.watchDate here.
             film.isWatched = true;
-            if (isValidWatchDate(date) && !film.watchDate) {
-              film.watchDate = date;
-            }
           }
         }
       }
@@ -316,7 +333,7 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
     // ----------------------------------------------------
     // 3. reviews.csv
     // ----------------------------------------------------
-    if (fileName === "reviews.csv" && !isInsideLists) {
+    if (fileName === "reviews.csv" && !isInsideLists && !isInsideLikes) {
       const csvText = entry.getData().toString("utf8");
       const rows = parseCSV(csvText);
       if (rows.length > 1) {
@@ -334,7 +351,15 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
         for (let i = 1; i < rows.length; i++) {
           const row = rows[i];
           const name = row[nameIdx] || "";
-          if (!name.trim()) continue;
+          if (!name.trim()) {
+            unresolved.push({
+              sourceType: "review",
+              rawRow: { file: "reviews.csv", row: String(i), raw: row.join(",") },
+              reason: "missing_metadata",
+              details: `Row ${i} in reviews.csv is missing a film title.`,
+            });
+            continue;
+          }
           const year = row[yearIdx] || "";
           const uri = row[uriIdx] || "";
           const review = (row[reviewIdx] || "").trim();
@@ -382,7 +407,7 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
     // ----------------------------------------------------
     // 4. diary.csv
     // ----------------------------------------------------
-    if (fileName === "diary.csv" && !isInsideLists) {
+    if (fileName === "diary.csv" && !isInsideLists && !isInsideLikes) {
       const csvText = entry.getData().toString("utf8");
       const rows = parseCSV(csvText);
       if (rows.length > 1) {
@@ -399,7 +424,15 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
         for (let i = 1; i < rows.length; i++) {
           const row = rows[i];
           const name = row[nameIdx] || "";
-          if (!name.trim()) continue;
+          if (!name.trim()) {
+            unresolved.push({
+              sourceType: "diary",
+              rawRow: { file: "diary.csv", row: String(i), raw: row.join(",") },
+              reason: "missing_metadata",
+              details: `Row ${i} in diary.csv is missing a film title.`,
+            });
+            continue;
+          }
           const year = row[yearIdx] || "";
           const uri = row[uriIdx] || "";
           const watchDate = row[watchDateIdx] || "";
@@ -412,7 +445,6 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
           if (film) {
             film.isWatched = true;
             if (isValidWatchDate(watchDate)) {
-              // Always keep the latest watch date if multiple viewings exist
               if (!film.watchDate || watchDate > film.watchDate) {
                 film.watchDate = watchDate;
               }
@@ -421,6 +453,11 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
               film.rating = ratingVal;
             }
           }
+
+          // Distinguish same-day multiple viewings using an occurrence index
+          const signature = `${name.trim().toLowerCase()}::${parseYear(year) ?? ""}::${watchDate}::${loggedDate}::${isRewatch}::${ratingVal ?? ""}::${tags.slice().sort().join(",")}`;
+          const currentOcc = (diaryOccurrenceTracker.get(signature) || 0) + 1;
+          diaryOccurrenceTracker.set(signature, currentOcc);
 
           diaryEntries.push({
             title: name.trim(),
@@ -431,6 +468,7 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
             isRewatch,
             rating: ratingVal,
             tags,
+            occurrenceIndex: currentOcc,
           });
         }
       }
@@ -440,7 +478,7 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
     // ----------------------------------------------------
     // 5. watchlist.csv
     // ----------------------------------------------------
-    if (fileName === "watchlist.csv" && !isInsideLists) {
+    if (fileName === "watchlist.csv" && !isInsideLists && !isInsideLikes) {
       const csvText = entry.getData().toString("utf8");
       const rows = parseCSV(csvText);
       if (rows.length > 1) {
@@ -453,7 +491,15 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
         for (let i = 1; i < rows.length; i++) {
           const row = rows[i];
           const name = row[nameIdx] || "";
-          if (!name.trim()) continue;
+          if (!name.trim()) {
+            unresolved.push({
+              sourceType: "watchlist",
+              rawRow: { file: "watchlist.csv", row: String(i), raw: row.join(",") },
+              reason: "missing_metadata",
+              details: `Row ${i} in watchlist.csv is missing a film title.`,
+            });
+            continue;
+          }
           const year = row[yearIdx] || "";
           const uri = row[uriIdx] || "";
           const date = row[dateIdx] || "";
@@ -493,8 +539,8 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
 
           const film = getOrCreateFilm(name, year, uri);
           if (film) {
+            // Liking a film only sets isFavorite. It does NOT automatically imply the film was watched!
             film.isFavorite = true;
-            film.isWatched = true;
           }
 
           likedFilms.push({
@@ -507,18 +553,75 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
       continue;
     }
 
-    // Other likes (reviews/lists) counted for summary
-    if (lowerName.includes("likes/reviews.csv") || lowerName.includes("likes/lists.csv")) {
+    // ----------------------------------------------------
+    // 7. External social activity: likes/reviews.csv & likes/lists.csv
+    // ----------------------------------------------------
+    if (lowerName.includes("likes/reviews.csv")) {
       const csvText = entry.getData().toString("utf8");
       const rows = parseCSV(csvText);
-      if (rows.length > 1) {
-        otherLikesCount += rows.length - 1;
-      }
+      const rowCount = Math.max(rows.length - 1, 0);
+      otherLikesCount += rowCount;
+      unsupportedItems.push({
+        filename: entryName,
+        category: "external_social_activity",
+        details: `Found ${rowCount} likes on other users' Letterboxd reviews. These cannot map to Aubrey records without matching accounts.`,
+        count: rowCount,
+      });
+      continue;
+    }
+
+    if (lowerName.includes("likes/lists.csv")) {
+      const csvText = entry.getData().toString("utf8");
+      const rows = parseCSV(csvText);
+      const rowCount = Math.max(rows.length - 1, 0);
+      otherLikesCount += rowCount;
+      unsupportedItems.push({
+        filename: entryName,
+        category: "external_social_activity",
+        details: `Found ${rowCount} likes on other users' Letterboxd lists. These cannot map to Aubrey collections without matching accounts.`,
+        count: rowCount,
+      });
       continue;
     }
 
     // ----------------------------------------------------
-    // 7. lists/*.csv (custom lists)
+    // 8. Unsupported optional Letterboxd files (comments, orphans, profile)
+    // ----------------------------------------------------
+    if (fileName === "comments.csv") {
+      const csvText = entry.getData().toString("utf8");
+      const rowCount = Math.max(parseCSV(csvText).length - 1, 0);
+      unsupportedItems.push({
+        filename: entryName,
+        category: "unsupported_file",
+        details: `Found ${rowCount} Letterboxd comments. Aubrey comments are scoped to rankings and reviews.`,
+        count: rowCount,
+      });
+      continue;
+    }
+
+    if (fileName === "orphans.csv") {
+      const csvText = entry.getData().toString("utf8");
+      const rowCount = Math.max(parseCSV(csvText).length - 1, 0);
+      unsupportedItems.push({
+        filename: entryName,
+        category: "unsupported_file",
+        details: `Found ${rowCount} orphan records removed from Letterboxd catalog.`,
+        count: rowCount,
+      });
+      continue;
+    }
+
+    if (fileName === "profile.csv") {
+      unsupportedItems.push({
+        filename: entryName,
+        category: "unsupported_file",
+        details: "Letterboxd profile export skipped; Aubrey profile settings are managed in Account.",
+      });
+      continue;
+    }
+
+    // ----------------------------------------------------
+    // 9. lists/*.csv (custom lists)
     // ----------------------------------------------------
     if (isInsideLists && fileName.endsWith(".csv")) {
       const csvText = entry.getData().toString("utf8");
@@ -557,7 +660,6 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
             listDesc = metaRow[descIdx].trim();
           }
 
-          // Entries start after the second header row (usually row 3 or 4)
           startRowIdx = 2;
           for (let r = 2; r < rows.length; r++) {
             const rHeader = rows[r].map((h) => h.trim().toLowerCase());
@@ -568,7 +670,6 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
           }
         }
 
-        // Detect entry columns from the header row right before entries
         const entryHeaderRow = rows[startRowIdx - 1]?.map((h) => h.trim().toLowerCase()) || [];
         const posIdx = entryHeaderRow.indexOf("position");
         const nameIdx = entryHeaderRow.indexOf("name");
@@ -616,6 +717,15 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
       }
       continue;
     }
+
+    // Any other unrecognized .csv file
+    if (fileName.endsWith(".csv")) {
+      unsupportedItems.push({
+        filename: entryName,
+        category: "unsupported_file",
+        details: `Unrecognized archive file "${entryName}".`,
+      });
+    }
   }
 
   const films = Array.from(filmMap.values());
@@ -637,5 +747,6 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
     customLists,
     likedFilms,
     unresolved,
+    unsupportedItems,
   };
 }

@@ -8,6 +8,7 @@ import {
   watchlistItems,
   diaryEntries,
   collections,
+  ratingSystems,
   unresolvedImportItems,
 } from "@/db/schema";
 import { desc, eq } from "drizzle-orm";
@@ -100,7 +101,21 @@ export async function GET(req: NextRequest) {
       },
     });
 
-    // 7. Import provenance & unresolved items
+    // 7. Custom rating systems
+    const userRatingSystems = await db.query.ratingSystems.findMany({
+      where: eq(ratingSystems.userId, userId),
+      orderBy: [desc(ratingSystems.updatedAt)],
+      with: {
+        categories: {
+          orderBy: (cat, { asc }) => [asc(cat.sortOrder)],
+        },
+        tiers: {
+          orderBy: (t, { asc }) => [asc(t.sortOrder)],
+        },
+      },
+    });
+
+    // 8. Import provenance & unresolved items
     const unresolvedItems = await db.query.unresolvedImportItems.findMany({
       where: eq(unresolvedImportItems.userId, userId),
       orderBy: [desc(unresolvedImportItems.createdAt)],
@@ -117,6 +132,7 @@ export async function GET(req: NextRequest) {
         totalDiaryEntries: userDiary.length,
         totalWatchlistItems: userWatchlist.length,
         totalCollections: userCollections.length,
+        totalRatingSystems: userRatingSystems.length,
       },
       watched: userRatings
         .filter((r) => r.isWatched)
@@ -159,11 +175,15 @@ export async function GET(req: NextRequest) {
         mediaItemId: rev.mediaItemId,
         title: rev.title,
         content: rev.content,
+        draftContent: rev.draftContent,
         contentFormat: rev.contentFormat,
+        draftContentFormat: rev.draftContentFormat,
         status: rev.status,
         visibility: rev.visibility,
         isSpoiler: rev.isSpoiler,
         isJournal: rev.isJournal,
+        shareRating: rev.shareRating,
+        watchedDate: rev.watchedDate,
         media: {
           title: rev.mediaItem?.title,
           releaseDate: rev.mediaItem?.releaseDate,
@@ -179,12 +199,17 @@ export async function GET(req: NextRequest) {
         id: r.id,
         mediaItemId: r.mediaItemId,
         collectionId: r.collectionId,
+        ratingSystemId: r.ratingSystemId,
+        tierId: r.tierId,
         score: r.calculatedOverallScore,
         sourceRating: r.sourceRating,
         sourceScale: r.sourceScale,
         sourceService: r.sourceService,
         letterboxdUri: r.letterboxdUri,
         watchDate: r.watchDate,
+        reviewText: r.reviewText,
+        personalNotes: r.personalNotes,
+        shareCommentary: r.shareCommentary,
         isWatched: r.isWatched,
         isFavorite: r.isFavorite,
         media: {
@@ -201,6 +226,31 @@ export async function GET(req: NextRequest) {
         createdAt: r.createdAt,
         updatedAt: r.updatedAt,
       })),
+      ratingSystems: userRatingSystems.map((rs) => ({
+        id: rs.id,
+        name: rs.name,
+        description: rs.description,
+        scale: rs.scale,
+        type: rs.type,
+        isDefault: rs.isDefault,
+        categories: rs.categories.map((c) => ({
+          id: c.id,
+          name: c.name,
+          description: c.description,
+          weight: c.weight,
+          sortOrder: c.sortOrder,
+          isRequired: c.isRequired,
+        })),
+        tiers: rs.tiers.map((t) => ({
+          id: t.id,
+          name: t.name,
+          description: t.description,
+          color: t.color,
+          sortOrder: t.sortOrder,
+        })),
+        createdAt: rs.createdAt,
+        updatedAt: rs.updatedAt,
+      })),
       collections: userCollections.map((col) => ({
         id: col.id,
         title: col.title,
@@ -208,9 +258,17 @@ export async function GET(req: NextRequest) {
         collectionType: col.collectionType,
         isRanked: col.isRanked,
         visibility: col.visibility,
+        isPublic: col.isPublic,
+        isPinned: col.isPinned,
+        allowComments: col.allowComments,
+        defaultRatingSystemId: col.defaultRatingSystemId,
+        customCoverImage: col.customCoverImage,
+        backdropImage: col.backdropImage,
+        shareSlug: col.shareSlug,
         sourceService: col.sourceService,
         sourceUri: col.sourceUri,
         createdAt: col.createdAt,
+        updatedAt: col.updatedAt,
         entries: col.entries.map((e) => ({
           mediaItemId: e.mediaItemId,
           title: e.mediaItem?.title,

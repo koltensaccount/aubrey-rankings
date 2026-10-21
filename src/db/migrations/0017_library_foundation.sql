@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS "diary_entries" (
 	"notes" text,
 	"source_service" text,
 	"source_uri" text,
+	"source_event_key" text,
 	"created_at" timestamp DEFAULT now() NOT NULL,
 	"updated_at" timestamp DEFAULT now() NOT NULL
 );
@@ -37,7 +38,8 @@ CREATE INDEX IF NOT EXISTS "idx_diary_user_watched" ON "diary_entries" ("user_id
 CREATE INDEX IF NOT EXISTS "idx_diary_user_media" ON "diary_entries" ("user_id", "media_item_id");
 CREATE INDEX IF NOT EXISTS "idx_diary_review" ON "diary_entries" ("review_id");
 CREATE INDEX IF NOT EXISTS "idx_diary_rating" ON "diary_entries" ("rating_id");
-CREATE UNIQUE INDEX IF NOT EXISTS "uniq_diary_source_entry" ON "diary_entries" ("user_id", "source_service", "source_uri") WHERE "source_uri" IS NOT NULL;
+CREATE INDEX IF NOT EXISTS "idx_diary_source_uri" ON "diary_entries" ("user_id", "source_uri");
+CREATE UNIQUE INDEX IF NOT EXISTS "uniq_diary_source_event" ON "diary_entries" ("user_id", "source_event_key") WHERE "source_event_key" IS NOT NULL;
 
 -- 3. Unresolved import items table (for audit, transparency, and preserving ambiguous items)
 CREATE TABLE IF NOT EXISTS "unresolved_import_items" (

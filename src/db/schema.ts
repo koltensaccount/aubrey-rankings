@@ -439,6 +439,7 @@ export const diaryEntries = pgTable(
     notes: text("notes"),
     sourceService: text("source_service"),
     sourceUri: text("source_uri"),
+    sourceEventKey: text("source_event_key"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -447,9 +448,10 @@ export const diaryEntries = pgTable(
     index("idx_diary_user_media").on(table.userId, table.mediaItemId),
     index("idx_diary_review").on(table.reviewId),
     index("idx_diary_rating").on(table.ratingId),
-    uniqueIndex("uniq_diary_source_entry")
-      .on(table.userId, table.sourceService, table.sourceUri)
-      .where(sql`"source_uri" IS NOT NULL`),
+    index("idx_diary_source_uri").on(table.userId, table.sourceUri),
+    uniqueIndex("uniq_diary_source_event")
+      .on(table.userId, table.sourceEventKey)
+      .where(sql`"source_event_key" IS NOT NULL`),
   ]
 );
 

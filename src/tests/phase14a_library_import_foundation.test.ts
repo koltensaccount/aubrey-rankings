@@ -13,9 +13,12 @@ import {
   diaryEntries,
   collections,
   collectionEntries,
+  ratingSystems,
+  ratingCategories,
+  ratingTiers,
   unresolvedImportItems,
 } from "../db/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, or } from "drizzle-orm";
 import { parseLetterboxdZip } from "../lib/letterboxd";
 import {
   previewLetterboxdImport,
@@ -90,6 +93,7 @@ describe("Phase 14A: Personal Library Foundation & Letterboxd Importer", () => {
       await db.delete(reviews).where(eq(reviews.userId, ownerId));
       await db.delete(ratings).where(eq(ratings.userId, ownerId));
       await db.delete(collections).where(eq(collections.userId, ownerId));
+      await db.delete(ratingSystems).where(eq(ratingSystems.userId, ownerId));
       await db.delete(user).where(eq(user.id, ownerId));
     }
     if (visitorId) {
@@ -558,5 +562,293 @@ Position,Name,Year,URL,Description
     assert.ok(preview.breakdown);
     assert.equal(preview.breakdown.films.new, 1);
     assert.ok(preview.unsupportedReasons.length > 0);
+  });
+
+  it("15. never attaches ambiguous films to arbitrary database matches and quarantines dependent records", async () => {
+    // 1. Insert two pre-existing media items with the identical title and different years
+    const [media1] = await db
+      .insert(mediaItems)
+      .values({
+        id: `media_ambig_1_${suffix}`,
+        title: `Ambiguous Mirage ${suffix}`,
+        releaseDate: "1994-01-01",
+        mediaType: "movie",
+      })
+      .returning();
+    const [media2] = await db
+      .insert(mediaItems)
+      .values({
+        id: `media_ambig_2_${suffix}`,
+        title: `Ambiguous Mirage ${suffix}`,
+        releaseDate: "2014-01-01",
+        mediaType: "movie",
+      })
+      .returning();
+    trackedMediaIds.push(media1.id, media2.id);
+
+    // 2. Import Letterboxd archive containing a review and diary entry for "Ambiguous Mirage" with NO year specified
+    const zip = new AdmZip();
+    const diaryContent = `Date,Name,Year,Letterboxd URI,Rating,Rewatch,Tags,Watched Date
+2026-03-01,Ambiguous Mirage ${suffix},,https://boxd.it/ambig_unresolved,4.0,No,"quarantine-test",2026-03-01
+`;
+    const reviewsContent = `Date,Name,Year,Letterboxd URI,Rating,Rewatch,Review,Tags,Watched Date
+2026-03-01,Ambiguous Mirage ${suffix},,https://boxd.it/ambig_unresolved,4.0,No,"Dependent review that must not attach arbitrarily.","quarantine-test",2026-03-01
+`;
+    zip.addFile("diary.csv", Buffer.from(diaryContent, "utf8"));
+    zip.addFile("reviews.csv", Buffer.from(reviewsContent, "utf8"));
+    const summary = parseLetterboxdZip(zip.toBuffer());
+
+    const result = await executeLetterboxdImport(ownerId, summary);
+
+    // Assert that the ambiguous film was NOT assigned arbitrarily
+    assert.ok("unresolvedCount" in result && (result.unresolvedCount ?? 0) > 0);
+
+    // Assert that neither media item was written to in reviews or diary entries
+    const attachedReviews = await db.query.reviews.findMany({
+      where: and(
+        eq(reviews.userId, ownerId),
+        or(eq(reviews.mediaItemId, media1.id), eq(reviews.mediaItemId, media2.id))
+      ),
+    });
+    assert.equal(attachedReviews.length, 0);
+
+    const attachedDiary = await db.query.diaryEntries.findMany({
+      where: and(
+        eq(diaryEntries.userId, ownerId),
+        or(eq(diaryEntries.mediaItemId, media1.id), eq(diaryEntries.mediaItemId, media2.id))
+      ),
+    });
+    assert.equal(attachedDiary.length, 0);
+
+    // Assert records are safely quarantined in unresolved_import_items
+    const quarantined = await db.query.unresolvedImportItems.findMany({
+      where: eq(unresolvedImportItems.userId, ownerId),
+    });
+    const ambigQuarantined = quarantined.filter(
+      (q) => JSON.stringify(q.sourceData).includes(`Ambiguous Mirage ${suffix}`)
+    );
+    assert.ok(ambigQuarantined.length >= 1);
+  });
+
+  it("16. preserves multiple diary events sharing the exact same film URI and is idempotent on re-import", async () => {
+    const zip = new AdmZip();
+    // 3 viewings with the exact same canonical film URI (as Letterboxd does for diary.csv)
+    const diaryContent = `Date,Name,Year,Letterboxd URI,Rating,Rewatch,Tags,Watched Date
+2026-01-01,Canonical Boxd Film ${suffix},2021,https://boxd.it/canonical_film,4.0,No,"fest",2026-01-01
+2026-02-15,Canonical Boxd Film ${suffix},2021,https://boxd.it/canonical_film,4.5,Yes,"rewatch 1",2026-02-15
+2026-03-30,Canonical Boxd Film ${suffix},2021,https://boxd.it/canonical_film,5.0,Yes,"rewatch 2",2026-03-30
+`;
+    zip.addFile("diary.csv", Buffer.from(diaryContent, "utf8"));
+    const summary = parseLetterboxdZip(zip.toBuffer());
+
+    assert.equal(summary.totalDiaryEntries, 3);
+    assert.equal(summary.totalUniqueFilms, 1);
+
+    // 1. Initial import creates all 3 diary events
+    const res1 = await executeLetterboxdImport(ownerId, summary);
+    assert.equal(res1.newDiaryCount, 3);
+
+    const userDiary = await db.query.diaryEntries.findMany({
+      where: eq(diaryEntries.userId, ownerId),
+      with: { mediaItem: true },
+    });
+    const canonicalEntries = userDiary.filter((d) => d.mediaItem.title.includes("Canonical Boxd Film"));
+    assert.equal(canonicalEntries.length, 3);
+    trackedMediaIds.push(canonicalEntries[0].mediaItemId);
+
+    // 2. Re-import of the exact same archive produces 0 new diary events (complete idempotency)
+    const res2 = await executeLetterboxdImport(ownerId, summary);
+    assert.equal(res2.newDiaryCount, 0);
+
+    const userDiaryAfter = await db.query.diaryEntries.findMany({
+      where: eq(diaryEntries.userId, ownerId),
+      with: { mediaItem: true },
+    });
+    const canonicalEntriesAfter = userDiaryAfter.filter((d) => d.mediaItem.title.includes("Canonical Boxd Film"));
+    assert.equal(canonicalEntriesAfter.length, 3);
+  });
+
+  it("17. enforces watched-state semantics (likes do not mark watched; watched.csv does not fabricate watchDate)", async () => {
+    const zip = new AdmZip();
+    // Film in likes/films.csv only
+    const likesContent = `Date,Name,Year,Letterboxd URI
+2026-01-01,Favorited Only Film ${suffix},2022,https://boxd.it/favonly
+`;
+    // Film in watched.csv with an activity date
+    const watchedContent = `Date,Name,Year,Letterboxd URI
+2026-02-01,Watched Logged Film ${suffix},2020,https://boxd.it/watchedlog
+`;
+    zip.addFile("likes/films.csv", Buffer.from(likesContent, "utf8"));
+    zip.addFile("watched.csv", Buffer.from(watchedContent, "utf8"));
+    const summary = parseLetterboxdZip(zip.toBuffer());
+
+    await executeLetterboxdImport(ownerId, summary);
+
+    const userRatings = await db.query.ratings.findMany({
+      where: eq(ratings.userId, ownerId),
+      with: { mediaItem: true },
+    });
+
+    // 1. Favorited only film must have isFavorite: true, isWatched: false, watchDate: null
+    const favOnly = userRatings.find((r) => r.mediaItem.title.includes("Favorited Only Film"));
+    assert.ok(favOnly);
+    assert.equal(favOnly.isFavorite, true);
+    assert.equal(favOnly.isWatched, false);
+    assert.equal(favOnly.watchDate, null);
+    trackedMediaIds.push(favOnly.mediaItemId);
+
+    // 2. Watched film from watched.csv must have isWatched: true, but watchDate: null (activity date is not viewing date)
+    const watchedFilm = userRatings.find((r) => r.mediaItem.title.includes("Watched Logged Film"));
+    assert.ok(watchedFilm);
+    assert.equal(watchedFilm.isWatched, true);
+    assert.equal(watchedFilm.watchDate, null);
+    trackedMediaIds.push(watchedFilm.mediaItemId);
+  });
+
+  it("18. detects and transparently reports unsupported files and social activity without data loss", async () => {
+    const zip = new AdmZip();
+    zip.addFile("comments.csv", Buffer.from("Date,URL,Comment\n2026-01-01,https://boxd.it/c1,\"Great list!\"\n", "utf8"));
+    zip.addFile("orphans.csv", Buffer.from("Date,Name,Year,Letterboxd URI\n2026-01-01,Lost Film,1910,https://boxd.it/lost\n", "utf8"));
+    zip.addFile("profile.csv", Buffer.from("Username,Given Name,Family Name\ncurator,Library,Curator\n", "utf8"));
+    zip.addFile("likes/reviews.csv", Buffer.from("Date,Letterboxd URI\n2026-01-01,https://boxd.it/rev_external\n", "utf8"));
+    zip.addFile("likes/lists.csv", Buffer.from("Date,Letterboxd URI\n2026-01-01,https://boxd.it/list_external\n", "utf8"));
+    zip.addFile("ratings.csv", Buffer.from(`Date,Name,Year,Letterboxd URI,Rating\n2026-01-01,Normal Film ${suffix},2022,https://boxd.it/norm,4.0\n`, "utf8"));
+
+    const summary = parseLetterboxdZip(zip.toBuffer());
+    assert.ok(summary.unsupportedItems.length >= 5);
+
+    const preview = await previewLetterboxdImport(ownerId, summary);
+    assert.ok("unsupportedReasons" in preview && preview.unsupportedReasons);
+    const reasons = preview.unsupportedReasons;
+    assert.ok(reasons.length >= 5);
+    assert.ok(reasons.some((r) => r.includes("comments.csv")));
+    assert.ok(reasons.some((r) => r.includes("orphans.csv")));
+    assert.ok(reasons.some((r) => r.includes("profile.csv")));
+    assert.ok(reasons.some((r) => r.includes("likes/reviews.csv")));
+    assert.ok(reasons.some((r) => r.includes("likes/lists.csv")));
+  });
+
+  it("19. exports complete archive including drafts, personal notes, share commentary, list settings, and custom rating systems", async () => {
+    // 1. Create a custom rating system with a category and tier
+    const [sys] = await db
+      .insert(ratingSystems)
+      .values({
+        id: `sys_test_${suffix}`,
+        userId: ownerId,
+        name: `Custom System ${suffix}`,
+        description: "Specialized scoring system",
+        scale: 10,
+        type: "numerical",
+        isDefault: false,
+      })
+      .returning();
+
+    await db.insert(ratingCategories).values({
+      id: `cat_test_${suffix}`,
+      ratingSystemId: sys.id,
+      name: "Direction & Craft",
+      weight: 1.5,
+      sortOrder: 0,
+      isRequired: true,
+    });
+
+    await db.insert(ratingTiers).values({
+      id: `tier_test_${suffix}`,
+      ratingSystemId: sys.id,
+      name: "Masterpiece",
+      color: "#FF4757",
+      sortOrder: 0,
+    });
+
+    // 2. Create media and rating with personal notes and share commentary
+    const [media] = await db
+      .insert(mediaItems)
+      .values({
+        id: `media_export_rich_${suffix}`,
+        title: `Rich Export Film ${suffix}`,
+        releaseDate: "2021-05-01",
+        mediaType: "movie",
+      })
+      .returning();
+    trackedMediaIds.push(media.id);
+
+    await db.insert(ratings).values({
+      id: `rate_rich_${suffix}`,
+      userId: ownerId,
+      mediaItemId: media.id,
+      calculatedOverallScore: 9.5,
+      personalNotes: "Sensitive personal notes strictly for export backup",
+      shareCommentary: true,
+      ratingSystemId: sys.id,
+      isWatched: true,
+    });
+
+    // 3. Create review with draft content
+    await db.insert(reviews).values({
+      id: `rev_rich_${suffix}`,
+      userId: ownerId,
+      mediaItemId: media.id,
+      content: "Published review content.",
+      draftContent: "Unpublished draft work in progress.",
+      draftContentFormat: "markdown",
+      status: "draft",
+      visibility: "private",
+      isJournal: true,
+      shareRating: true,
+    });
+
+    // 4. Create collection with specific settings
+    await db.insert(collections).values({
+      id: `col_rich_${suffix}`,
+      userId: ownerId,
+      title: `Curated Special Collection ${suffix}`,
+      collectionType: "custom",
+      isRanked: false,
+      visibility: "unlisted",
+      isPublic: true,
+      isPinned: true,
+      allowComments: false,
+    });
+
+    // 5. Invoke export
+    const exportReq = new NextRequest("http://localhost:3000/api/data/export", {
+      headers: { cookie: ownerCookie },
+    });
+    const res = await exportData(exportReq);
+    assert.equal(res.status, 200);
+    const json = await res.json();
+
+    // Verify ratingSystems section
+    assert.ok(Array.isArray(json.ratingSystems));
+    const exportedSys = json.ratingSystems.find((s: any) => s.id === sys.id);
+    assert.ok(exportedSys);
+    assert.equal(exportedSys.name, `Custom System ${suffix}`);
+    assert.equal(exportedSys.categories.length, 1);
+    assert.equal(exportedSys.categories[0].name, "Direction & Craft");
+    assert.equal(exportedSys.categories[0].weight, 1.5);
+    assert.equal(exportedSys.tiers.length, 1);
+    assert.equal(exportedSys.tiers[0].name, "Masterpiece");
+
+    // Verify review draft fields
+    const exportedRev = json.reviews.find((r: any) => r.id === `rev_rich_${suffix}`);
+    assert.ok(exportedRev);
+    assert.equal(exportedRev.draftContent, "Unpublished draft work in progress.");
+    assert.equal(exportedRev.draftContentFormat, "markdown");
+    assert.equal(exportedRev.shareRating, true);
+
+    // Verify rating personal notes and commentary
+    const exportedRating = json.ratings.find((r: any) => r.id === `rate_rich_${suffix}`);
+    assert.ok(exportedRating);
+    assert.equal(exportedRating.personalNotes, "Sensitive personal notes strictly for export backup");
+    assert.equal(exportedRating.shareCommentary, true);
+    assert.equal(exportedRating.ratingSystemId, sys.id);
+
+    // Verify collection settings
+    const exportedCol = json.collections.find((c: any) => c.id === `col_rich_${suffix}`);
+    assert.ok(exportedCol);
+    assert.equal(exportedCol.isRanked, false);
+    assert.equal(exportedCol.visibility, "unlisted");
+    assert.equal(exportedCol.isPinned, true);
+    assert.equal(exportedCol.allowComments, false);
   });
 });
