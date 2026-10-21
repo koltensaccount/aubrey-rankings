@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
 import { Check, AlertCircle, ArrowRight, Sparkles, User, ShieldCheck } from "lucide-react";
 import Link from "next/link";
+import { getSafeCallbackUrl } from "@/lib/safe-url";
 
 export default function OnboardingPage() {
   const router = useRouter();
@@ -38,7 +39,11 @@ export default function OnboardingPage() {
           .then((res) => res.json())
           .then((data) => {
             if (data?.user?.username && data.user.username.trim()) {
-              router.push("/profile");
+              const rawRedirect = typeof window !== "undefined"
+                ? new URLSearchParams(window.location.search).get("redirect") || new URLSearchParams(window.location.search).get("callbackUrl")
+                : null;
+              const safeRedirect = getSafeCallbackUrl(rawRedirect, "/profile");
+              router.push(safeRedirect);
             } else if (data?.user) {
               if (data.user.name && !displayName) {
                 setDisplayName(data.user.name);
@@ -108,8 +113,10 @@ export default function OnboardingPage() {
         throw new Error(json.error || "Failed to set username.");
       }
 
-      const rawRedirect = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("redirect") : null;
-      const safeRedirect = rawRedirect && rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") ? rawRedirect : "/profile";
+      const rawRedirect = typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("redirect") || new URLSearchParams(window.location.search).get("callbackUrl")
+        : null;
+      const safeRedirect = getSafeCallbackUrl(rawRedirect, "/profile");
       router.push(safeRedirect);
       router.refresh();
     } catch (err: any) {

@@ -374,6 +374,33 @@ export default async function MediaDetailsPage({
         }
       }
     } catch { /* Keep available cached metadata when TMDB is unavailable. */ }
+
+    // Fall back to stored episode records in database if TMDB is unavailable
+    if (tvSeasonsList.length === 0) {
+      try {
+        const storedEpisodes = await db.query.mediaItems.findMany({
+          where: (m, { eq, and }) => and(eq(m.parentMediaId, media.id), eq(m.mediaType, "episode")),
+          orderBy: (m, { asc }) => [asc(m.seasonNumber), asc(m.episodeNumber)],
+        });
+        if (storedEpisodes.length > 0) {
+          const seasonNums = Array.from(new Set(storedEpisodes.map((e) => e.seasonNumber || 1))).sort((a, b) => a - b);
+          tvSeasonsList = seasonNums.map((num) => ({
+            season_number: num,
+            name: `Season ${num}`,
+          }));
+          activeSeasonNumber = selectedSeason;
+          seasonEpisodes = storedEpisodes
+            .filter((e) => (e.seasonNumber || 1) === activeSeasonNumber)
+            .map((e) => ({
+              id: e.tmdbId || e.id,
+              name: e.title,
+              overview: e.overview,
+              episode_number: e.episodeNumber,
+              still_path: e.stillPath,
+            }));
+        }
+      } catch {}
+    }
   } else if (media.tmdbId && media.mediaType === "movie") {
     try {
       const details = await tmdb.getMovieDetails(media.tmdbId);
@@ -645,7 +672,7 @@ export default async function MediaDetailsPage({
                       </div>
                       <div className="pt-2 flex items-center gap-2">
                         <Link
-                          href={`/media/${epMediaId}?journal=1`}
+                          href={session?.user ? `/media/${epMediaId}?journal=1` : `/login?redirect=${encodeURIComponent(`/media/${epMediaId}?journal=1`)}`}
                           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-button bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 text-xs font-semibold transition-colors"
                         >
                           <PenLine size={12} />

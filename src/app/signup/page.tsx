@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { signUp, signIn } from "@/lib/auth-client";
 import { AlertCircle } from "lucide-react";
+import { getSafeCallbackUrl } from "@/lib/safe-url";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -30,9 +31,14 @@ export default function SignUpPage() {
       if (res.error) {
         setError(res.error.message || "Failed to create account. Please try again.");
       } else {
-        const rawRedirect = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("redirect") : null;
-        const safeRedirect = rawRedirect && rawRedirect.startsWith("/") && !rawRedirect.startsWith("//") ? rawRedirect : null;
-        router.push(safeRedirect ? `/onboarding?redirect=${encodeURIComponent(safeRedirect)}` : "/onboarding");
+        const rawRedirect = typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("redirect") || new URLSearchParams(window.location.search).get("callbackUrl")
+          : null;
+        const safeRedirect = getSafeCallbackUrl(rawRedirect, "/profile");
+        const onboardingTarget = safeRedirect !== "/profile"
+          ? `/onboarding?redirect=${encodeURIComponent(safeRedirect)}`
+          : "/onboarding";
+        router.push(onboardingTarget);
         router.refresh();
       }
     } catch (err: any) {
@@ -62,9 +68,17 @@ export default function SignUpPage() {
     }
     setGoogleLoading(true);
     try {
+      const rawRedirect = typeof window !== "undefined"
+        ? new URLSearchParams(window.location.search).get("redirect") || new URLSearchParams(window.location.search).get("callbackUrl")
+        : null;
+      const safeRedirect = getSafeCallbackUrl(rawRedirect, "/profile");
+      const callbackURL = safeRedirect !== "/profile"
+        ? `/onboarding?redirect=${encodeURIComponent(safeRedirect)}`
+        : "/onboarding";
+
       const res = await signIn.social({
         provider: "google",
-        callbackURL: "/onboarding",
+        callbackURL,
         errorCallbackURL: "/login",
       });
       if (res?.error) {

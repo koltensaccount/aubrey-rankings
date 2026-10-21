@@ -194,28 +194,44 @@ describe("Phase 13 UX Completion: Journal Destination, Discover & Navigation Int
     assert.equal(ownerRating.calculatedOverallScore, 9.5);
   });
 
-  it("5. Safe redirect URLs preserve target paths and reject open redirects", () => {
-    const safeInputs = [
-      "/journal",
-      "/media/550?journal=1",
-      "/media/tv_1399_s1_e1?journal=1",
-      "/discover",
-    ];
+  it("5. getSafeCallbackUrl preserves target paths with query params and rejects open redirects", async () => {
+    const { getSafeCallbackUrl } = await import("../lib/safe-url");
 
-    for (const url of safeInputs) {
-      const isSafe = url.startsWith("/") && !url.startsWith("//");
-      assert.equal(isSafe, true, `Expected ${url} to be identified as safe`);
-    }
+    assert.equal(getSafeCallbackUrl("/journal"), "/journal");
+    assert.equal(getSafeCallbackUrl("/media/550?journal=1"), "/media/550?journal=1");
+    assert.equal(getSafeCallbackUrl("/media/tv_1399_s1_e1?journal=1"), "/media/tv_1399_s1_e1?journal=1");
+    assert.equal(getSafeCallbackUrl("/discover?q=fight"), "/discover?q=fight");
 
-    const unsafeInputs = [
-      "https://malicious.com",
-      "//evil.com/phish",
-      "javascript:alert(1)",
-    ];
+    // Rejection of malicious or open redirects
+    assert.equal(getSafeCallbackUrl("https://malicious.com", "/profile"), "/profile");
+    assert.equal(getSafeCallbackUrl("//evil.com/phish", "/profile"), "/profile");
+    assert.equal(getSafeCallbackUrl("/\\evil.com", "/profile"), "/profile");
+    assert.equal(getSafeCallbackUrl("javascript:alert(1)", "/profile"), "/profile");
+    assert.equal(getSafeCallbackUrl(null, "/profile"), "/profile");
+    assert.equal(getSafeCallbackUrl("", "/profile"), "/profile");
+  });
 
-    for (const url of unsafeInputs) {
-      const isSafe = url.startsWith("/") && !url.startsWith("//");
-      assert.equal(isSafe, false, `Expected ${url} to be identified as unsafe`);
-    }
+  it("6. Watched-only items (score null) are distinguished from numerical ratings", async () => {
+    const { reviewScoreOnTen } = await import("../lib/review-rating");
+
+    // Watched-only entry (imported without rating)
+    const watchedOnly = {
+      calculatedOverallScore: null,
+      sourceRating: null,
+      sourceScale: 10,
+      isWatched: true,
+      categoryScores: [],
+    } as any;
+    assert.equal(reviewScoreOnTen(watchedOnly), null, "Watched-only items must produce null score");
+
+    // Rated entry
+    const ratedEntry = {
+      calculatedOverallScore: 8.5,
+      sourceRating: 8.5,
+      sourceScale: 10,
+      isWatched: true,
+      categoryScores: [],
+    } as any;
+    assert.equal(reviewScoreOnTen(ratedEntry), 8.5, "Rated items must produce calculated numeric score");
   });
 });

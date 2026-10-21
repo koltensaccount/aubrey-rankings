@@ -129,7 +129,7 @@ export default function ExplorePage() {
         <p className="text-xs text-muted-foreground mt-1 max-w-xl">
           Search movies, television series, and community curators. Log what you watch directly into your personal Journal or start a ranking collection.
         </p>
-        {session && (
+        {session ? (
           <div className="flex flex-wrap items-center gap-2 mt-4">
             <Link href="/journal" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold transition-colors">
               <BookOpen size={14} />
@@ -138,6 +138,15 @@ export default function ExplorePage() {
             <Link href="/create" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-secondary hover:bg-muted text-secondary-foreground border border-border text-xs font-semibold transition-colors">
               <Plus size={14} />
               Create Ranking
+            </Link>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center gap-2 mt-4">
+            <Link href="/login?redirect=/discover" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold transition-colors">
+              Sign In to Journal
+            </Link>
+            <Link href="/signup?redirect=/discover" className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-secondary hover:bg-muted text-secondary-foreground border border-border text-xs font-semibold transition-colors">
+              Create Account
             </Link>
           </div>
         )}
@@ -308,6 +317,10 @@ export default function ExplorePage() {
                     : `/login?redirect=${encodeURIComponent(`/media/${m.id}?type=movie&journal=1`)}`;
                   const tvDetailsHref = `/media/${m.id}?type=tv`;
 
+                  const rankHref = session?.user
+                    ? `/create?type=${isTv ? "tv_show" : "movie_franchise"}&suggest=${encodeURIComponent(title)}`
+                    : `/login?redirect=${encodeURIComponent(`/create?type=${isTv ? "tv_show" : "movie_franchise"}&suggest=${encodeURIComponent(title)}`)}`;
+
                   return (
                     <div
                       key={m.id}
@@ -351,7 +364,7 @@ export default function ExplorePage() {
                           {/* Secondary Ranking & Reviews Actions */}
                           <div className="flex items-center gap-1">
                             <Link
-                              href={`/create?type=${isTv ? "tv_show" : "movie_franchise"}&suggest=${encodeURIComponent(title)}`}
+                              href={rankHref}
                               className="flex-1 py-1 rounded-button bg-secondary hover:bg-muted text-secondary-foreground border border-border text-[9px] font-medium flex items-center justify-center transition-colors"
                             >
                               Rank

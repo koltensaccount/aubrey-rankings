@@ -58,7 +58,11 @@ export default async function JournalPage({
   const draftReviews = userReviews.filter((r) => r.status === "draft" || r.status === "unpublished");
   const publishedReviews = userReviews.filter((r) => r.status === "published");
 
-  // Calculate average score across user's journal entries
+  // Distinguish rated standalone items from watched-only imported items (where score is null)
+  const ratedStandalone = standaloneRatings.filter((r) => reviewScoreOnTen(r) !== null);
+  const watchedOnlyStandalone = standaloneRatings.filter((r) => reviewScoreOnTen(r) === null);
+
+  // Calculate average score across user's rated journal entries
   const allScores: number[] = [];
   userReviews.forEach((r) => {
     if (r.rating) {
@@ -75,14 +79,22 @@ export default async function JournalPage({
     : "—";
 
   // Filter items based on active tab
-  const showReviews = activeFilter !== "ratings";
-  const showRatings = activeFilter === "all" || activeFilter === "ratings";
-
+  const showReviews = activeFilter === "all" || activeFilter === "drafts" || activeFilter === "published";
   const filteredReviews = userReviews.filter((r) => {
     if (activeFilter === "drafts") return r.status === "draft" || r.status === "unpublished";
     if (activeFilter === "published") return r.status === "published";
     return true;
   });
+
+  const displayStandalone =
+    activeFilter === "ratings"
+      ? ratedStandalone
+      : activeFilter === "watched"
+        ? watchedOnlyStandalone
+        : activeFilter === "all"
+          ? standaloneRatings
+          : [];
+  const showRatings = displayStandalone.length > 0;
 
   return (
     <div className="min-h-screen bg-background text-foreground transition-colors pb-24">
@@ -92,13 +104,13 @@ export default async function JournalPage({
           <div>
             <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border border-primary/30 bg-primary/10 text-[10px] font-semibold uppercase tracking-wider text-primary mb-2">
               <BookOpen size={12} />
-              <span>Personal Watch History</span>
+              <span>Personal Journal · Recent Activity</span>
             </div>
             <h1 className="font-display text-3xl sm:text-4xl uppercase tracking-tight text-foreground font-bold">
               My Journal
             </h1>
             <p className="text-xs text-muted-foreground mt-1 max-w-xl">
-              Your personal log of cinema and television. Private scores, drafts, critical analyses, and published reviews.
+              Your personal log of cinema and television sorted by recent activity. Drafts, ratings, watched titles, and published reviews.
             </p>
           </div>
 
@@ -126,10 +138,10 @@ export default async function JournalPage({
 
           <div className="p-3.5 rounded-xl border border-border bg-card">
             <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-wider block">
-              Drafts & Private
+              Drafts
             </span>
             <span className="font-display text-2xl font-bold text-foreground mt-0.5 block">
-              {draftReviews.length + standaloneRatings.length}
+              {draftReviews.length}
             </span>
           </div>
 
@@ -192,8 +204,20 @@ export default async function JournalPage({
                 : "border-transparent text-muted-foreground hover:text-foreground"
             }`}
           >
-            Rating Only ({standaloneRatings.length})
+            Ratings ({ratedStandalone.length})
           </Link>
+          {watchedOnlyStandalone.length > 0 && (
+            <Link
+              href="/journal?filter=watched"
+              className={`px-3 py-2 border-b-2 font-semibold transition-colors whitespace-nowrap ${
+                activeFilter === "watched"
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Watched ({watchedOnlyStandalone.length})
+            </Link>
+          )}
         </div>
 
         {/* Empty State */}
@@ -253,22 +277,11 @@ export default async function JournalPage({
 
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wider">
-                          <span
-                            className={
-                              isDraft
-                                ? "text-primary font-bold"
-                                : review.visibility === "public"
-                                  ? "text-primary"
-                                  : "text-muted-foreground"
-                            }
-                          >
-                            {isDraft
-                              ? "Draft"
-                              : review.visibility === "public"
-                                ? "Published Public"
-                                : review.visibility === "unlisted"
-                                  ? "Unlisted"
-                                  : "Private Entry"}
+                          <span className="px-1.5 py-0.5 rounded font-bold bg-primary/10 text-primary border border-primary/20">
+                            {review.status === "draft" ? "Draft" : review.status === "unpublished" ? "Unpublished" : "Published"}
+                          </span>
+                          <span className="px-1.5 py-0.5 rounded font-medium bg-surface text-muted-foreground border border-border">
+                            {review.visibility === "public" ? "Public" : review.visibility === "unlisted" ? "Unlisted" : "Private"}
                           </span>
                           <span className="text-muted-foreground/60">·</span>
                           <span className="text-muted-foreground">
@@ -344,9 +357,9 @@ export default async function JournalPage({
                 );
               })}
 
-            {/* Standalone Rating-Only Entries */}
+            {/* Standalone Rating & Watched Entries */}
             {showRatings &&
-              standaloneRatings.map((rating) => {
+              displayStandalone.map((rating) => {
                 const isEpisode =
                   rating.mediaItem?.mediaType === "episode" ||
                   Boolean(rating.mediaItem?.seasonNumber && rating.mediaItem?.episodeNumber);
@@ -355,6 +368,7 @@ export default async function JournalPage({
                     ? `S${String(rating.mediaItem.seasonNumber).padStart(2, "0")}E${String(rating.mediaItem.episodeNumber).padStart(2, "0")}`
                     : null;
                 const normalizedScore = reviewScoreOnTen(rating);
+                const isWatchedOnly = normalizedScore === null;
                 const targetLink = `/media/${rating.mediaItemId}?journal=1`;
 
                 return (
@@ -374,7 +388,9 @@ export default async function JournalPage({
 
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wider">
-                          <span className="text-muted-foreground">Private Rating</span>
+                          <span className="px-1.5 py-0.5 rounded font-bold bg-surface text-muted-foreground border border-border">
+                            {isWatchedOnly ? "Watched" : "Private Rating"}
+                          </span>
                           <span className="text-muted-foreground/60">·</span>
                           <span className="text-muted-foreground">
                             {rating.mediaItem?.mediaType === "episode" ? "TV Episode" : "Film"}
@@ -400,7 +416,9 @@ export default async function JournalPage({
                           </Link>
                         </h3>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Rated in your Journal. Click to add writing or adjust your score.
+                          {isWatchedOnly
+                            ? "Logged as watched in your Journal. Click to rate or add writing."
+                            : "Rated in your Journal. Click to add writing or adjust your score."}
                         </p>
                       </div>
 
@@ -420,7 +438,7 @@ export default async function JournalPage({
                           className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary hover:text-primary-hover px-3 py-1.5 rounded-button bg-surface border border-border hover:bg-surface-elevated transition-colors"
                         >
                           <PenLine size={13} />
-                          <span>Add Writing</span>
+                          <span>{isWatchedOnly ? "Rate & Journal" : "Add Writing"}</span>
                         </Link>
                       </div>
                     </div>
