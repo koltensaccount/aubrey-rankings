@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useSession, signOut } from "@/lib/auth-client";
-import { Plus, Settings, LogOut, Library, Compass, Rss } from "lucide-react";
+import { Plus, Settings, LogOut, Library, Compass, Rss, BookOpen, PenLine } from "lucide-react";
 import { NotificationBell } from "@/components/notification-bell";
 
 export function Navbar() {
@@ -25,6 +25,7 @@ export function Navbar() {
   const username = (session?.user as { username?: string } | undefined)?.username;
   const primaryNavigation = [
     { href: "/", label: "My Library", icon: Library, active: pathname === "/" || pathname === "/profile" },
+    { href: "/journal", label: "Journal", icon: BookOpen, active: pathname === "/journal" },
     { href: "/discover", label: "Discover", icon: Compass, active: pathname === "/discover" || pathname === "/explore" || pathname.startsWith("/media/") },
     { href: "/feed", label: "Feed", icon: Rss, active: pathname === "/feed" },
   ];
@@ -59,8 +60,20 @@ export function Navbar() {
             {isPending ? (
               <div className="h-8 w-20 rounded bg-muted animate-pulse" />
             ) : session ? (
-              <div className="flex items-center gap-3">
-                <Link href="/create" aria-label="New ranking" className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded border border-border bg-secondary hover:bg-muted text-secondary-foreground text-xs font-semibold transition-colors">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Link
+                  href="/discover"
+                  aria-label="Add to Journal"
+                  className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 rounded-button border border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-semibold transition-colors"
+                >
+                  <PenLine size={13} />
+                  <span className="hidden sm:inline">Journal</span>
+                </Link>
+                <Link
+                  href="/create"
+                  aria-label="New ranking"
+                  className="inline-flex items-center gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-button border border-border bg-secondary hover:bg-muted text-secondary-foreground text-xs font-semibold transition-colors"
+                >
                   <Plus size={14} />
                   <span className="hidden sm:inline">New ranking</span>
                 </Link>

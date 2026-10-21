@@ -4,7 +4,7 @@ import { tmdb } from "@/lib/tmdb";
 import { getServerSession } from "@/lib/server-session";
 
 export async function GET(request: NextRequest) {
-  const session = await getServerSession();
+  const session = await getServerSession(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

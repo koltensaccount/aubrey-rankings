@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "@/lib/auth-client";
 import { AlertCircle } from "lucide-react";
+import { getSafeCallbackUrl } from "@/lib/safe-url";
 
 function LoginFormContent() {
   const router = useRouter();
@@ -47,12 +48,18 @@ function LoginFormContent() {
       if (res.error) {
         setError(res.error.message || "Invalid email or password.");
       } else {
+        const rawRedirect = searchParams.get("redirect") || searchParams.get("callbackUrl");
+        const safeRedirect = getSafeCallbackUrl(rawRedirect, "/profile");
+        const onboardingTarget = safeRedirect !== "/profile"
+          ? `/onboarding?redirect=${encodeURIComponent(safeRedirect)}`
+          : "/onboarding";
+
         try {
           const profileRes = await fetch("/api/user/profile");
           if (profileRes.ok) {
             const profileData = await profileRes.json();
             if (!profileData?.user?.username) {
-              router.push("/onboarding");
+              router.push(onboardingTarget);
               router.refresh();
               return;
             }
@@ -60,11 +67,12 @@ function LoginFormContent() {
         } catch {
           // If profile check fails, fallback to user payload
         }
+
         const user = res.data?.user as any;
         if (user && !user.username) {
-          router.push("/onboarding");
+          router.push(onboardingTarget);
         } else {
-          router.push("/profile");
+          router.push(safeRedirect);
         }
         router.refresh();
       }
@@ -95,9 +103,15 @@ function LoginFormContent() {
     }
     setGoogleLoading(true);
     try {
+      const rawRedirect = searchParams.get("redirect") || searchParams.get("callbackUrl");
+      const safeRedirect = getSafeCallbackUrl(rawRedirect, "/profile");
+      const callbackURL = safeRedirect !== "/profile"
+        ? `/onboarding?redirect=${encodeURIComponent(safeRedirect)}`
+        : "/onboarding";
+
       const res = await signIn.social({
         provider: "google",
-        callbackURL: "/onboarding",
+        callbackURL,
         errorCallbackURL: "/login",
       });
       if (res?.error) {
