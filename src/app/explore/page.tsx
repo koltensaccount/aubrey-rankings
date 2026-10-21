@@ -78,6 +78,13 @@ export default function ExplorePage() {
   };
 
   useEffect(() => {
+    if (!session?.user) {
+      setTmdbResults([]);
+      setUserResults([]);
+      setSearchError(null);
+      return;
+    }
+
     if (!query.trim() || query.trim().length < 2) {
       setTmdbResults([]);
       setUserResults([]);
@@ -152,52 +159,86 @@ export default function ExplorePage() {
         )}
       </div>
 
-      {/* Search Input */}
-      <div className="relative max-w-2xl">
-        <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <input
-          type="text"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search by title, director, series, or username..."
-          autoFocus
-          className="w-full h-12 pl-12 pr-10 rounded-xl bg-input border border-input-border text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors shadow-sm"
-        />
-        {loading && (
-          <Loader2 size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-primary animate-spin" />
-        )}
-      </div>
+      {/* Search Input (Signed-in) or Sign-in Required Banner (Signed-out) */}
+      {!session?.user ? (
+        <div className="max-w-2xl p-6 rounded-xl border border-border bg-card space-y-4 shadow-sm">
+          <div className="flex items-start gap-3.5">
+            <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shrink-0 mt-0.5">
+              <Search size={18} />
+            </div>
+            <div className="space-y-1">
+              <h3 className="font-display text-lg uppercase font-bold text-foreground">
+                Sign in to Search & Journal
+              </h3>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Searching titles across TMDB, rating movies and episodes, and saving personal journal entries requires an Aubrey account.
+              </p>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 pt-1">
+            <Link
+              href="/login?redirect=/discover"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-primary hover:bg-primary-hover text-primary-foreground text-xs font-semibold transition-colors shadow-sm"
+            >
+              Sign In
+            </Link>
+            <Link
+              href="/signup?redirect=/discover"
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-button bg-secondary hover:bg-muted text-secondary-foreground border border-border text-xs font-semibold transition-colors"
+            >
+              Create Free Account
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="relative max-w-2xl">
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by title, director, series, or username..."
+              autoFocus
+              className="w-full h-12 pl-12 pr-10 rounded-xl bg-input border border-input-border text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-colors shadow-sm"
+            />
+            {loading && (
+              <Loader2 size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-primary animate-spin" />
+            )}
+          </div>
 
-      {/* Tabs */}
-      <div className="flex items-center gap-2 border-b border-border pb-px text-xs">
-        <button
-          onClick={() => setActiveTab("all")}
-          className={`px-3 py-2 border-b-2 font-semibold transition-colors cursor-pointer ${
-            activeTab === "all" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          All Results
-        </button>
-        <button
-          onClick={() => setActiveTab("media")}
-          className={`px-3 py-2 border-b-2 font-semibold transition-colors cursor-pointer ${
-            activeTab === "media" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          Movies & TV ({tmdbResults.length})
-        </button>
-        <button
-          onClick={() => setActiveTab("people")}
-          className={`px-3 py-2 border-b-2 font-semibold transition-colors cursor-pointer ${
-            activeTab === "people" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          People ({userResults.length})
-        </button>
-      </div>
+          {/* Tabs */}
+          <div className="flex items-center gap-2 border-b border-border pb-px text-xs">
+            <button
+              onClick={() => setActiveTab("all")}
+              className={`px-3 py-2 border-b-2 font-semibold transition-colors cursor-pointer ${
+                activeTab === "all" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              All Results
+            </button>
+            <button
+              onClick={() => setActiveTab("media")}
+              className={`px-3 py-2 border-b-2 font-semibold transition-colors cursor-pointer ${
+                activeTab === "media" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              Movies & TV ({tmdbResults.length})
+            </button>
+            <button
+              onClick={() => setActiveTab("people")}
+              className={`px-3 py-2 border-b-2 font-semibold transition-colors cursor-pointer ${
+                activeTab === "people" ? "border-primary text-foreground" : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              People ({userResults.length})
+            </button>
+          </div>
+        </>
+      )}
 
       {/* Results Section */}
-      {query.trim().length >= 2 ? (
+      {session?.user && query.trim().length >= 2 ? (
         <div className="space-y-10">
           {/* People Results */}
           {(activeTab === "all" || activeTab === "people") && userResults.length > 0 && (

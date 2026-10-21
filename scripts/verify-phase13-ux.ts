@@ -4,29 +4,82 @@ import { spawn, ChildProcess, execSync } from "node:child_process";
 import path from "node:path";
 import fs from "node:fs";
 import { chromium, type Browser, type Page } from "playwright";
-import { db, pool } from "../src/db";
-import {
-  user,
-  mediaItems,
-  ratings,
-  reviews,
-} from "../src/db/schema";
-import { eq, inArray } from "drizzle-orm";
-import { auth } from "../src/lib/auth";
 
-// 1. Database Safety: fail closed if DATABASE_URL is missing or non-loopback
+// =============================================================================
+// 1. Establish Environment and Safety Checks BEFORE Database Modules Initialize
+// =============================================================================
 try {
   process.loadEnvFile(path.resolve(process.cwd(), ".env.local"));
 } catch {}
 
-if (
-  !process.env.DATABASE_URL ||
-  !["localhost", "127.0.0.1"].includes(new URL(process.env.DATABASE_URL).hostname)
-) {
+if (process.env.TEST_DATABASE_URL) {
+  process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
+}
+
+// Require explicit opt-in for destructive/fixture database testing
+const isOptedIn = process.env.AUBREY_TEST_MODE === "1" || process.env.ALLOW_TEST_DB_WRITES === "1";
+if (!isOptedIn) {
   throw new Error(
-    "Browser verification requires an isolated loopback database (DATABASE_URL must be on localhost or 127.0.0.1). Aborting to protect data safety."
+    "Verification aborted: Refusing to run without explicit test execution opt-in. Set AUBREY_TEST_MODE=1 or ALLOW_TEST_DB_WRITES=1 to run against a dedicated disposable test database."
   );
 }
+
+// Require DATABASE_URL
+if (!process.env.DATABASE_URL) {
+  throw new Error("Verification aborted: DATABASE_URL (or TEST_DATABASE_URL) is required.");
+}
+
+let parsedUrl: URL;
+try {
+  parsedUrl = new URL(process.env.DATABASE_URL);
+} catch {
+  throw new Error("Verification aborted: DATABASE_URL is not a valid URL.");
+}
+
+// Require loopback connection
+if (!["localhost", "127.0.0.1"].includes(parsedUrl.hostname)) {
+  throw new Error(
+    `Verification aborted: DATABASE_URL must be on loopback (localhost or 127.0.0.1), got: ${parsedUrl.hostname}`
+  );
+}
+
+// Require explicitly verified test database name; reject normal aubrey_rankings database
+const dbName = parsedUrl.pathname.replace(/^\//, "").toLowerCase().trim();
+if (!dbName) {
+  throw new Error("Verification aborted: Database name is missing from DATABASE_URL.");
+}
+
+if (
+  dbName === "aubrey_rankings" ||
+  dbName === "aubrey" ||
+  dbName === "postgres" ||
+  dbName === "template1" ||
+  dbName === "template0"
+) {
+  throw new Error(
+    `Verification aborted: Refusing to run against primary database "${dbName}". A dedicated disposable test database (e.g. aubrey_rankings_test) is strictly required.`
+  );
+}
+
+const isExplicitTestDb = dbName.endsWith("_test") || dbName.includes("test");
+if (!isExplicitTestDb) {
+  throw new Error(
+    `Verification aborted: Database "${dbName}" is ambiguous. The dedicated test database name must explicitly contain "test" or end in "_test" (e.g. aubrey_rankings_test).`
+  );
+}
+
+// =============================================================================
+// 2. Dynamic Initialization of Database Modules (Only After Safety Checks Pass)
+// =============================================================================
+let db: any;
+let pool: any;
+let user: any;
+let mediaItems: any;
+let ratings: any;
+let reviews: any;
+let eq: any;
+let inArray: any;
+let auth: any;
 
 const PORT = 3012;
 const BASE_URL = `http://localhost:${PORT}`;
@@ -65,6 +118,26 @@ const createdReviewIds: string[] = [];
 const createdRatingIds: string[] = [];
 
 async function setup() {
+  console.log(`Verified test database isolation: running against "${dbName}" on ${parsedUrl.hostname}`);
+
+  // Initialize DB and Auth modules now that safety checks have passed
+  const dbModule = await import("../src/db");
+  db = dbModule.db;
+  pool = dbModule.pool;
+
+  const schemaModule = await import("../src/db/schema");
+  user = schemaModule.user;
+  mediaItems = schemaModule.mediaItems;
+  ratings = schemaModule.ratings;
+  reviews = schemaModule.reviews;
+
+  const ormModule = await import("drizzle-orm");
+  eq = ormModule.eq;
+  inArray = ormModule.inArray;
+
+  const authModule = await import("../src/lib/auth");
+  auth = authModule.auth;
+
   console.log("Preparing standalone static assets...");
   try {
     execSync("cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/", {
@@ -147,10 +220,10 @@ async function setup() {
   });
   createdRatingIds.push(standaloneRatingId);
 
-  // Start standalone server
+  // Start standalone server with verified test database in environment
   console.log(`Starting standalone server on port ${PORT}...`);
   serverProcess = spawn("node", [".next/standalone/server.js"], {
-    env: { ...process.env, PORT: String(PORT), HOSTNAME: "localhost" },
+    env: { ...process.env, PORT: String(PORT), HOSTNAME: "localhost", DATABASE_URL: parsedUrl.toString() },
     stdio: "pipe",
   });
 
@@ -281,9 +354,18 @@ async function runJourneys() {
     console.log("Saved screenshot: phase13-journey2-library-desktop.png");
 
     // =========================================================================
-    // Journey 3: Discover Search (Movie & TV)
+    // Journey 3: Discover (Signed-Out vs Signed-In Search)
     // =========================================================================
-    console.log("Verifying Journey 3: Discover Page Search...");
+    console.log("Verifying Journey 3: Discover Page...");
+    // 3a. Signed-out Discover: verify clear sign-in required prompt & no broken search input
+    console.log("Verifying signed-out Discover page...");
+    await desktopVisitorPage.goto(`${BASE_URL}/discover`, { waitUntil: "networkidle" });
+    const signInPrompt = await desktopVisitorPage.textContent("text=Sign in to Search & Journal");
+    assert.ok(signInPrompt, "Signed-out visitors must see clear 'Sign in to Search & Journal' banner");
+    const visitorInput = await desktopVisitorPage.$('input[placeholder*="Search by title"]');
+    assert.equal(visitorInput, null, "Signed-out visitors must not have active search input triggering 401s");
+
+    // 3b. Signed-in Discover: interactive search
     await authPage.route("**/api/tmdb/search*", async (route) => {
       const url = new URL(route.request().url());
       const q = (url.searchParams.get("q") || "").toLowerCase();
@@ -334,7 +416,7 @@ async function runJourneys() {
     // Search for a movie
     console.log("Searching for movie on Discover...");
     const searchInput = await authPage.$('input[type="text"]');
-    assert.ok(searchInput);
+    assert.ok(searchInput, "Signed-in user must have interactive search input");
     await searchInput.fill("Fight Club");
     await authPage.waitForTimeout(1000);
 
