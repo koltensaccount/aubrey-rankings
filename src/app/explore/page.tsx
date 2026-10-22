@@ -6,6 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Search, Film, Tv, Users, Compass, ArrowRight, Loader2, UserPlus, UserCheck, BookOpen, PenLine, Plus, Star } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { useSession } from "@/lib/auth-client";
+import { getPublicMediaUrl } from "@/lib/media-url";
 
 export default function ExplorePage() {
   const pathname = usePathname();
@@ -353,10 +354,11 @@ export default function ExplorePage() {
                   const title = m.title || m.name;
                   const year = (m.release_date || m.first_air_date || "").split("-")[0];
                   const isTv = m.media_type === "tv" || !m.title;
+                  const overviewHref = getPublicMediaUrl(m.id, { type: isTv ? "tv" : "movie" });
                   const movieJournalHref = session?.user
                     ? `/media/${m.id}?type=movie&journal=1`
                     : `/login?redirect=${encodeURIComponent(`/media/${m.id}?type=movie&journal=1`)}`;
-                  const tvDetailsHref = `/media/${m.id}?type=tv`;
+                  const tvDetailsHref = overviewHref;
 
                   const rankHref = session?.user
                     ? `/create?type=${isTv ? "tv_show" : "movie_franchise"}&suggest=${encodeURIComponent(title)}`
@@ -367,15 +369,15 @@ export default function ExplorePage() {
                       key={m.id}
                       className="rounded-xl border border-border bg-card overflow-hidden flex flex-col justify-between group hover:border-primary/40 transition-colors shadow-sm"
                     >
-                      <div className="aspect-[2/3] w-full bg-black relative overflow-hidden">
+                      <Link href={overviewHref} className="aspect-[2/3] w-full bg-black relative overflow-hidden block">
                         <CinematicMediaCard posterPath={m.poster_path} title={title} aspect="poster" />
                         <span className="absolute top-2 left-2 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-black/80 text-primary border border-primary/30">
                           {isTv ? "TV" : "Movie"}
                         </span>
-                      </div>
+                      </Link>
                       <div className="p-3 space-y-1.5">
                         <Link
-                          href={isTv ? tvDetailsHref : `/media/${m.id}?type=movie`}
+                          href={overviewHref}
                           className="font-semibold text-xs text-foreground hover:text-primary transition-colors line-clamp-1 block"
                         >
                           {title}
@@ -411,7 +413,7 @@ export default function ExplorePage() {
                               Rank
                             </Link>
                             <Link
-                              href={isTv ? tvDetailsHref : `/media/${m.id}?type=movie`}
+                              href={overviewHref}
                               className="flex-1 py-1 rounded-button bg-surface hover:bg-surface-elevated text-foreground border border-border text-[9px] font-medium flex items-center justify-center transition-colors"
                             >
                               Reviews

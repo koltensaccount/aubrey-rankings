@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import Link from "next/link";
 import { getMediaArtworkAspect } from "@/lib/artwork";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
+import { getRankingMediaUrl, getPersonalMediaUrl } from "@/lib/media-url";
 import { Sliders, MoveRight, Check, Loader2, Layers, BookOpen } from "lucide-react";
 
 interface TierBoardViewProps {
@@ -135,26 +136,30 @@ export function TierBoardView({
                       </div>
 
                       <div className="p-1.5 bg-card">
-                        <div
+                        <Link
+                          href={getRankingMediaUrl(media.id, isOwner)}
                           title={episodeBadgeText ? `${episodeBadgeText} — ${media.title}` : media.title}
-                          className="text-[11px] font-semibold text-foreground truncate uppercase font-display leading-tight"
+                          className="text-[11px] font-semibold text-foreground truncate uppercase font-display leading-tight block hover:text-primary transition-colors"
                         >
                           {media.title}
-                        </div>
+                        </Link>
                       </div>
 
                       {/* Hover Overlay Action Controls */}
                       <div className="absolute inset-0 bg-black/85 opacity-0 group-hover:opacity-100 transition-opacity p-2 flex flex-col justify-between z-10 text-xs">
-                        <div className="text-[10px] text-white/90 font-medium line-clamp-2">
+                        <Link
+                          href={getRankingMediaUrl(media.id, isOwner)}
+                          className="text-[10px] text-white/90 font-medium line-clamp-2 hover:text-primary transition-colors block"
+                        >
                           {episodeBadgeText ? `${episodeBadgeText} — ${media.title}` : media.title}
-                        </div>
+                        </Link>
 
                         <div className="space-y-1">
                           {isOwner && (
                             <>
                               <div className="flex items-center gap-1">
                                 <Link
-                                  href={`/media/${encodeURIComponent(media.id)}?journal=1`}
+                                  href={getPersonalMediaUrl(media.id, { journal: true })}
                                   className="py-1 px-1.5 rounded bg-surface text-foreground font-semibold text-[10px] flex items-center justify-center gap-0.5 border border-border hover:bg-surface-elevated transition-colors"
                                   title="Open personal journal entry"
                                 >
@@ -258,24 +263,28 @@ export function TierBoardView({
                   </div>
 
                   <div className="p-1.5 bg-card">
-                    <div
+                    <Link
+                      href={getRankingMediaUrl(media.id, isOwner)}
                       title={episodeBadgeText ? `${episodeBadgeText} — ${media.title}` : media.title}
-                      className="text-[11px] font-semibold text-foreground truncate uppercase font-display leading-tight"
+                      className="text-[11px] font-semibold text-foreground truncate uppercase font-display leading-tight block hover:text-primary transition-colors"
                     >
                       {media.title}
-                    </div>
+                    </Link>
                   </div>
 
                   {isOwner && (
                     <div className="absolute inset-0 bg-black/85 opacity-0 group-hover:opacity-100 transition-opacity p-2 flex flex-col justify-between z-10 text-xs">
-                      <div className="text-[10px] text-white/90 font-medium line-clamp-2">
+                      <Link
+                        href={getRankingMediaUrl(media.id, isOwner)}
+                        className="text-[10px] text-white/90 font-medium line-clamp-2 hover:text-primary transition-colors block"
+                      >
                         {episodeBadgeText ? `${episodeBadgeText} — ${media.title}` : media.title}
-                      </div>
+                      </Link>
 
                       <div className="space-y-1">
                         <div className="flex items-center gap-1">
                           <Link
-                            href={`/media/${encodeURIComponent(media.id)}?journal=1`}
+                            href={getPersonalMediaUrl(media.id, { journal: true })}
                             className="py-1 px-1.5 rounded bg-surface text-foreground font-semibold text-[10px] flex items-center justify-center gap-0.5 border border-border hover:bg-surface-elevated transition-colors"
                             title="Open personal journal entry"
                           >

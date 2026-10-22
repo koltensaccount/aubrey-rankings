@@ -4,6 +4,7 @@ import React from "react";
 import Link from "next/link";
 import { Plus, Sliders, Trash2, BookOpen } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
+import { getRankingMediaUrl, getPersonalMediaUrl } from "@/lib/media-url";
 import { TierBoardView } from "./tier-board-view";
 
 interface CollectionEntryListProps {
@@ -83,12 +84,14 @@ export function CollectionEntryList({
 
               {/* Cinematic Card: 2:3 Portrait for Movies, 16:9 for Episodes */}
               <div className={isMovie ? "row-span-2 w-20 sm:w-[84px] shrink-0" : "row-span-2 w-20 sm:w-36 shrink-0"}>
-                <CinematicMediaCard
-                  stillPath={media.stillPath}
-                  posterPath={media.posterPath}
-                  title={media.title}
-                  aspect={isMovie ? "poster" : "video"}
-                />
+                <Link href={getRankingMediaUrl(media.id, isOwner)} className="block">
+                  <CinematicMediaCard
+                    stillPath={media.stillPath}
+                    posterPath={media.posterPath}
+                    title={media.title}
+                    aspect={isMovie ? "poster" : "video"}
+                  />
+                </Link>
               </div>
 
               {/* Title & Metadata */}
@@ -102,7 +105,9 @@ export function CollectionEntryList({
                   {media.releaseDate && <span>· {media.releaseDate.split("-")[0]}</span>}
                 </div>
                 <h3 className="font-display text-xl sm:text-2xl font-bold text-foreground uppercase tracking-tight truncate mt-0.5 group-hover:text-primary-text transition-colors">
-                  {media.title}
+                  <Link href={getRankingMediaUrl(media.id, isOwner)} className="hover:text-primary transition-colors">
+                    {media.title}
+                  </Link>
                 </h3>
                 {entry.userRating?.reviewText && (
                   <p className="text-xs text-muted-foreground line-clamp-1 italic mt-1">
@@ -149,7 +154,7 @@ export function CollectionEntryList({
                 {isOwner && (
                   <div className="flex items-center gap-1.5">
                     <Link
-                      href={`/media/${encodeURIComponent(media.id)}?journal=1`}
+                      href={getPersonalMediaUrl(media.id, { journal: true })}
                       className="px-2.5 py-1.5 rounded-button text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer border bg-surface hover:bg-surface-elevated text-foreground border-border"
                       title="Open personal journal entry"
                     >
@@ -214,12 +219,14 @@ export function CollectionEntryList({
             }`}
           >
             <div className="relative overflow-hidden">
-              <CinematicMediaCard
-                stillPath={media.stillPath}
-                posterPath={media.posterPath}
-                title={media.title}
-                aspect={isMovie ? "poster" : "video"}
-              />
+              <Link href={getRankingMediaUrl(media.id, isOwner)} className="block">
+                <CinematicMediaCard
+                  stillPath={media.stillPath}
+                  posterPath={media.posterPath}
+                  title={media.title}
+                  aspect={isMovie ? "poster" : "video"}
+                />
+              </Link>
               <div className="absolute top-3 left-3 px-2 py-0.5 rounded bg-black/85 backdrop-blur-md font-display text-lg text-white border border-white/10">
                 #{index < 9 ? `0${index + 1}` : index + 1}
               </div>
@@ -253,14 +260,16 @@ export function CollectionEntryList({
                   {media.seasonNumber ? `Season ${media.seasonNumber}, Ep ${media.episodeNumber}` : "Movie"}
                 </span>
                 <h3 className="font-display text-xl font-bold text-foreground uppercase tracking-tight mt-0.5 truncate">
-                  {media.title}
+                  <Link href={getRankingMediaUrl(media.id, isOwner)} className="hover:text-primary transition-colors">
+                    {media.title}
+                  </Link>
                 </h3>
               </div>
 
               {isOwner ? (
                 <div className="flex items-center gap-2 mt-2">
                   <Link
-                    href={`/media/${encodeURIComponent(media.id)}?journal=1`}
+                    href={getPersonalMediaUrl(media.id, { journal: true })}
                     className="py-2 px-2.5 rounded-button text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer bg-surface hover:bg-surface-elevated text-foreground border border-border"
                     title="Open personal journal entry"
                   >

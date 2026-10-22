@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Star, History, Edit2, Calendar } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { StarRating } from "@/components/rating/star-rating";
+import { getPersonalMediaUrl } from "@/lib/media-url";
 import type { TimelineEntry } from "./cinematic-timeline";
 
 interface CompactDiaryListProps {
@@ -93,17 +94,17 @@ export function CompactDiaryList({
                     {/* Media Item & Poster */}
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <div className={`shrink-0 rounded overflow-hidden border border-border bg-surface ${isEpisode ? "w-14 aspect-video" : "w-8 aspect-[2/3]"}`}>
+                        <Link href={getPersonalMediaUrl(entry.mediaItem.id)} className={`shrink-0 rounded overflow-hidden border border-border bg-surface ${isEpisode ? "w-14 aspect-video" : "w-8 aspect-[2/3]"}`}>
                           <CinematicMediaCard
                             title={entry.mediaItem.title}
                             posterPath={isEpisode ? entry.mediaItem.stillPath || entry.mediaItem.posterPath : entry.mediaItem.posterPath}
                             stillPath={entry.mediaItem.stillPath}
                             aspect={isEpisode ? "video" : "poster"}
                           />
-                        </div>
+                        </Link>
                         <div className="min-w-0">
                           <Link
-                            href={`/media/${encodeURIComponent(entry.mediaItem.id)}`}
+                            href={getPersonalMediaUrl(entry.mediaItem.id)}
                             className="font-semibold text-foreground hover:text-primary transition-colors truncate block"
                           >
                             {entry.mediaItem.title}
@@ -207,17 +208,17 @@ export function CompactDiaryList({
                   key={item.id}
                   className="p-3 rounded-card bg-card border border-border flex items-center gap-3"
                 >
-                  <div className={`shrink-0 rounded overflow-hidden border border-border ${isEpisode ? "w-16 aspect-video" : "w-10 aspect-[2/3]"}`}>
+                  <Link href={getPersonalMediaUrl(item.mediaItem.id)} className={`shrink-0 rounded overflow-hidden border border-border ${isEpisode ? "w-16 aspect-video" : "w-10 aspect-[2/3]"}`}>
                     <CinematicMediaCard
                       title={item.mediaItem.title}
                       posterPath={isEpisode ? item.mediaItem.stillPath || item.mediaItem.posterPath : item.mediaItem.posterPath}
                       stillPath={item.mediaItem.stillPath}
                       aspect={isEpisode ? "video" : "poster"}
                     />
-                  </div>
+                  </Link>
                   <div className="min-w-0 flex-1">
                     <Link
-                      href={`/media/${encodeURIComponent(item.mediaItem.id)}`}
+                      href={getPersonalMediaUrl(item.mediaItem.id)}
                       className="text-xs font-semibold text-foreground hover:text-primary truncate block"
                     >
                       {item.mediaItem.title}

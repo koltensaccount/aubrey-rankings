@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { collections, ratings, reviews } from "@/db/schema";
 import { eq, and, desc, isNotNull, isNull, inArray, or, ne } from "drizzle-orm";
 import { canShowReviewRating, reviewScoreOnTen } from "@/lib/review-rating";
+import { getPublicMediaUrl } from "@/lib/media-url";
 
 export interface UnifiedPublicReview {
   id: string;
@@ -116,7 +117,7 @@ export async function getPublicReviews(
     watchDate: r.watchDate,
     publishedAt: r.updatedAt,
     updatedAt: r.updatedAt,
-    reviewUrl: r.collectionId ? `/collection/${r.collectionId}` : `/media/${r.mediaItemId}`,
+    reviewUrl: r.collectionId ? `/collection/${r.collectionId}` : getPublicMediaUrl(r.mediaItemId),
     mediaItem: r.mediaItem,
   }));
 

@@ -16,6 +16,8 @@ interface WriteReviewButtonProps {
   initialQuickScore?: number | null;
   initialDetailedRating?: { ratingSystemId: string; categoryScores: Array<{ categoryId: string; score: number }> } | null;
   autoOpen?: boolean;
+  buttonId?: string;
+  isCanonical?: boolean;
 }
 
 export function WriteReviewButton({
@@ -27,12 +29,16 @@ export function WriteReviewButton({
   initialQuickScore,
   initialDetailedRating,
   autoOpen = false,
+  buttonId,
+  isCanonical = false,
 }: WriteReviewButtonProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { data: session } = useSession();
 
   const [isOpen, setIsOpen] = useState(false);
+  const isCanonicalButton = isCanonical || buttonId === "canonical-journal-button";
+
   // Track which mediaItemId has already been auto-opened to ensure auto-open runs only ONCE per media item
   const autoOpenedMediaIdRef = useRef<string | null>(null);
 
@@ -52,7 +58,8 @@ export function WriteReviewButton({
 
   useEffect(() => {
     // Only auto-open if session is present (never open for unauthenticated users)
-    const isJournalRequested = autoOpen || searchParams?.get("journal") === "1" || searchParams?.get("journal") === "true";
+    // Only the explicit autoOpen prop or canonical button matching ?journal=1 should trigger auto-open
+    const isJournalRequested = autoOpen || (isCanonicalButton && (searchParams?.get("journal") === "1" || searchParams?.get("journal") === "true"));
     if (session?.user && isJournalRequested) {
       if (autoOpenedMediaIdRef.current !== mediaItemId) {
         autoOpenedMediaIdRef.current = mediaItemId;
@@ -60,14 +67,15 @@ export function WriteReviewButton({
         removeJournalParam();
       }
     }
-  }, [autoOpen, searchParams, session, mediaItemId]);
+  }, [autoOpen, isCanonicalButton, searchParams, session, mediaItemId]);
 
-  // Listen for custom trigger from secondary buttons on the page (e.g. empty-state button)
+  // Listen for custom trigger only on the canonical button to avoid multiple dialogs
   useEffect(() => {
+    if (!isCanonicalButton) return;
     const handleCustomOpen = () => setIsOpen(true);
     window.addEventListener("aubrey:open-journal", handleCustomOpen);
     return () => window.removeEventListener("aubrey:open-journal", handleCustomOpen);
-  }, []);
+  }, [isCanonicalButton]);
 
   const handleClose = () => {
     setIsOpen(false);
@@ -88,7 +96,7 @@ export function WriteReviewButton({
   return (
     <>
       <button
-        id="canonical-journal-button"
+        id={buttonId || (isCanonicalButton ? "canonical-journal-button" : undefined)}
         type="button"
         onClick={handleClick}
         className={

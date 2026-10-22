@@ -4,6 +4,7 @@ import { useMemo, useState, useEffect } from "react";
 import Link from "next/link";
 import { Bookmark, Search, Trash2, Plus, Film, BookmarkX } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
+import { getPersonalMediaUrl } from "@/lib/media-url";
 import { LogViewingDialog } from "./log-viewing-dialog";
 
 export interface WatchlistGridItem {
@@ -161,7 +162,7 @@ export function WatchlistGrid({ items: initialItems, onItemRemoved, onItemLogged
               >
                 {/* Poster Artwork */}
                 <div className="relative">
-                  <Link href={`/media/${encodeURIComponent(item.mediaItem.id)}`}>
+                  <Link href={getPersonalMediaUrl(item.mediaItem.id)}>
                     <CinematicMediaCard
                       title={item.mediaItem.title}
                       posterPath={isEpisode ? item.mediaItem.stillPath || item.mediaItem.posterPath : item.mediaItem.posterPath}
@@ -182,7 +183,7 @@ export function WatchlistGrid({ items: initialItems, onItemRemoved, onItemLogged
                 <div className="p-3 space-y-1">
                   <h4 className="font-display text-base uppercase tracking-tight text-foreground truncate">
                     <Link
-                      href={`/media/${encodeURIComponent(item.mediaItem.id)}`}
+                      href={getPersonalMediaUrl(item.mediaItem.id)}
                       className="hover:text-primary transition-colors"
                     >
                       {item.mediaItem.title}
