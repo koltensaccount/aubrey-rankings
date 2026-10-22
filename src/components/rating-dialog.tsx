@@ -68,7 +68,7 @@ export function RatingDialog({
   const [selectedTierId, setSelectedTierId] = useState<string | null>(null);
   const [reviewText, setReviewText] = useState("");
   const [personalNotes, setPersonalNotes] = useState("");
-  const [shareCommentary, setShareCommentary] = useState(false);
+  const [notesDirty, setNotesDirty] = useState(false);
   const [showReviewEditor, setShowReviewEditor] = useState(false);
   const [isWatched, setIsWatched] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
@@ -108,7 +108,7 @@ export function RatingDialog({
         initialRating.notes ||
         ""
       );
-      setShareCommentary(Boolean(initialRating.shareCommentary));
+      setNotesDirty(false);
       setIsWatched(initialRating.isWatched !== false);
       setIsFavorite(Boolean(initialRating.isFavorite));
       setWatchDate(
@@ -122,7 +122,7 @@ export function RatingDialog({
       setSelectedTierId(null);
       setReviewText("");
       setPersonalNotes("");
-      setShareCommentary(false);
+      setNotesDirty(false);
       setIsWatched(true);
       setIsFavorite(false);
       setWatchDate(new Date().toISOString().split("T")[0]);
@@ -291,8 +291,7 @@ export function RatingDialog({
         collectionId: collectionId || null,
         watchDate: watchDate ? new Date(watchDate).toISOString() : null,
         reviewText: reviewText.trim() || null,
-        personalNotes: personalNotes.trim() || null,
-        shareCommentary,
+        ...(notesDirty && personalNotes.trim() ? { personalNotes: personalNotes.trim() } : {}),
         isWatched,
         isFavorite,
       };
@@ -331,7 +330,6 @@ export function RatingDialog({
             : initialRating?.categoryScores ?? [],
           reviewText: reviewText.trim() || null,
           personalNotes: personalNotes.trim() || null,
-          shareCommentary,
           isWatched,
           isFavorite,
         }
@@ -537,29 +535,12 @@ export function RatingDialog({
                   : "Write your personal notes on this title (universal to your library)..."
               }
               value={personalNotes}
-              onChange={(e) => setPersonalNotes(e.target.value)}
+              onChange={(e) => {
+                setPersonalNotes(e.target.value);
+                setNotesDirty(true);
+              }}
               className="w-full text-xs rounded-input p-3 bg-surface border border-border-input text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary leading-relaxed resize-none"
             />
-
-            {/* Sharing Consent Option */}
-            {collectionId && (
-              <div className="flex items-center justify-between pt-0.5 text-xs">
-                <label className="flex items-center gap-2 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={shareCommentary}
-                    onChange={(e) => setShareCommentary(e.target.checked)}
-                    className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer"
-                  />
-                  <span className="text-xs text-muted-foreground font-medium">
-                    Share note with this ranking
-                  </span>
-                </label>
-                <span className="text-[10px] text-muted-foreground">
-                  {shareCommentary ? "Visible in public ranking" : "Private to you"}
-                </span>
-              </div>
-            )}
 
             {/* Non-destructive preservation of distinct legacy commentary */}
             {Boolean(initialRating?.reviewText && initialRating.reviewText.trim() && initialRating.reviewText !== personalNotes) && (

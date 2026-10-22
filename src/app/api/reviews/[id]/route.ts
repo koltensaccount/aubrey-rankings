@@ -436,6 +436,14 @@ export async function DELETE(
     .set({ reviewId: null })
     .where(eq(diaryEntries.reviewId, reviewId));
 
+  // Remove chronological activity event to prevent stale timeline cards
+  await db.delete(activityEvents).where(
+    and(
+      eq(activityEvents.reviewId, reviewId),
+      eq(activityEvents.userId, session.user.id),
+    ),
+  );
+
   await db.delete(reviews).where(eq(reviews.id, reviewId));
 
   return NextResponse.json({ success: true });

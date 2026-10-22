@@ -909,16 +909,27 @@ export async function executeLetterboxdImport(
         continue;
       }
 
-      const existingRev = await tx.query.reviews.findFirst({
-        where: (r, { and, eq }) =>
-          rev.letterboxdUri
-            ? and(
+      let existingRev = rev.letterboxdUri
+        ? await tx.query.reviews.findFirst({
+            where: (r, { and, eq }) =>
+              and(
                 eq(r.userId, userId),
                 eq(r.sourceService, "letterboxd"),
                 eq(r.sourceUri, rev.letterboxdUri),
-              )
-            : and(eq(r.userId, userId), eq(r.mediaItemId, mediaItem.id)),
-      });
+              ),
+          })
+        : null;
+
+      if (!existingRev) {
+        existingRev = await tx.query.reviews.findFirst({
+          where: (r, { and, eq }) =>
+            and(
+              eq(r.userId, userId),
+              eq(r.mediaItemId, mediaItem.id),
+              eq(r.sourceService, "letterboxd"),
+            ),
+        });
+      }
 
       const linkedRating = await tx.query.ratings.findFirst({
         where: (r, { and, eq, isNull }) =>
@@ -957,7 +968,7 @@ export async function executeLetterboxdImport(
         });
         newReviewsCount++;
       } else if (existingRev.sourceService === "letterboxd" && !existingRev.draftContent) {
-        // Idempotent update without overwriting Aubrey user edits
+        // Idempotent update: recover authentic publication date and source URI
         await tx
           .update(reviews)
           .set({
@@ -965,8 +976,10 @@ export async function executeLetterboxdImport(
             ratingValue: typeof rev.rating === "number" ? rev.rating * 2 : existingRev.ratingValue,
             sourceRating: rev.rating ?? existingRev.sourceRating,
             sourceScale: typeof rev.rating === "number" ? 5 : existingRev.sourceScale,
+            sourceUri: rev.letterboxdUri || existingRev.sourceUri,
             watchedDate: rev.watchedDate || existingRev.watchedDate,
             tags: rev.tags && rev.tags.length > 0 ? rev.tags : existingRev.tags,
+            ...(pubDate ? { publishedAt: pubDate, createdAt: pubDate } : {}),
             updatedAt: new Date(),
           })
           .where(eq(reviews.id, existingRev.id));
@@ -1016,18 +1029,40 @@ export async function executeLetterboxdImport(
             ),
         });
 
-        const linkedReview = await tx.query.reviews.findFirst({
-          where: (r, { and, eq }) =>
-            and(
-              eq(r.userId, userId),
-              eq(r.mediaItemId, mediaItem.id),
-              d.letterboxdUri
-                ? eq(r.sourceUri, d.letterboxdUri)
-                : d.watchedDate
-                ? eq(r.watchedDate, d.watchedDate)
-                : undefined
-            ),
-        });
+        // Must avoid associating reviews with the wrong viewing or rewatch.
+        // A review is legitimately associated ONLY if:
+        // 1. Both share the exact same non-null watchedDate, OR
+        // 2. The review has no watchedDate, but its publishedAt date matches d.watchedDate.
+        // Reviews on different dates or for different rewatches remain unlinked.
+        let linkedReview = null;
+        if (d.watchedDate) {
+          const targetWatchDate = d.watchedDate;
+          linkedReview = await tx.query.reviews.findFirst({
+            where: (r, { and, eq }) =>
+              and(
+                eq(r.userId, userId),
+                eq(r.mediaItemId, mediaItem.id),
+                eq(r.watchedDate, targetWatchDate),
+              ),
+          });
+
+          if (!linkedReview) {
+            const potential = await tx.query.reviews.findMany({
+              where: (r, { and, eq, isNull }) =>
+                and(
+                  eq(r.userId, userId),
+                  eq(r.mediaItemId, mediaItem.id),
+                  isNull(r.watchedDate),
+                ),
+            });
+            linkedReview =
+              potential.find(
+                (p) =>
+                  p.publishedAt &&
+                  p.publishedAt.toISOString().slice(0, 10) === d.watchedDate,
+              ) || null;
+          }
+        }
 
         await tx.insert(diaryEntries).values({
           id: `diary_${randomUUID()}`,
@@ -1111,6 +1146,15 @@ export async function executeLetterboxdImport(
           updatedAt: new Date(),
         });
         newWatchlistCount++;
+      } else if (w.dateAdded) {
+        // Enrich existing watchlist item with authentic source dateAdded
+        await tx
+          .update(watchlistItems)
+          .set({
+            createdAt: new Date(w.dateAdded),
+            updatedAt: new Date(),
+          })
+          .where(eq(watchlistItems.id, existingWl.id));
       }
     }
 

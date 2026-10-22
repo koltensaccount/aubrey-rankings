@@ -317,6 +317,20 @@ export function TimelineEntryCard({
                       <Edit2 size={11} />
                       <span>Edit Rating</span>
                     </button>
+                  ) : entry.eventType === "watchlist" ? (
+                    <Link
+                      href={getPersonalMediaUrl(mediaItem.id, { from: "timeline" })}
+                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+                    >
+                      <span>View in Watchlist</span>
+                    </Link>
+                  ) : entry.eventType === "watched_mark" ? (
+                    <Link
+                      href={getPersonalMediaUrl(mediaItem.id, { from: "timeline" })}
+                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+                    >
+                      <span>View Title</span>
+                    </Link>
                   ) : (
                     <button
                       type="button"
@@ -324,7 +338,7 @@ export function TimelineEntryCard({
                       className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
                     >
                       <Edit2 size={11} />
-                      <span>Edit</span>
+                      <span>Edit Viewing</span>
                     </button>
                   )}
                 </>

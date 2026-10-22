@@ -7,6 +7,7 @@ import { CompactDiaryList } from "./compact-diary-list";
 import { LogViewingDialog } from "./log-viewing-dialog";
 import { RewatchHistoryModal, type DiaryViewingEvent } from "./rewatch-history-modal";
 import { ReviewEditorDialog, type ReviewEditorData } from "@/components/reviews/review-editor-dialog";
+import { RatingDialog } from "@/components/rating-dialog";
 
 export type FilterType =
   | "all"
@@ -85,13 +86,38 @@ export function CinematicTimeline({
   onEntryUpdated,
   onEntryDeleted,
 }: CinematicTimelineProps) {
-  const [entries, setEntries] = useState<TimelineEntry[]>(initialEntries);
-  const [hasMore, setHasMore] = useState<boolean>(
-    hasMoreInitial || (typeof totalDiaryCount === "number" && initialEntries.length < totalDiaryCount)
-  );
-  const [loadingMore, setLoadingMore] = useState(false);
   const [filter, setFilter] = useState<FilterType>("all");
   const [viewMode, setViewMode] = useState<ViewMode>("timeline");
+
+  const [dataByFilter, setDataByFilter] = useState<
+    Record<
+      string,
+      {
+        entries: TimelineEntry[];
+        undated: any[];
+        hasMore: boolean;
+      }
+    >
+  >({
+    all: {
+      entries: initialEntries,
+      undated: undatedEntries,
+      hasMore:
+        hasMoreInitial ||
+        (typeof totalDiaryCount === "number" && initialEntries.length < totalDiaryCount),
+    },
+  });
+
+  const activeData = dataByFilter[filter] || {
+    entries: [],
+    undated: [],
+    hasMore: false,
+  };
+  const entries = activeData.entries;
+  const hasMore = activeData.hasMore;
+  const undatedFromFilter = activeData.undated;
+
+  const [loadingMore, setLoadingMore] = useState(false);
 
   // Dialog state
   const [historyMediaItem, setHistoryMediaItem] = useState<any | null>(null);
@@ -104,10 +130,50 @@ export function CinematicTimeline({
   const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
   const [reviewDialogMediaItem, setReviewDialogMediaItem] = useState<any | null>(null);
 
+  // Rating editing state
+  const [editingRating, setEditingRating] = useState<any | null>(null);
+  const [isRatingDialogOpen, setIsRatingDialogOpen] = useState(false);
+  const [ratingDialogMediaItem, setRatingDialogMediaItem] = useState<any | null>(null);
+
   // Synchronize entries cleanly when initialEntries updates
   useEffect(() => {
-    setEntries(initialEntries);
-  }, [initialEntries]);
+    setDataByFilter((prev) => ({
+      ...prev,
+      all: {
+        entries: initialEntries,
+        undated: undatedEntries,
+        hasMore:
+          hasMoreInitial ||
+          (typeof totalDiaryCount === "number" && initialEntries.length < totalDiaryCount),
+      },
+    }));
+  }, [initialEntries, undatedEntries, hasMoreInitial, totalDiaryCount]);
+
+  // Handle switching filter: fetch if not already cached for this filter
+  const handleFilterChange = async (newFilter: FilterType) => {
+    setFilter(newFilter);
+    if (!dataByFilter[newFilter]) {
+      try {
+        setLoadingMore(true);
+        const res = await fetch(`/api/activity?offset=0&limit=50&filter=${encodeURIComponent(newFilter)}`);
+        if (res.ok) {
+          const data = await res.json();
+          setDataByFilter((prev) => ({
+            ...prev,
+            [newFilter]: {
+              entries: Array.isArray(data.entries) ? data.entries : [],
+              undated: Array.isArray(data.undatedEntries) ? data.undatedEntries : [],
+              hasMore: Boolean(data.hasMore),
+            },
+          }));
+        }
+      } catch (err) {
+        console.error("Failed to load filtered activity:", err);
+      } finally {
+        setLoadingMore(false);
+      }
+    }
+  };
 
   // Load earlier activities incrementally with consistent combination and filtering
   const handleLoadMore = async () => {
@@ -120,12 +186,21 @@ export function CinematicTimeline({
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.entries)) {
-          setEntries((prev) => {
-            const existingIds = new Set(prev.map((e) => e.id));
+          setDataByFilter((prev) => {
+            const current = prev[filter] || { entries: [], undated: [], hasMore: false };
+            const existingIds = new Set(current.entries.map((e) => e.id));
             const fresh = data.entries.filter((e: any) => !existingIds.has(e.id));
-            return [...prev, ...fresh];
+            return {
+              ...prev,
+              [filter]: {
+                entries: [...current.entries, ...fresh],
+                undated: Array.isArray(data.undatedEntries) && data.undatedEntries.length > 0
+                  ? data.undatedEntries
+                  : current.undated,
+                hasMore: Boolean(data.hasMore),
+              },
+            };
           });
-          setHasMore(Boolean(data.hasMore));
         }
       }
     } catch (err) {
@@ -244,6 +319,17 @@ export function CinematicTimeline({
       }
     });
 
+    // Also include genuine undated entries provided by server for active filter
+    const seenUndatedIds = new Set(undated.map((u) => u.id));
+    if (Array.isArray(undatedFromFilter)) {
+      undatedFromFilter.forEach((u) => {
+        if (!seenUndatedIds.has(u.id)) {
+          undated.push(u);
+          seenUndatedIds.add(u.id);
+        }
+      });
+    }
+
     // Sort dated entries strictly descending by genuine date
     dated.sort((a, b) => {
       const dateA = a.eventDate || a.watchedDate || "";
@@ -328,10 +414,32 @@ export function CinematicTimeline({
       return;
     }
 
+    if (targetAction === "rating") {
+      setRatingDialogMediaItem(entry.mediaItem);
+      setEditingRating(
+        entry.rating || {
+          id: entry.ratingId,
+          mediaItemId: entry.mediaItemId || entry.mediaItem?.id,
+          calculatedOverallScore: entry.ratingValue,
+          sourceRating: entry.sourceRating,
+          sourceScale: entry.sourceScale,
+          watchDate: entry.eventDate || entry.watchedDate,
+          isWatched: true,
+        }
+      );
+      setIsRatingDialogOpen(true);
+      return;
+    }
+
     // Viewing edit: strictly requires a confirmed diary entry ID
     const viewingId = entry.diaryEntryId || (entry.eventType === "viewing" ? entry.id : null);
+    if (!viewingId) {
+      // Never create a viewing when editing another activity
+      return;
+    }
+
     setEditingEntry({
-      id: viewingId || "",
+      id: viewingId,
       mediaItemId: entry.mediaItemId || entry.mediaItem?.id,
       watchedDate: entry.eventDate || entry.watchedDate || null,
       isRewatch: Boolean(entry.isRewatch),
@@ -343,23 +451,60 @@ export function CinematicTimeline({
     setIsLogDialogOpen(true);
   };
 
+  const handleRatingSaved = (savedRating: any) => {
+    setDataByFilter((prev) => {
+      const updated: typeof prev = {};
+      for (const [k, v] of Object.entries(prev)) {
+        updated[k] = {
+          ...v,
+          entries: v.entries.map((e) => {
+            if (
+              e.ratingId === savedRating.id ||
+              (e.mediaItemId === savedRating.mediaItemId && e.eventType === "rating")
+            ) {
+              return {
+                ...e,
+                ratingValue:
+                  typeof savedRating.calculatedOverallScore === "number"
+                    ? savedRating.calculatedOverallScore
+                    : e.ratingValue,
+              };
+            }
+            return e;
+          }),
+        };
+      }
+      return updated;
+    });
+    setIsRatingDialogOpen(false);
+    if (onEntryUpdated) onEntryUpdated(savedRating);
+  };
+
   const handleReviewSaved = (savedReview: any) => {
-    setEntries((prev) =>
-      prev.map((e) => {
-        if (e.reviewId === savedReview.id || e.id === savedReview.id) {
-          return {
-            ...e,
-            reviewContent: savedReview.content,
-            reviewTitle: savedReview.title,
-            reviewVisibility: savedReview.visibility,
-            reviewIsSpoiler: savedReview.isSpoiler,
-            ratingValue: typeof savedReview.score === "number" ? savedReview.score : e.ratingValue,
-          };
-        }
-        return e;
-      })
-    );
+    setDataByFilter((prev) => {
+      const updated: typeof prev = {};
+      for (const [k, v] of Object.entries(prev)) {
+        updated[k] = {
+          ...v,
+          entries: v.entries.map((e) => {
+            if (e.reviewId === savedReview.id || e.id === savedReview.id) {
+              return {
+                ...e,
+                reviewContent: savedReview.content,
+                reviewTitle: savedReview.title,
+                reviewVisibility: savedReview.visibility,
+                reviewIsSpoiler: savedReview.isSpoiler,
+                ratingValue: typeof savedReview.score === "number" ? savedReview.score : e.ratingValue,
+              };
+            }
+            return e;
+          }),
+        };
+      }
+      return updated;
+    });
     setIsReviewDialogOpen(false);
+    if (onEntryUpdated) onEntryUpdated(savedReview);
   };
 
   const handleNewLog = () => {
@@ -369,14 +514,19 @@ export function CinematicTimeline({
   };
 
   const handleLogSaved = (savedEntry: any) => {
-    setEntries((prev) => {
-      const idx = prev.findIndex((e) => e.id === savedEntry.id);
-      if (idx >= 0) {
-        const copy = [...prev];
-        copy[idx] = { ...copy[idx], ...savedEntry };
-        return copy;
+    setDataByFilter((prev) => {
+      const updated: typeof prev = {};
+      for (const [k, v] of Object.entries(prev)) {
+        const idx = v.entries.findIndex((e) => e.id === savedEntry.id);
+        if (idx >= 0) {
+          const copy = [...v.entries];
+          copy[idx] = { ...copy[idx], ...savedEntry };
+          updated[k] = { ...v, entries: copy };
+        } else {
+          updated[k] = { ...v, entries: [savedEntry, ...v.entries] };
+        }
       }
-      return [savedEntry, ...prev];
+      return updated;
     });
 
     if (editingEntry) {
@@ -387,7 +537,17 @@ export function CinematicTimeline({
   };
 
   const handleEntryDeleted = (deletedId: string) => {
-    setEntries((prev) => prev.filter((e) => e.id !== deletedId));
+    setDataByFilter((prev) => {
+      const updated: typeof prev = {};
+      for (const [k, v] of Object.entries(prev)) {
+        updated[k] = {
+          ...v,
+          entries: v.entries.filter((e) => e.id !== deletedId && e.diaryEntryId !== deletedId && e.reviewId !== deletedId),
+          undated: v.undated.filter((u) => u.id !== deletedId && u.diaryEntryId !== deletedId && u.reviewId !== deletedId),
+        };
+      }
+      return updated;
+    });
     if (onEntryDeleted) onEntryDeleted(deletedId);
   };
 
@@ -452,7 +612,7 @@ export function CinematicTimeline({
               <button
                 key={f.id}
                 type="button"
-                onClick={() => setFilter(f.id)}
+                onClick={() => handleFilterChange(f.id)}
                 className={`px-2.5 py-1 rounded text-xs font-semibold transition-colors cursor-pointer ${
                   filter === f.id
                     ? "bg-card text-foreground shadow-xs border border-border"
@@ -505,7 +665,7 @@ export function CinematicTimeline({
         <div className="py-12 text-center text-xs text-muted-foreground">
           No viewings match the &ldquo;{filter}&rdquo; filter.{" "}
           <button
-            onClick={() => setFilter("all")}
+            onClick={() => handleFilterChange("all")}
             className="text-primary hover:underline font-semibold ml-1 cursor-pointer"
           >
             Show all
@@ -515,7 +675,7 @@ export function CinematicTimeline({
         /* Compact List Mode */
         <CompactDiaryList
           entries={filteredEntries}
-          undatedEntries={undatedEntries}
+          undatedEntries={undatedTimelineEntries}
           onOpenHistory={handleOpenHistory}
           onEditEntry={handleEditEntry}
         />
@@ -579,7 +739,7 @@ export function CinematicTimeline({
             <div className="pt-6 border-t border-border/80">
               <div className="flex items-center gap-4 mb-4 select-none">
                 <span className="font-display text-2xl font-bold tracking-tight text-muted-foreground uppercase">
-                  Undated Viewings ({undatedTimelineEntries.length})
+                  Undated Activities ({undatedTimelineEntries.length})
                 </span>
                 <div className="flex-1 h-px bg-border/60" />
               </div>
@@ -667,9 +827,21 @@ export function CinematicTimeline({
           existingReview={editingReview}
           onSaved={handleReviewSaved}
           onDeleted={(deletedId) => {
-            setEntries((prev) => prev.filter((e) => e.reviewId !== deletedId && e.id !== deletedId));
+            handleEntryDeleted(deletedId);
             setIsReviewDialogOpen(false);
           }}
+        />
+      )}
+
+      {/* Rating Editor Dialog */}
+      {isRatingDialogOpen && ratingDialogMediaItem && (
+        <RatingDialog
+          isOpen={isRatingDialogOpen}
+          onClose={() => setIsRatingDialogOpen(false)}
+          mediaItem={ratingDialogMediaItem}
+          ratingSystem={null}
+          initialRating={editingRating}
+          onRatingSaved={handleRatingSaved}
         />
       )}
     </div>

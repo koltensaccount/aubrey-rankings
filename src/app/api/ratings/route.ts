@@ -254,9 +254,10 @@ export async function POST(request: NextRequest) {
               ...values,
             });
 
-        // Sync universal mediaNotes if personalNotes was provided
-        if (personalNotes !== undefined) {
-          const trimmed = typeof personalNotes === "string" ? personalNotes.trim() : "";
+        // Sync universal mediaNotes ONLY if personalNotes is explicitly provided with non-empty string,
+        // preventing accidental overwrites or erasures from rating updates
+        if (typeof personalNotes === "string" && personalNotes.trim().length > 0) {
+          const trimmed = personalNotes.trim();
           const existingNote = await tx.query.mediaNotes.findFirst({
             where: (mn: any, { and, eq }: any) =>
               and(eq(mn.userId, session.user.id), eq(mn.mediaItemId, mediaItemId)),
@@ -266,7 +267,7 @@ export async function POST(request: NextRequest) {
               .update(mediaNotes)
               .set({ content: trimmed, updatedAt: new Date() })
               .where(eq(mediaNotes.id, existingNote.id));
-          } else if (trimmed) {
+          } else {
             await tx.insert(mediaNotes).values({
               id: `note_${randomUUID()}`,
               userId: session.user.id,

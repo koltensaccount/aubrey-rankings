@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { diaryEntries } from "@/db/schema";
+import { diaryEntries, activityEvents } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
 
 export async function GET(
@@ -107,6 +107,26 @@ export async function PATCH(
       .set(updateData)
       .where(eq(diaryEntries.id, id));
 
+    // Synchronize chronological activity event representation
+    const existingAct = await db.query.activityEvents.findFirst({
+      where: and(
+        eq(activityEvents.diaryEntryId, id),
+        eq(activityEvents.userId, session.user.id),
+      ),
+    });
+    if (existingAct) {
+      await db
+        .update(activityEvents)
+        .set({
+          eventDate: updateData.watchedDate !== undefined ? updateData.watchedDate : existingAct.eventDate,
+          ratingValue: updateData.ratingValue !== undefined ? updateData.ratingValue : existingAct.ratingValue,
+          sourceRating: updateData.sourceRating !== undefined ? updateData.sourceRating : existingAct.sourceRating,
+          sourceScale: updateData.sourceScale !== undefined ? updateData.sourceScale : existingAct.sourceScale,
+          updatedAt: new Date(),
+        })
+        .where(eq(activityEvents.id, existingAct.id));
+    }
+
     const updated = await db.query.diaryEntries.findFirst({
       where: eq(diaryEntries.id, id),
       with: {
@@ -148,6 +168,12 @@ export async function DELETE(
       return NextResponse.json({ error: "Entry not found" }, { status: 404 });
     }
 
+    await db.delete(activityEvents).where(
+      and(
+        eq(activityEvents.diaryEntryId, id),
+        eq(activityEvents.userId, session.user.id),
+      ),
+    );
     await db.delete(diaryEntries).where(eq(diaryEntries.id, id));
 
     return NextResponse.json({ success: true, deletedId: id });

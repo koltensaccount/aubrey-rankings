@@ -66,6 +66,17 @@ export async function backfillUserActivityEvents(
   userId: string,
   txOrDb: any = db
 ): Promise<void> {
+  // 0. Clean up any orphaned activity events where underlying source record was deleted
+  await txOrDb.execute(sql`
+    DELETE FROM activity_events
+    WHERE user_id = ${userId}
+      AND (
+        (diary_entry_id IS NOT NULL AND diary_entry_id NOT IN (SELECT id FROM diary_entries WHERE user_id = ${userId}))
+        OR (review_id IS NOT NULL AND review_id NOT IN (SELECT id FROM reviews WHERE user_id = ${userId} AND status = 'published'))
+        OR (watchlist_item_id IS NOT NULL AND watchlist_item_id NOT IN (SELECT id FROM watchlist_items WHERE user_id = ${userId}))
+      )
+  `);
+
   // 1. Backfill from diary entries
   const userDiaries = await txOrDb.query.diaryEntries.findMany({
     where: eq(diaryEntries.userId, userId),
@@ -73,30 +84,61 @@ export async function backfillUserActivityEvents(
 
   for (const d of userDiaries) {
     const key = d.sourceEventKey || `diary:${d.id}`;
-    await txOrDb
-      .insert(activityEvents)
-      .values({
-        id: `act_${randomUUID()}`,
-        userId,
-        mediaItemId: d.mediaItemId,
-        eventType: "viewing",
-        eventDate: d.watchedDate || null,
-        loggedDate: d.loggedDate || null,
-        diaryEntryId: d.id,
-        reviewId: d.reviewId || null,
-        ratingId: d.ratingId || null,
-        ratingValue: d.ratingValue,
-        sourceRating: d.sourceRating,
-        sourceScale: d.sourceScale,
-        isRewatch: d.isRewatch,
-        notes: d.notes,
-        sourceService: d.sourceService,
-        sourceUri: d.sourceUri,
-        sourceEventKey: key,
-        createdAt: d.createdAt,
-        updatedAt: d.updatedAt,
-      })
-      .onConflictDoNothing();
+    const existing = await txOrDb.query.activityEvents.findFirst({
+      where: and(
+        eq(activityEvents.userId, userId),
+        eq(activityEvents.eventType, "viewing"),
+        eq(activityEvents.diaryEntryId, d.id),
+      ),
+    });
+
+    if (existing) {
+      if (
+        existing.eventDate !== (d.watchedDate || null) ||
+        existing.ratingValue !== d.ratingValue ||
+        existing.sourceRating !== d.sourceRating ||
+        existing.isRewatch !== d.isRewatch ||
+        existing.notes !== d.notes
+      ) {
+        await txOrDb
+          .update(activityEvents)
+          .set({
+            eventDate: d.watchedDate || null,
+            ratingValue: d.ratingValue,
+            sourceRating: d.sourceRating,
+            sourceScale: d.sourceScale,
+            isRewatch: d.isRewatch,
+            notes: d.notes,
+            updatedAt: new Date(),
+          })
+          .where(eq(activityEvents.id, existing.id));
+      }
+    } else {
+      await txOrDb
+        .insert(activityEvents)
+        .values({
+          id: `act_${randomUUID()}`,
+          userId,
+          mediaItemId: d.mediaItemId,
+          eventType: "viewing",
+          eventDate: d.watchedDate || null,
+          loggedDate: d.loggedDate || null,
+          diaryEntryId: d.id,
+          reviewId: d.reviewId || null,
+          ratingId: d.ratingId || null,
+          ratingValue: d.ratingValue,
+          sourceRating: d.sourceRating,
+          sourceScale: d.sourceScale,
+          isRewatch: d.isRewatch,
+          notes: d.notes,
+          sourceService: d.sourceService,
+          sourceUri: d.sourceUri,
+          sourceEventKey: key,
+          createdAt: d.createdAt,
+          updatedAt: d.updatedAt,
+        })
+        .onConflictDoNothing();
+    }
   }
 
   // 2. Backfill from published reviews
@@ -110,28 +152,55 @@ export async function backfillUserActivityEvents(
     const pubDate = r.publishedAt ? r.publishedAt.toISOString().slice(0, 10) : null;
     const eventDate = pubDate;
 
-    await txOrDb
-      .insert(activityEvents)
-      .values({
-        id: `act_${randomUUID()}`,
-        userId,
-        mediaItemId: r.mediaItemId,
-        eventType: "review",
-        eventDate,
-        loggedDate: r.publishedAt || null,
-        reviewId: r.id,
-        ratingId: r.ratingId || null,
-        diaryEntryId: r.viewingId || null,
-        ratingValue: r.ratingValue,
-        sourceRating: r.sourceRating,
-        sourceScale: r.sourceScale,
-        sourceService: r.sourceService,
-        sourceUri: r.sourceUri,
-        sourceEventKey: key,
-        createdAt: r.createdAt,
-        updatedAt: r.updatedAt,
-      })
-      .onConflictDoNothing();
+    const existing = await txOrDb.query.activityEvents.findFirst({
+      where: and(
+        eq(activityEvents.userId, userId),
+        eq(activityEvents.eventType, "review"),
+        eq(activityEvents.reviewId, r.id),
+      ),
+    });
+
+    if (existing) {
+      if (
+        existing.eventDate !== eventDate ||
+        existing.ratingValue !== r.ratingValue ||
+        existing.sourceRating !== r.sourceRating
+      ) {
+        await txOrDb
+          .update(activityEvents)
+          .set({
+            eventDate,
+            ratingValue: r.ratingValue,
+            sourceRating: r.sourceRating,
+            sourceScale: r.sourceScale,
+            updatedAt: new Date(),
+          })
+          .where(eq(activityEvents.id, existing.id));
+      }
+    } else {
+      await txOrDb
+        .insert(activityEvents)
+        .values({
+          id: `act_${randomUUID()}`,
+          userId,
+          mediaItemId: r.mediaItemId,
+          eventType: "review",
+          eventDate,
+          loggedDate: r.publishedAt || null,
+          reviewId: r.id,
+          ratingId: r.ratingId || null,
+          diaryEntryId: r.viewingId || null,
+          ratingValue: r.ratingValue,
+          sourceRating: r.sourceRating,
+          sourceScale: r.sourceScale,
+          sourceService: r.sourceService,
+          sourceUri: r.sourceUri,
+          sourceEventKey: key,
+          createdAt: r.createdAt,
+          updatedAt: r.updatedAt,
+        })
+        .onConflictDoNothing();
+    }
   }
 
   // 3. Backfill from watchlist items
@@ -143,21 +212,41 @@ export async function backfillUserActivityEvents(
     const key = `wl:${w.id}`;
     const dateAdded = w.createdAt ? w.createdAt.toISOString().slice(0, 10) : null;
 
-    await txOrDb
-      .insert(activityEvents)
-      .values({
-        id: `act_${randomUUID()}`,
-        userId,
-        mediaItemId: w.mediaItemId,
-        eventType: "watchlist",
-        eventDate: dateAdded,
-        watchlistItemId: w.id,
-        notes: w.notes,
-        sourceEventKey: key,
-        createdAt: w.createdAt,
-        updatedAt: w.updatedAt,
-      })
-      .onConflictDoNothing();
+    const existing = await txOrDb.query.activityEvents.findFirst({
+      where: and(
+        eq(activityEvents.userId, userId),
+        eq(activityEvents.eventType, "watchlist"),
+        eq(activityEvents.watchlistItemId, w.id),
+      ),
+    });
+
+    if (existing) {
+      if (existing.eventDate !== dateAdded) {
+        await txOrDb
+          .update(activityEvents)
+          .set({
+            eventDate: dateAdded,
+            updatedAt: new Date(),
+          })
+          .where(eq(activityEvents.id, existing.id));
+      }
+    } else {
+      await txOrDb
+        .insert(activityEvents)
+        .values({
+          id: `act_${randomUUID()}`,
+          userId,
+          mediaItemId: w.mediaItemId,
+          eventType: "watchlist",
+          eventDate: dateAdded,
+          watchlistItemId: w.id,
+          notes: w.notes,
+          sourceEventKey: key,
+          createdAt: w.createdAt,
+          updatedAt: w.updatedAt,
+        })
+        .onConflictDoNothing();
+    }
   }
 }
 

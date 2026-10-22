@@ -290,6 +290,12 @@ export async function DELETE(req: NextRequest) {
 
     // Invariant 17: Deleting a viewing event must never delete a review
     await db.update(reviews).set({ viewingId: null }).where(eq(reviews.viewingId, id));
+    await db.delete(activityEvents).where(
+      and(
+        eq(activityEvents.diaryEntryId, id),
+        eq(activityEvents.userId, session.user.id),
+      ),
+    );
     await db.delete(diaryEntries).where(eq(diaryEntries.id, id));
 
     return NextResponse.json({ success: true, deletedId: id });

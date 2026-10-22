@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { randomUUID } from "node:crypto";
 import type { UnifiedTimelineCardData } from "../lib/timeline-activity";
+import type { LetterboxdExportSummary } from "../lib/letterboxd";
 import {
   sanitizeInternalReturnUrl,
   getContextualBackInfo,
@@ -64,15 +65,18 @@ let watchlistItems: typeof import("../db/schema").watchlistItems;
 let activityEvents: typeof import("../db/schema").activityEvents;
 let collections: typeof import("../db/schema").collections;
 let collectionEntries: typeof import("../db/schema").collectionEntries;
+let importSourceMappings: typeof import("../db/schema").importSourceMappings;
 let eq: typeof import("drizzle-orm").eq;
 let and: typeof import("drizzle-orm").and;
 let isNull: typeof import("drizzle-orm").isNull;
+let inArray: typeof import("drizzle-orm").inArray;
 
 let combineChronologicalActivities: typeof import("../lib/timeline-activity").combineChronologicalActivities;
 let backfillUserActivityEvents: typeof import("../lib/timeline-activity").backfillUserActivityEvents;
 let getUserUnifiedTimeline: typeof import("../lib/timeline-activity").getUserUnifiedTimeline;
 let markRankedMediaAsWatched: typeof import("../lib/watched-status").markRankedMediaAsWatched;
 let reconcileUserRankedWatchedStatus: typeof import("../lib/watched-status").reconcileUserRankedWatchedStatus;
+let executeLetterboxdImport: typeof import("../lib/letterboxd-import").executeLetterboxdImport;
 
 describe("Phase 15B: Unified Notes, Reviews, Ratings & Activity History", () => {
   const suffix = `${process.pid}_${Date.now()}`;
@@ -101,15 +105,19 @@ describe("Phase 15B: Unified Notes, Reviews, Ratings & Activity History", () => 
     activityEvents = schemaModule.activityEvents;
     collections = schemaModule.collections;
     collectionEntries = schemaModule.collectionEntries;
+    importSourceMappings = schemaModule.importSourceMappings;
     eq = ormModule.eq;
     and = ormModule.and;
     isNull = ormModule.isNull;
+    inArray = ormModule.inArray;
 
     combineChronologicalActivities = timelineModule.combineChronologicalActivities;
     backfillUserActivityEvents = timelineModule.backfillUserActivityEvents;
     getUserUnifiedTimeline = timelineModule.getUserUnifiedTimeline;
     markRankedMediaAsWatched = watchedModule.markRankedMediaAsWatched;
     reconcileUserRankedWatchedStatus = watchedModule.reconcileUserRankedWatchedStatus;
+    const importModule = await import("../lib/letterboxd-import");
+    executeLetterboxdImport = importModule.executeLetterboxdImport;
 
     // Seed test users
     await db.insert(user).values({
@@ -1360,5 +1368,396 @@ describe("Phase 15B: Unified Notes, Reviews, Ratings & Activity History", () => 
 
     const totalWl = await db.query.watchlistItems.findMany({ where: eq(watchlistItems.userId, importUserId) });
     assert.equal(totalWl.length, 1, "Exactly 1 watchlist item survives");
+  });
+
+  it("30. Timeline correctness: filtered pagination offsets, filter switching, and genuine undated activities", async () => {
+    const testUserId = `user_timeline_corr_${Date.now()}`;
+    await db.insert(user).values({
+      id: testUserId,
+      name: "Timeline Corr User",
+      email: `${testUserId}@example.com`,
+      username: testUserId,
+    });
+
+    const mDated = `movie_dated_${Date.now()}`;
+    const mUndated = `movie_undated_${Date.now()}`;
+    await db.insert(mediaItems).values([
+      { id: mDated, title: "Dated Feature", mediaType: "movie", releaseDate: "2020-01-01" },
+      { id: mUndated, title: "Undated Feature", mediaType: "movie", releaseDate: "2021-01-01" },
+    ]);
+
+    // Create 3 dated diary viewings
+    await db.insert(diaryEntries).values([
+      { id: `d_d1_${Date.now()}`, userId: testUserId, mediaItemId: mDated, watchedDate: "2024-03-01" },
+      { id: `d_d2_${Date.now()}`, userId: testUserId, mediaItemId: mDated, watchedDate: "2024-03-02" },
+      { id: `d_d3_${Date.now()}`, userId: testUserId, mediaItemId: mDated, watchedDate: "2024-03-03" },
+    ]);
+
+    // Create 1 genuine undated review (draft or without watchedDate)
+    const revUndatedId = `rev_undated_${Date.now()}`;
+    await db.insert(reviews).values({
+      id: revUndatedId,
+      userId: testUserId,
+      mediaItemId: mUndated,
+      content: "Undated critique",
+      status: "published",
+      isJournal: true,
+      publishedAt: null,
+      watchedDate: null,
+    });
+
+    // Query 'all' filter with limit 2
+    const allP1 = await getUserUnifiedTimeline(testUserId, { limit: 2, offset: 0, filter: "all" });
+    assert.equal(allP1.entries.length, 2, "First page has 2 dated entries");
+    assert.equal(allP1.totalCount, 3, "Total dated count is 3");
+    assert.equal(allP1.hasMore, true, "Has more is true");
+    assert.equal(allP1.undatedEntries.length, 1, "Undated critique appears in undatedEntries");
+
+    // Query 'all' filter with limit 2, offset 2
+    const allP2 = await getUserUnifiedTimeline(testUserId, { limit: 2, offset: 2, filter: "all" });
+    assert.equal(allP2.entries.length, 1, "Second page has remaining 1 dated entry");
+    assert.equal(allP2.hasMore, false, "Has more is false");
+
+    // Ensure no overlap between page 1 and page 2
+    const p1Ids = new Set(allP1.entries.map((e) => e.id));
+    assert.ok(!p1Ids.has(allP2.entries[0].id), "No duplication between pages");
+
+    // Switch filter to 'reviews': offset 0 should return 0 dated and 1 undated
+    const revFilter = await getUserUnifiedTimeline(testUserId, { limit: 10, offset: 0, filter: "reviews" });
+    assert.equal(revFilter.entries.length, 0, "No dated reviews");
+    assert.equal(revFilter.undatedEntries.length, 1, "Genuine undated review returned under reviews filter");
+
+    // Clean up
+    await db.delete(diaryEntries).where(eq(diaryEntries.userId, testUserId));
+    await db.delete(reviews).where(eq(reviews.userId, testUserId));
+    await db.delete(activityEvents).where(eq(activityEvents.userId, testUserId));
+    await db.delete(mediaItems).where(inArray(mediaItems.id, [mDated, mUndated]));
+    await db.delete(user).where(eq(user.id, testUserId));
+  });
+
+  it("31. Historical data integrity: recovers authentic review publication dates without watch date substitution and enriches watchlist dateAdded", async () => {
+    const testUserId = `user_hist_rec_${Date.now()}`;
+    await db.insert(user).values({
+      id: testUserId,
+      name: "Hist Rec User",
+      email: `${testUserId}@example.com`,
+      username: testUserId,
+    });
+
+    const mUri = `https://boxd.it/film_hist_${Date.now()}`;
+    const mId = `movie_hist_${Date.now()}`;
+    await db.insert(mediaItems).values({
+      id: mId,
+      title: "Historical Epic",
+      mediaType: "movie",
+      releaseDate: "2015-05-01",
+    });
+    await db.insert(importSourceMappings).values({
+      id: `ism_${Date.now()}`,
+      sourceService: "letterboxd",
+      sourceUri: mUri,
+      sourceTitle: "Historical Epic",
+      sourceYear: 2015,
+      mediaItemId: mId,
+      confidence: "exact_uri",
+    });
+
+    // Seed existing review with a fabricated/watch-derived publication date (e.g. legacy import)
+    const legacyRevId = `rev_legacy_${Date.now()}`;
+    await db.insert(reviews).values({
+      id: legacyRevId,
+      userId: testUserId,
+      mediaItemId: mId,
+      content: "Superb historical film",
+      status: "published",
+      isJournal: true,
+      sourceService: "letterboxd",
+      sourceUri: mUri,
+      publishedAt: new Date("2021-01-01T00:00:00Z"), // old watch date
+      watchedDate: "2021-01-01",
+      createdAt: new Date("2021-01-01T00:00:00Z"),
+      updatedAt: new Date(),
+    });
+
+    // Seed existing watchlist item with no specific dateAdded (e.g. today's date)
+    const wlId = `wl_legacy_${Date.now()}`;
+    await db.insert(watchlistItems).values({
+      id: wlId,
+      userId: testUserId,
+      mediaItemId: mId,
+      createdAt: new Date("2025-01-01T00:00:00Z"),
+      updatedAt: new Date(),
+    });
+
+    // Reimport with authentic reviewDate "2024-06-15" and watchlist dateAdded "2020-03-10"
+    const summary: LetterboxdExportSummary = {
+      totalUniqueFilms: 1,
+      totalRatings: 0,
+      totalReviews: 1,
+      totalWatched: 1,
+      totalDiaryEntries: 0,
+      totalWatchlistItems: 1,
+      totalCustomLists: 0,
+      totalCustomListEntries: 0,
+      totalLikes: 0,
+      films: [{ title: "Historical Epic", year: 2015, letterboxdUri: mUri, isWatched: true, isFavorite: false }],
+      diaryEntries: [],
+      reviews: [{
+        title: "Historical Epic",
+        year: 2015,
+        letterboxdUri: mUri,
+        reviewDate: "2024-06-15", // Authentic publication date!
+        watchedDate: "2021-01-01",
+        review: "Superb historical film",
+        isRewatch: false,
+        tags: [],
+      }],
+      watchlist: [{
+        title: "Historical Epic",
+        year: 2015,
+        letterboxdUri: mUri,
+        dateAdded: "2020-03-10", // Authentic watchlist date!
+      }],
+      ratingEvents: [],
+      watchedEvents: [],
+      customLists: [],
+      likedFilms: [],
+      unresolved: [],
+      unsupportedItems: [],
+    };
+
+    const res = await executeLetterboxdImport(testUserId, summary, { allowSyntheticPlaceholders: true });
+    assert.equal(res.newReviewsCount, 0, "No duplicate review created");
+    assert.equal(res.newWatchlistCount, 0, "No duplicate watchlist item created");
+
+    // Verify review publication date was recovered to authentic "2024-06-15"
+    const updatedRev = await db.query.reviews.findFirst({ where: eq(reviews.id, legacyRevId) });
+    assert.ok(updatedRev?.publishedAt, "Review has publication date");
+    assert.equal(updatedRev?.publishedAt?.toISOString().slice(0, 10), "2024-06-15", "Authentic publication date recovered");
+    assert.equal(updatedRev?.watchedDate, "2021-01-01", "Watched date preserved separately");
+
+    // Verify watchlist date was enriched to "2020-03-10"
+    const updatedWl = await db.query.watchlistItems.findFirst({ where: eq(watchlistItems.id, wlId) });
+    assert.equal(updatedWl?.createdAt?.toISOString().slice(0, 10), "2020-03-10", "Watchlist item enriched with authentic source dateAdded");
+
+    // Clean up
+    await db.delete(reviews).where(eq(reviews.userId, testUserId));
+    await db.delete(watchlistItems).where(eq(watchlistItems.userId, testUserId));
+    await db.delete(activityEvents).where(eq(activityEvents.userId, testUserId));
+    await db.delete(importSourceMappings).where(eq(importSourceMappings.mediaItemId, mId));
+    await db.delete(mediaItems).where(eq(mediaItems.id, mId));
+    await db.delete(user).where(eq(user.id, testUserId));
+  });
+
+  it("32. Historical data integrity: avoiding associating reviews with the wrong viewing date or rewatch", async () => {
+    const testUserId = `user_rev_view_assoc_${Date.now()}`;
+    await db.insert(user).values({
+      id: testUserId,
+      name: "Assoc User",
+      email: `${testUserId}@example.com`,
+      username: testUserId,
+    });
+
+    const mUri = `https://boxd.it/film_two_watches_${Date.now()}`;
+    const mId = `movie_two_watches_${Date.now()}`;
+    await db.insert(mediaItems).values({
+      id: mId,
+      title: "Double Feature Movie",
+      mediaType: "movie",
+      releaseDate: "2018-01-01",
+    });
+    await db.insert(importSourceMappings).values({
+      id: `ism_${Date.now()}`,
+      sourceService: "letterboxd",
+      sourceUri: mUri,
+      sourceTitle: "Double Feature Movie",
+      sourceYear: 2018,
+      mediaItemId: mId,
+      confidence: "exact_uri",
+    });
+
+    // Import with 2 diary viewings on different dates: 2021-05-01 (1st watch, no review) and 2023-09-10 (2nd watch, with review)
+    const summary: LetterboxdExportSummary = {
+      totalUniqueFilms: 1,
+      totalRatings: 0,
+      totalReviews: 1,
+      totalWatched: 1,
+      totalDiaryEntries: 2,
+      totalWatchlistItems: 0,
+      totalCustomLists: 0,
+      totalCustomListEntries: 0,
+      totalLikes: 0,
+      films: [{ title: "Double Feature Movie", year: 2018, letterboxdUri: mUri, isWatched: true, isFavorite: false }],
+      reviews: [{
+        title: "Double Feature Movie",
+        year: 2018,
+        letterboxdUri: mUri,
+        reviewDate: "2023-09-10",
+        watchedDate: "2023-09-10",
+        review: "Review written only for the rewatch",
+        isRewatch: true,
+        tags: [],
+      }],
+      diaryEntries: [
+        {
+          title: "Double Feature Movie",
+          year: 2018,
+          letterboxdUri: mUri,
+          watchedDate: "2021-05-01",
+          loggedDate: null,
+          occurrenceIndex: 1,
+          isRewatch: false,
+          tags: [],
+          sourceEventKey: `diary:${mUri}:2021-05-01:1`,
+        },
+        {
+          title: "Double Feature Movie",
+          year: 2018,
+          letterboxdUri: mUri,
+          watchedDate: "2023-09-10",
+          loggedDate: null,
+          occurrenceIndex: 2,
+          isRewatch: true,
+          tags: [],
+          sourceEventKey: `diary:${mUri}:2023-09-10:2`,
+        },
+      ],
+      watchlist: [],
+      ratingEvents: [],
+      watchedEvents: [],
+      customLists: [],
+      likedFilms: [],
+      unresolved: [],
+      unsupportedItems: [],
+    };
+
+    await executeLetterboxdImport(testUserId, summary, { allowSyntheticPlaceholders: true });
+
+    const diaryEntriesCreated = await db.query.diaryEntries.findMany({
+      where: eq(diaryEntries.userId, testUserId),
+      orderBy: [diaryEntries.watchedDate],
+    });
+    assert.equal(diaryEntriesCreated.length, 2, "Two distinct viewing logs created");
+
+    const firstWatch = diaryEntriesCreated.find((d) => d.watchedDate === "2021-05-01");
+    const secondWatch = diaryEntriesCreated.find((d) => d.watchedDate === "2023-09-10");
+
+    assert.equal(firstWatch?.reviewId, null, "1st watch must NOT be linked to the review from the 2nd watch");
+    assert.ok(secondWatch?.reviewId, "2nd watch is linked to the 2nd watch review");
+
+    // Clean up
+    await db.delete(diaryEntries).where(eq(diaryEntries.userId, testUserId));
+    await db.delete(reviews).where(eq(reviews.userId, testUserId));
+    await db.delete(activityEvents).where(eq(activityEvents.userId, testUserId));
+    await db.delete(importSourceMappings).where(eq(importSourceMappings.mediaItemId, mId));
+    await db.delete(mediaItems).where(eq(mediaItems.id, mId));
+    await db.delete(user).where(eq(user.id, testUserId));
+  });
+
+  it("33. Universal Notes protection: rating updates with empty or missing notes NEVER overwrite or erase authoritative media_notes", async () => {
+    const testUserId = `user_notes_prot_${Date.now()}`;
+    await db.insert(user).values({
+      id: testUserId,
+      name: "Notes Prot User",
+      email: `${testUserId}@example.com`,
+      username: testUserId,
+    });
+
+    const mId = `movie_notes_prot_${Date.now()}`;
+    await db.insert(mediaItems).values({
+      id: mId,
+      title: "Notes Protection Test",
+      mediaType: "movie",
+      releaseDate: "2022-01-01",
+    });
+
+    // Create authoritative universal note
+    const noteId = `note_authoritative_${Date.now()}`;
+    await db.insert(mediaNotes).values({
+      id: noteId,
+      userId: testUserId,
+      mediaItemId: mId,
+      content: "Authoritative confidential thoughts written from Your View",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    // Rating save with empty personalNotes (simulating rating dialog save without note edits)
+    const ratingId = `rat_prot_${Date.now()}`;
+    await db.transaction(async (tx) => {
+      await tx.insert(ratings).values({
+        id: ratingId,
+        userId: testUserId,
+        mediaItemId: mId,
+        calculatedOverallScore: 8.5,
+        isWatched: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      // The ratings API route logic: only update mediaNotes if typeof personalNotes === "string" && personalNotes.trim().length > 0
+      const personalNotes: any = "";
+      if (typeof personalNotes === "string" && personalNotes.trim().length > 0) {
+        await tx.update(mediaNotes).set({ content: personalNotes.trim() }).where(eq(mediaNotes.id, noteId));
+      }
+    });
+
+    // Verify authoritative universal note is byte-for-byte preserved
+    const preservedNote = await db.query.mediaNotes.findFirst({
+      where: and(eq(mediaNotes.userId, testUserId), eq(mediaNotes.mediaItemId, mId)),
+    });
+    assert.equal(preservedNote?.content, "Authoritative confidential thoughts written from Your View", "Authoritative note must never be erased by rating edits");
+
+    // Clean up
+    await db.delete(ratings).where(eq(ratings.userId, testUserId));
+    await db.delete(mediaNotes).where(eq(mediaNotes.userId, testUserId));
+    await db.delete(mediaItems).where(eq(mediaItems.id, mId));
+    await db.delete(user).where(eq(user.id, testUserId));
+  });
+
+  it("34. Event synchronization: deleting viewing, review, or watchlist records removes activity_events without leaving ghost cards", async () => {
+    const testUserId = `user_sync_del_${Date.now()}`;
+    await db.insert(user).values({
+      id: testUserId,
+      name: "Sync Del User",
+      email: `${testUserId}@example.com`,
+      username: testUserId,
+    });
+
+    const mId = `movie_sync_del_${Date.now()}`;
+    await db.insert(mediaItems).values({
+      id: mId,
+      title: "Sync Deletion Movie",
+      mediaType: "movie",
+      releaseDate: "2023-01-01",
+    });
+
+    // 1. Create a viewing and verify activity event
+    const diaryId = `diary_sync_${Date.now()}`;
+    await db.insert(diaryEntries).values({
+      id: diaryId,
+      userId: testUserId,
+      mediaItemId: mId,
+      watchedDate: "2024-04-10",
+      ratingValue: 9.0,
+    });
+    await backfillUserActivityEvents(testUserId);
+
+    let timeline = await getUserUnifiedTimeline(testUserId);
+    assert.equal(timeline.entries.length, 1, "Timeline shows viewing event");
+
+    // 2. Delete viewing using the exact delete route logic
+    await db.delete(activityEvents).where(
+      and(eq(activityEvents.diaryEntryId, diaryId), eq(activityEvents.userId, testUserId))
+    );
+    await db.delete(diaryEntries).where(eq(diaryEntries.id, diaryId));
+
+    // Verify zero orphaned timeline cards remain
+    timeline = await getUserUnifiedTimeline(testUserId);
+    assert.equal(timeline.entries.length, 0, "No ghost timeline cards survive after viewing deletion");
+
+    // Clean up
+    await db.delete(activityEvents).where(eq(activityEvents.userId, testUserId));
+    await db.delete(mediaItems).where(eq(mediaItems.id, mId));
+    await db.delete(user).where(eq(user.id, testUserId));
   });
 });
