@@ -109,9 +109,9 @@ export function CollectionEntryList({
                     {media.title}
                   </Link>
                 </h3>
-                {entry.userRating?.reviewText && (
+                {(entry.userRating?.reviewText || entry.notes || (isOwner && entry.universalNote)) && (
                   <p className="text-xs text-muted-foreground line-clamp-1 italic mt-1">
-                    &ldquo;{entry.userRating.reviewText}&rdquo;
+                    &ldquo;{entry.userRating?.reviewText || entry.notes || (isOwner ? entry.universalNote : "")}&rdquo;
                   </p>
                 )}
               </div>

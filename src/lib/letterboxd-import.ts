@@ -9,6 +9,7 @@ import {
   collectionEntries,
   unresolvedImportItems,
   importSourceMappings,
+  activityEvents,
 } from "@/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -25,6 +26,8 @@ import {
   type SourceFilmCandidate,
 } from "./letterboxd-matching";
 import { TEST_WORKSPACE_USER_ID } from "@/lib/test-workspace";
+import { backfillUserActivityEvents } from "@/lib/timeline-activity";
+import { reconcileUserRankedWatchedStatus } from "@/lib/watched-status";
 
 export function filmIdentity(film: { title: string; year: number | null }) {
   return `${film.title.trim().toLowerCase()}::${film.year ?? ""}`;
@@ -60,6 +63,8 @@ function normalizeSummary(input: LetterboxdImportInput): LetterboxdExportSummary
         tags: [],
       })),
     watchlist: [],
+    ratingEvents: [],
+    watchedEvents: [],
     customLists: [],
     likedFilms: input
       .filter((f) => Boolean(f.isFavorite))
@@ -942,6 +947,9 @@ export async function executeLetterboxdImport(
           visibility: "private", // strictly private
           isJournal: true,
           shareRating: false,
+          ratingValue: typeof rev.rating === "number" ? rev.rating * 2 : null,
+          sourceRating: rev.rating ?? null,
+          sourceScale: typeof rev.rating === "number" ? 5 : null,
           sourceService: "letterboxd",
           sourceUri: rev.letterboxdUri || null,
           watchedDate: rev.watchedDate || null,
@@ -957,6 +965,9 @@ export async function executeLetterboxdImport(
           .update(reviews)
           .set({
             ratingId: linkedRating?.id ?? existingRev.ratingId,
+            ratingValue: typeof rev.rating === "number" ? rev.rating * 2 : existingRev.ratingValue,
+            sourceRating: rev.rating ?? existingRev.sourceRating,
+            sourceScale: typeof rev.rating === "number" ? 5 : existingRev.sourceScale,
             watchedDate: rev.watchedDate || existingRev.watchedDate,
             tags: rev.tags && rev.tags.length > 0 ? rev.tags : existingRev.tags,
             updatedAt: new Date(),
@@ -1210,6 +1221,63 @@ export async function executeLetterboxdImport(
         details: unsupp.details,
       });
     }
+
+    // ------------------------------------------------------------------
+    // STEP 8: Activity Events for Dated Ratings, Watched Marks & Backfill
+    // ------------------------------------------------------------------
+    for (const re of summary.ratingEvents || []) {
+      const mediaItem = await resolveOrCreateMedia(re.title, re.year, re.letterboxdUri);
+      if (mediaItem) {
+        const uriPart = re.letterboxdUri ? normalizeLetterboxdFilmUri(re.letterboxdUri) : `${re.title.toLowerCase()}::${re.year ?? ""}`;
+        const eventKey = `act:rating:${uriPart}::${re.ratingDate || ""}`;
+        await tx
+          .insert(activityEvents)
+          .values({
+            id: `act_${randomUUID()}`,
+            userId,
+            mediaItemId: mediaItem.id,
+            eventType: "rating",
+            eventDate: re.ratingDate,
+            ratingValue: typeof re.rating === "number" ? re.rating * 2 : null,
+            sourceRating: re.rating,
+            sourceScale: 5,
+            sourceService: "letterboxd",
+            sourceUri: re.letterboxdUri || null,
+            sourceEventKey: eventKey,
+            createdAt: re.ratingDate ? new Date(re.ratingDate) : new Date(),
+            updatedAt: new Date(),
+          })
+          .onConflictDoNothing();
+      }
+    }
+
+    for (const we of summary.watchedEvents || []) {
+      if (we.watchedDate) {
+        const mediaItem = await resolveOrCreateMedia(we.title, we.year, we.letterboxdUri);
+        if (mediaItem) {
+          const uriPart = we.letterboxdUri ? normalizeLetterboxdFilmUri(we.letterboxdUri) : `${we.title.toLowerCase()}::${we.year ?? ""}`;
+          const eventKey = `act:watched_mark:${uriPart}::${we.watchedDate}`;
+          await tx
+            .insert(activityEvents)
+            .values({
+              id: `act_${randomUUID()}`,
+              userId,
+              mediaItemId: mediaItem.id,
+              eventType: "watched_mark",
+              eventDate: we.watchedDate,
+              sourceService: "letterboxd",
+              sourceUri: we.letterboxdUri || null,
+              sourceEventKey: eventKey,
+              createdAt: new Date(we.watchedDate),
+              updatedAt: new Date(),
+            })
+            .onConflictDoNothing();
+        }
+      }
+    }
+
+    await backfillUserActivityEvents(userId, tx);
+    await reconcileUserRankedWatchedStatus(userId, tx);
 
     if (Array.isArray(input)) {
       return { newCount, updatedCount };

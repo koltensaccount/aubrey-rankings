@@ -73,6 +73,21 @@ export interface ParsedWatchlistItem {
   dateAdded: string | null;
 }
 
+export interface ParsedRatingEvent {
+  title: string;
+  year: number | null;
+  letterboxdUri: string;
+  ratingDate: string | null;
+  rating: number;
+}
+
+export interface ParsedWatchedEvent {
+  title: string;
+  year: number | null;
+  letterboxdUri: string;
+  watchedDate: string | null;
+}
+
 export interface ParsedListEntry {
   position: number;
   title: string;
@@ -118,6 +133,8 @@ export interface LetterboxdExportSummary {
   diaryEntries: ParsedDiaryEntry[];
   reviews: ParsedReview[];
   watchlist: ParsedWatchlistItem[];
+  ratingEvents: ParsedRatingEvent[];
+  watchedEvents: ParsedWatchedEvent[];
   customLists: ParsedCustomList[];
   likedFilms: Array<{ title: string; year: number | null; letterboxdUri: string }>;
   unresolved: UnresolvedSourceItem[];
@@ -255,6 +272,8 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
   const diaryEntries: ParsedDiaryEntry[] = [];
   const reviews: ParsedReview[] = [];
   const watchlist: ParsedWatchlistItem[] = [];
+  const ratingEvents: ParsedRatingEvent[] = [];
+  const watchedEvents: ParsedWatchedEvent[] = [];
   const customLists: ParsedCustomList[] = [];
   const likedFilms: Array<{ title: string; year: number | null; letterboxdUri: string }> = [];
   const unresolved: UnresolvedSourceItem[] = [];
@@ -373,6 +392,7 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
         const yearIdx = header.indexOf("year");
         const uriIdx = header.indexOf("letterboxd uri");
         const ratingIdx = header.indexOf("rating");
+        const dateIdx = header.indexOf("date");
 
         for (let i = 1; i < rows.length; i++) {
           const row = rows[i];
@@ -389,6 +409,7 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
           const year = row[yearIdx] || "";
           const uri = row[uriIdx] || "";
           const ratingVal = parseRating(row[ratingIdx]);
+          const ratingDate = dateIdx !== -1 ? row[dateIdx] || "" : "";
 
           const film = getOrCreateFilm(name, year, uri);
           if (film) {
@@ -396,6 +417,16 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
             if (ratingVal !== undefined) {
               film.rating = ratingVal;
             }
+          }
+
+          if (ratingVal !== undefined) {
+            ratingEvents.push({
+              title: name.trim(),
+              year: parseYear(year),
+              letterboxdUri: uri.trim(),
+              ratingDate: isValidWatchDate(ratingDate) ? ratingDate : null,
+              rating: ratingVal,
+            });
           }
         }
       }
@@ -413,6 +444,7 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
         const nameIdx = header.indexOf("name");
         const yearIdx = header.indexOf("year");
         const uriIdx = header.indexOf("letterboxd uri");
+        const dateIdx = header.indexOf("date");
 
         for (let i = 1; i < rows.length; i++) {
           const row = rows[i];
@@ -428,6 +460,8 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
           }
           const year = row[yearIdx] || "";
           const uri = row[uriIdx] || "";
+          const rawDate = dateIdx !== -1 ? row[dateIdx] || "" : "";
+          const watchedDate = isValidWatchDate(rawDate) ? rawDate : null;
 
           const film = getOrCreateFilm(name, year, uri);
           if (film) {
@@ -435,6 +469,13 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
             // not an actual viewing date. We do NOT set film.watchDate here.
             film.isWatched = true;
           }
+
+          watchedEvents.push({
+            title: name.trim(),
+            year: parseYear(year),
+            letterboxdUri: uri.trim(),
+            watchedDate,
+          });
         }
       }
       continue;
@@ -860,6 +901,8 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
     diaryEntries,
     reviews,
     watchlist,
+    ratingEvents,
+    watchedEvents,
     customLists,
     likedFilms,
     unresolved,

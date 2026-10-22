@@ -317,6 +317,15 @@ export default async function MediaDetailsPage({
       })
     : null;
 
+  const ownerUniversalNote = session
+    ? await db.query.mediaNotes.findFirst({
+        where: (mn, { and, eq }) => and(
+          eq(mn.userId, session.user.id),
+          eq(mn.mediaItemId, journalMediaId)
+        ),
+      })
+    : null;
+
   const allMediaCollectionEntries = session
     ? await db.query.collectionEntries.findMany({
         where: eq(collectionEntries.mediaItemId, journalMediaId),
@@ -578,7 +587,11 @@ export default async function MediaDetailsPage({
       isJournal: Boolean(r.isJournal),
       shareRating: Boolean(r.shareRating),
       ratingId: r.ratingId ?? null,
-      score: reviewScore,
+      ratingValue: r.ratingValue ?? null,
+      sourceRating: r.sourceRating ?? null,
+      sourceScale: r.sourceScale ?? null,
+      viewingId: r.viewingId ?? null,
+      score: r.ratingValue ?? (typeof r.sourceRating === "number" && r.sourceScale ? (r.sourceRating / r.sourceScale) * 10 : null) ?? reviewScore,
       tierName: r.rating?.tier?.name ?? null,
       tierColor: r.rating?.tier?.color ?? null,
       publishedAt: r.publishedAt,
@@ -654,6 +667,7 @@ export default async function MediaDetailsPage({
             ownerDiaryEntries={personalDiaryProp}
             ownerRankedCollections={ownerRankedCollections}
             shouldAutoOpen={shouldAutoOpen}
+            universalNote={ownerUniversalNote?.content || ownerGlobalRating?.personalNotes || ""}
           />
         ) : (
           <MediaPublicOverview

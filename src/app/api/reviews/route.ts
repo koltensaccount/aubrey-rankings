@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { reviews, mediaItems, user, ratings, ratingTiers } from "@/db/schema";
+import { reviews, mediaItems, user, ratings, ratingTiers, activityEvents, diaryEntries } from "@/db/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { requireRateLimit } from "@/lib/request-limits";
@@ -105,6 +105,10 @@ export async function GET(request: NextRequest) {
       status: r.status,
       visibility: r.visibility,
       isSpoiler: r.isSpoiler,
+      ratingValue: r.ratingValue,
+      sourceRating: r.sourceRating,
+      sourceScale: r.sourceScale,
+      viewingId: r.viewingId,
       publishedAt: r.publishedAt,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
@@ -160,7 +164,22 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid request payload" }, { status: 400 });
   }
 
-  const { mediaItemId, title, content, draftContent, contentFormat, draftContentFormat, status, visibility, isSpoiler, ratingId } = body;
+  const {
+    mediaItemId,
+    title,
+    content,
+    draftContent,
+    contentFormat,
+    draftContentFormat,
+    status,
+    visibility,
+    isSpoiler,
+    ratingId,
+    ratingValue,
+    sourceRating,
+    sourceScale,
+    viewingId,
+  } = body;
 
   if (!mediaItemId || typeof mediaItemId !== "string") {
     return NextResponse.json({ error: "mediaItemId is required" }, { status: 400 });
@@ -217,6 +236,28 @@ export async function POST(request: NextRequest) {
     validRatingId = existingRating.id;
   }
 
+  // Validate viewing attachment if supplied
+  let validViewingId: string | null = null;
+  if (viewingId && typeof viewingId === "string") {
+    const existingViewing = await db.query.diaryEntries.findFirst({
+      where: (d, { and, eq }) =>
+        and(eq(d.id, viewingId), eq(d.userId, session.user.id), eq(d.mediaItemId, resolvedMediaId)),
+      columns: { id: true },
+    });
+    if (existingViewing) {
+      validViewingId = existingViewing.id;
+    }
+  }
+
+  // Calculate normalized rating if source rating provided
+  const parsedSourceRating = typeof sourceRating === "number" && !isNaN(sourceRating) ? sourceRating : null;
+  const parsedSourceScale = typeof sourceScale === "number" && sourceScale > 0 ? sourceScale : (parsedSourceRating !== null ? 5 : null);
+  const parsedRatingValue = typeof ratingValue === "number" && !isNaN(ratingValue)
+    ? ratingValue
+    : (parsedSourceRating !== null && parsedSourceScale
+      ? (parsedSourceRating / parsedSourceScale) * 10
+      : null);
+
   const reviewId = `rev_${randomUUID()}`;
   const now = new Date();
   const publishedAt = reviewStatus === "published" ? now : null;
@@ -226,6 +267,10 @@ export async function POST(request: NextRequest) {
     userId: session.user.id,
     mediaItemId: resolvedMediaId,
     ratingId: validRatingId,
+    viewingId: validViewingId,
+    ratingValue: parsedRatingValue,
+    sourceRating: parsedSourceRating,
+    sourceScale: parsedSourceScale,
     title: typeof title === "string" && title.trim() ? title.trim() : null,
     content: finalContent,
     draftContent: typeof draftContent === "string" ? draftContent : null,
@@ -240,6 +285,26 @@ export async function POST(request: NextRequest) {
     createdAt: now,
     updatedAt: now,
   });
+
+  // Track chronological activity event if published
+  if (reviewStatus === "published") {
+    const eventDate = publishedAt ? publishedAt.toISOString().slice(0, 10) : null;
+    await db.insert(activityEvents).values({
+      id: `act_${randomUUID()}`,
+      userId: session.user.id,
+      mediaItemId: resolvedMediaId,
+      eventType: "review",
+      eventDate,
+      loggedDate: now,
+      reviewId,
+      ratingValue: parsedRatingValue,
+      sourceRating: parsedSourceRating,
+      sourceScale: parsedSourceScale,
+      sourceEventKey: `rev:${reviewId}`,
+      createdAt: now,
+      updatedAt: now,
+    }).onConflictDoNothing();
+  }
 
   const created = await db.query.reviews.findFirst({
     where: eq(reviews.id, reviewId),

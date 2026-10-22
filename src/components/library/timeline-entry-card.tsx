@@ -8,20 +8,41 @@ import { StarRating } from "@/components/rating/star-rating";
 import { getPersonalMediaUrl } from "@/lib/media-url";
 import type { DiaryViewingEvent } from "./rewatch-history-modal";
 
-interface TimelineEntryCardProps {
-  entry: DiaryViewingEvent & {
-    mediaItem: {
-      id: string;
-      title: string;
-      year?: number | null;
-      releaseDate?: string | null;
-      mediaType?: string | null;
-      seasonNumber?: number | null;
-      episodeNumber?: number | null;
-      posterPath?: string | null;
-      stillPath?: string | null;
-    };
+export interface TimelineEntryCardData {
+  id: string;
+  mediaItemId?: string;
+  mediaItem: {
+    id: string;
+    title: string;
+    year?: number | null;
+    releaseDate?: string | null;
+    mediaType?: string | null;
+    seasonNumber?: number | null;
+    episodeNumber?: number | null;
+    posterPath?: string | null;
+    stillPath?: string | null;
   };
+  eventDate?: string | null;
+  watchedDate?: string | null;
+  eventType?: string;
+  badgeLabel?: string;
+  ratingValue?: number | null;
+  sourceRating?: number | null;
+  sourceScale?: number | null;
+  isRewatch?: boolean;
+  notes?: string | null;
+  reviewContent?: string | null;
+  reviewTitle?: string | null;
+  reviewVisibility?: string | null;
+  reviewIsSpoiler?: boolean;
+  tags?: string[] | null;
+  rating?: any;
+  review?: any;
+  createdAt?: Date | string;
+}
+
+interface TimelineEntryCardProps {
+  entry: TimelineEntryCardData;
   ordinalIndex: number; // 1-based index among all logged viewings of this title
   totalViewingsForMedia: number;
   onOpenHistory: (mediaItem: any) => void;
@@ -52,20 +73,23 @@ export function TimelineEntryCard({
       ? "3rd"
       : `${ordinalIndex}th`;
 
-  let badgeLabel = "1st Logged Viewing";
-  if (isRewatch) {
-    if (totalViewingsForMedia > 1 && ordinalIndex > 1) {
-      badgeLabel = `Rewatch · ${ordinalSuffix} Logged Viewing`;
-    } else {
-      badgeLabel = "Rewatch";
+  let badgeLabel = entry.badgeLabel || "1st Logged Viewing";
+  if (!entry.badgeLabel) {
+    if (isRewatch) {
+      if (totalViewingsForMedia > 1 && ordinalIndex > 1) {
+        badgeLabel = `Rewatch · ${ordinalSuffix} Logged Viewing`;
+      } else {
+        badgeLabel = "Rewatch";
+      }
     }
   }
 
   // Parse date into Day and Month (strictly genuine viewing date, never DB timestamps)
+  const rawDate = entry.eventDate || entry.watchedDate;
   let day = "";
   let month = "";
-  if (entry.watchedDate) {
-    const parts = entry.watchedDate.split("-");
+  if (rawDate) {
+    const parts = rawDate.split("-");
     if (parts.length === 3) {
       day = parts[2];
       const monthNum = parseInt(parts[1], 10);
@@ -78,6 +102,9 @@ export function TimelineEntryCard({
   let ratingScore: number | null = null;
   if (typeof entry.ratingValue === "number" && Number.isFinite(entry.ratingValue)) {
     ratingScore = entry.ratingValue;
+  } else if (typeof entry.sourceRating === "number" && Number.isFinite(entry.sourceRating)) {
+    const scale = typeof entry.sourceScale === "number" && entry.sourceScale > 0 ? entry.sourceScale : 5;
+    ratingScore = (entry.sourceRating / scale) * 10;
   } else if (entry.rating) {
     const r = entry.rating as any;
     if (typeof r.calculatedOverallScore === "number" && Number.isFinite(r.calculatedOverallScore)) {
@@ -90,7 +117,9 @@ export function TimelineEntryCard({
   }
 
   // Visibility indicator
-  const visibility = entry.review?.visibility || "private";
+  const visibility = entry.reviewVisibility || entry.review?.visibility || "private";
+  const reviewContent = entry.reviewContent || entry.review?.content || entry.notes;
+  const isSpoiler = Boolean(entry.reviewIsSpoiler ?? entry.review?.isSpoiler);
 
   return (
     <div className="relative flex items-start group">
@@ -188,11 +217,11 @@ export function TimelineEntryCard({
           </div>
 
           {/* Notes or Review Excerpt */}
-          {(entry.notes || entry.review?.content) && (
+          {reviewContent && (
             <div className="text-xs sm:text-sm text-foreground/90 italic pt-1 border-t border-border/60">
               <SpoilerConcealedText
-                content={entry.notes || entry.review?.content}
-                isSpoiler={entry.review?.isSpoiler}
+                content={reviewContent}
+                isSpoiler={isSpoiler}
                 quoteStyle
               />
             </div>

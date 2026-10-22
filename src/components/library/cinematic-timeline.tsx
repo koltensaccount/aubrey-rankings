@@ -7,10 +7,20 @@ import { CompactDiaryList } from "./compact-diary-list";
 import { LogViewingDialog } from "./log-viewing-dialog";
 import { RewatchHistoryModal, type DiaryViewingEvent } from "./rewatch-history-modal";
 
-export type FilterType = "all" | "films" | "tv" | "rewatches";
+export type FilterType =
+  | "all"
+  | "viewings"
+  | "reviews"
+  | "ratings"
+  | "watchlist"
+  | "films"
+  | "tv"
+  | "rewatches";
 export type ViewMode = "timeline" | "list";
 
-export interface TimelineEntry extends DiaryViewingEvent {
+export interface TimelineEntry extends Partial<DiaryViewingEvent> {
+  id: string;
+  mediaItemId: string;
   mediaItem: {
     id: string;
     title: string;
@@ -22,6 +32,18 @@ export interface TimelineEntry extends DiaryViewingEvent {
     posterPath?: string | null;
     stillPath?: string | null;
   };
+  eventDate?: string | null;
+  eventType?: string;
+  badgeLabel?: string;
+  ratingValue?: number | null;
+  sourceRating?: number | null;
+  sourceScale?: number | null;
+  reviewContent?: string | null;
+  reviewTitle?: string | null;
+  reviewVisibility?: string | null;
+  reviewIsSpoiler?: boolean;
+  tags?: string[] | null;
+  createdAt?: Date | string;
 }
 
 interface CinematicTimelineProps {
@@ -152,18 +174,44 @@ export function CinematicTimeline({
   const filteredEntries = useMemo(() => {
     return entries.filter((e) => {
       const isEpisode =
-        e.mediaItem.mediaType === "episode" ||
-        Boolean(e.mediaItem.seasonNumber && e.mediaItem.episodeNumber);
+        e.mediaItem?.mediaType === "episode" ||
+        Boolean(e.mediaItem?.seasonNumber && e.mediaItem?.episodeNumber);
 
       if (filter === "films") {
-        return e.mediaItem.mediaType === "movie" || (!isEpisode && e.mediaItem.mediaType !== "tv");
+        return e.mediaItem?.mediaType === "movie" || (!isEpisode && e.mediaItem?.mediaType !== "tv");
       }
       if (filter === "tv") {
-        return isEpisode || e.mediaItem.mediaType === "tv";
+        return isEpisode || e.mediaItem?.mediaType === "tv";
       }
       if (filter === "rewatches") {
         const ordinal = e.ordinal ?? mediaOrdinalsMap.get(e.id) ?? 1;
         return Boolean(e.isRewatch || ordinal > 1);
+      }
+      if (filter === "viewings") {
+        return (
+          e.eventType === "viewing" ||
+          e.eventType === "viewing_and_review" ||
+          e.eventType === "watched_mark" ||
+          (!e.eventType && (e.watchedDate || e.eventDate))
+        );
+      }
+      if (filter === "reviews") {
+        return (
+          e.eventType === "review" ||
+          e.eventType === "viewing_and_review" ||
+          Boolean(e.reviewContent || (e as any).review?.content || (e as any).reviewId)
+        );
+      }
+      if (filter === "ratings") {
+        return (
+          e.eventType === "rating" ||
+          typeof e.ratingValue === "number" ||
+          typeof (e as any).sourceRating === "number" ||
+          Boolean((e as any).rating)
+        );
+      }
+      if (filter === "watchlist") {
+        return e.eventType === "watchlist";
       }
       return true;
     });
@@ -176,15 +224,23 @@ export function CinematicTimeline({
     const undated: TimelineEntry[] = [];
 
     filteredEntries.forEach((e) => {
-      if (e.watchedDate && /^\d{4}-\d{2}-\d{2}$/.test(e.watchedDate.trim())) {
+      const date = e.eventDate || e.watchedDate;
+      if (date && /^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
         dated.push(e);
       } else {
         undated.push(e);
       }
     });
 
-    // Sort dated entries strictly descending by genuine viewing date
-    dated.sort((a, b) => (b.watchedDate || "").localeCompare(a.watchedDate || ""));
+    // Sort dated entries strictly descending by genuine date
+    dated.sort((a, b) => {
+      const dateA = a.eventDate || a.watchedDate || "";
+      const dateB = b.eventDate || b.watchedDate || "";
+      if (dateA !== dateB) return dateB.localeCompare(dateA);
+      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return bTime - aTime;
+    });
 
     // Map: Year -> MonthName -> entries[]
     const groups: Array<{
@@ -201,10 +257,11 @@ export function CinematicTimeline({
     ];
 
     dated.forEach((entry) => {
-      const dateParts = entry.watchedDate!.split("-");
+      const dateStr = entry.eventDate || entry.watchedDate!;
+      const dateParts = dateStr.split("-");
       const year = dateParts[0];
       const monthIdx = parseInt(dateParts[1], 10) - 1;
-      const monthName = monthNames[monthIdx] || "VIEWINGS";
+      const monthName = monthNames[monthIdx] || "ACTIVITIES";
 
       let yearGroup = groups.find((g) => g.year === year);
       if (!yearGroup) {
@@ -308,12 +365,16 @@ export function CinematicTimeline({
           </div>
 
           {/* Filter Pills */}
-          <div className="flex items-center gap-1 bg-surface p-0.5 rounded-button border border-border text-xs">
+          <div className="flex flex-wrap items-center gap-1 bg-surface p-0.5 rounded-button border border-border text-xs">
             {(
               [
                 { id: "all", label: "All" },
+                { id: "viewings", label: "Viewings" },
+                { id: "reviews", label: "Reviews" },
+                { id: "ratings", label: "Ratings" },
+                { id: "watchlist", label: "Watchlist" },
                 { id: "films", label: "Films" },
-                { id: "tv", label: "Episodes" },
+                { id: "tv", label: "TV" },
                 { id: "rewatches", label: "Rewatches" },
               ] as const
             ).map((f) => (

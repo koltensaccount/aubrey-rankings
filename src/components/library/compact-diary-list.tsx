@@ -78,11 +78,12 @@ export function CompactDiaryList({
             <tbody className="divide-y divide-border">
               {entries.map((entry) => {
                 const totalLogs = mediaCountMap.get(entry.mediaItemId) || 1;
-                const formattedDate = entry.watchedDate || "Undated";
+                const formattedDate = (entry as any).eventDate || entry.watchedDate || "Undated";
                 const ratingScore = getScoreOnTen(entry);
                 const isEpisode =
                   entry.mediaItem.mediaType === "episode" ||
                   Boolean(entry.mediaItem.seasonNumber && entry.mediaItem.episodeNumber);
+                const badgeLabel = (entry as any).badgeLabel || (entry.isRewatch ? "Rewatch" : "Watched");
 
                 return (
                   <tr key={entry.id} className="hover:bg-surface/50 transition-colors">
@@ -150,7 +151,7 @@ export function CompactDiaryList({
                             : "bg-surface-raised text-muted-foreground border border-border"
                         }`}
                       >
-                        {entry.isRewatch ? "Rewatch" : "1st viewing"}
+                        {badgeLabel}
                       </span>
                     </td>
 

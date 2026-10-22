@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { collections, collectionEntries, mediaItems, ratings, ratingSystems, follows } from "@/db/schema";
+import { collections, collectionEntries, mediaItems, ratings, ratingSystems, follows, mediaNotes } from "@/db/schema";
 import { eq, and, or, isNull, asc, sql } from "drizzle-orm";
 import { tmdb } from "@/lib/tmdb";
 
@@ -127,9 +127,31 @@ export async function GET(
       followingCount = Number(fgc[0]?.count || 0);
     }
 
+    // Universal Notes for owner and privacy-gated commentary for visitors
+    const userMediaNotes = isOwner
+      ? await db.query.mediaNotes.findMany({
+          where: eq(mediaNotes.userId, targetUserId),
+        })
+      : [];
+    const notesMap = new Map(userMediaNotes.map((n) => [n.mediaItemId, n.content]));
+
+    const processedEntries = col.entries.map((entry) => {
+      if (isOwner) {
+        return {
+          ...entry,
+          universalNote: notesMap.get(entry.mediaItemId) || null,
+        };
+      }
+      return {
+        ...entry,
+        notes: entry.shareNotes ? entry.notes : null,
+      };
+    });
+
     return NextResponse.json({
       collection: {
         ...col,
+        entries: processedEntries,
         clearLogoUrl,
         isFollowing,
         user: col.user

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { diaryEntries, ratings, mediaItems } from "@/db/schema";
+import { diaryEntries, ratings, mediaItems, activityEvents, reviews } from "@/db/schema";
 import { and, desc, eq, isNull, count, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { resolveMediaItem } from "@/lib/media-resolution";
@@ -195,6 +195,26 @@ export async function POST(req: NextRequest) {
       tags: Array.isArray(tags) ? tags : null,
     });
 
+    // Track chronological viewing activity
+    const now = new Date();
+    await db.insert(activityEvents).values({
+      id: `act_${randomUUID()}`,
+      userId: session.user.id,
+      mediaItemId: resolvedMediaId,
+      eventType: "viewing",
+      eventDate: formattedWatchedDate || null,
+      loggedDate: now,
+      diaryEntryId: entryId,
+      ratingValue: parsedRating,
+      sourceRating,
+      sourceScale,
+      isRewatch: finalIsRewatch,
+      notes: typeof notes === "string" ? notes.trim() : null,
+      sourceEventKey: `diary:${entryId}`,
+      createdAt: now,
+      updatedAt: now,
+    }).onConflictDoNothing();
+
     // Mark media item as watched globally for the user
     const existingRating = await db.query.ratings.findFirst({
       where: and(
@@ -268,6 +288,8 @@ export async function DELETE(req: NextRequest) {
       return NextResponse.json({ error: "Entry not found" }, { status: 404 });
     }
 
+    // Invariant 17: Deleting a viewing event must never delete a review
+    await db.update(reviews).set({ viewingId: null }).where(eq(reviews.viewingId, id));
     await db.delete(diaryEntries).where(eq(diaryEntries.id, id));
 
     return NextResponse.json({ success: true, deletedId: id });
