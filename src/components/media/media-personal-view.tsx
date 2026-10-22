@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   Star,
   Tv,
@@ -153,8 +153,9 @@ export function MediaPersonalView({
     });
   };
 
+  const searchParams = useSearchParams();
   const isTv = media.mediaType === "tv";
-  const publicOverviewUrl = getPublicMediaUrl(media.id);
+  const publicOverviewUrl = getPublicMediaUrl(media.id, { from: searchParams?.get("from") || undefined });
 
   // Latest rated review score is the user's primary review rating
   const latestRatedReview = ownerReviews.find((r) => {

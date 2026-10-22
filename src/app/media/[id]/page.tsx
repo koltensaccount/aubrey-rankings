@@ -17,7 +17,7 @@ export default async function MediaDetailsPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams?: Promise<{ type?: string; season?: string; journal?: string; view?: string }>;
+  searchParams?: Promise<{ type?: string; season?: string; journal?: string; view?: string; from?: string }>;
 }) {
   const { id: rawMediaId } = await params;
   let decodedId = rawMediaId;
@@ -28,6 +28,7 @@ export default async function MediaDetailsPage({
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const requestedType = resolvedSearchParams.type?.toLowerCase();
   const activeView: "overview" | "personal" = resolvedSearchParams.view === "personal" ? "personal" : "overview";
+  const fromParam = resolvedSearchParams.from || null;
 
   let media: any = await db.query.mediaItems.findFirst({
     where: (m, { eq, or }) => or(eq(m.id, rawMediaId), eq(m.id, decodedId)),
@@ -250,7 +251,7 @@ export default async function MediaDetailsPage({
 
   // If requesting personal view while not signed in, redirect to login
   if (activeView === "personal" && !session) {
-    redirect(`/login?redirect=${encodeURIComponent(getPersonalMediaUrl(media.id))}`);
+    redirect(`/login?redirect=${encodeURIComponent(getPersonalMediaUrl(media.id, { from: fromParam || undefined }))}`);
   }
 
   const blockedUserIds = session ? await getBlockedUserIds(session.user.id) : new Set<string>();
@@ -647,6 +648,7 @@ export default async function MediaDetailsPage({
       <MediaHeroBanner
         media={media}
         activeView={activeView}
+        from={fromParam}
         isAuthenticated={Boolean(session)}
         hasPersonalActivity={hasPersonalActivity}
         averageScore={averageScore}
@@ -672,6 +674,7 @@ export default async function MediaDetailsPage({
         ) : (
           <MediaPublicOverview
             media={media}
+            from={fromParam}
             journalMediaId={journalMediaId}
             isAuthenticated={Boolean(session)}
             isWatchlist={Boolean(ownerWatchlistItem)}

@@ -26,6 +26,7 @@ export function TierBoardView({
 }: TierBoardViewProps) {
   const tiers: any[] = collection?.defaultRatingSystem?.tiers || [];
   const [movingEntryId, setMovingEntryId] = useState<string | null>(null);
+  const rankingReturnUrl = `/collection/${collection?.id}`;
 
   // Group entries by tier
   const entriesByTier: Record<string, any[]> = {};
@@ -137,7 +138,7 @@ export function TierBoardView({
 
                       <div className="p-1.5 bg-card">
                         <Link
-                          href={getRankingMediaUrl(media.id, isOwner)}
+                          href={getRankingMediaUrl(media.id, isOwner, { from: rankingReturnUrl })}
                           title={episodeBadgeText ? `${episodeBadgeText} — ${media.title}` : media.title}
                           className="text-[11px] font-semibold text-foreground truncate uppercase font-display leading-tight block hover:text-primary transition-colors"
                         >
@@ -148,7 +149,7 @@ export function TierBoardView({
                       {/* Hover Overlay Action Controls */}
                       <div className="absolute inset-0 bg-black/85 opacity-0 group-hover:opacity-100 transition-opacity p-2 flex flex-col justify-between z-10 text-xs">
                         <Link
-                          href={getRankingMediaUrl(media.id, isOwner)}
+                          href={getRankingMediaUrl(media.id, isOwner, { from: rankingReturnUrl })}
                           className="text-[10px] text-white/90 font-medium line-clamp-2 hover:text-primary transition-colors block"
                         >
                           {episodeBadgeText ? `${episodeBadgeText} — ${media.title}` : media.title}
@@ -159,7 +160,7 @@ export function TierBoardView({
                             <>
                               <div className="flex items-center gap-1">
                                 <Link
-                                  href={getPersonalMediaUrl(media.id, { journal: true })}
+                                  href={getPersonalMediaUrl(media.id, { journal: true, from: rankingReturnUrl })}
                                   className="py-1 px-1.5 rounded bg-surface text-foreground font-semibold text-[10px] flex items-center justify-center gap-0.5 border border-border hover:bg-surface-elevated transition-colors"
                                   title="Open personal journal entry"
                                 >
@@ -264,7 +265,7 @@ export function TierBoardView({
 
                   <div className="p-1.5 bg-card">
                     <Link
-                      href={getRankingMediaUrl(media.id, isOwner)}
+                      href={getRankingMediaUrl(media.id, isOwner, { from: rankingReturnUrl })}
                       title={episodeBadgeText ? `${episodeBadgeText} — ${media.title}` : media.title}
                       className="text-[11px] font-semibold text-foreground truncate uppercase font-display leading-tight block hover:text-primary transition-colors"
                     >
@@ -275,7 +276,7 @@ export function TierBoardView({
                   {isOwner && (
                     <div className="absolute inset-0 bg-black/85 opacity-0 group-hover:opacity-100 transition-opacity p-2 flex flex-col justify-between z-10 text-xs">
                       <Link
-                        href={getRankingMediaUrl(media.id, isOwner)}
+                        href={getRankingMediaUrl(media.id, isOwner, { from: rankingReturnUrl })}
                         className="text-[10px] text-white/90 font-medium line-clamp-2 hover:text-primary transition-colors block"
                       >
                         {episodeBadgeText ? `${episodeBadgeText} — ${media.title}` : media.title}
@@ -284,7 +285,7 @@ export function TierBoardView({
                       <div className="space-y-1">
                         <div className="flex items-center gap-1">
                           <Link
-                            href={getPersonalMediaUrl(media.id, { journal: true })}
+                            href={getPersonalMediaUrl(media.id, { journal: true, from: rankingReturnUrl })}
                             className="py-1 px-1.5 rounded bg-surface text-foreground font-semibold text-[10px] flex items-center justify-center gap-0.5 border border-border hover:bg-surface-elevated transition-colors"
                             title="Open personal journal entry"
                           >

@@ -6,7 +6,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { Search, Film, Tv, Users, Compass, ArrowRight, Loader2, UserPlus, UserCheck, BookOpen, PenLine, Plus, Star } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { useSession } from "@/lib/auth-client";
-import { getPublicMediaUrl } from "@/lib/media-url";
+import { getPublicMediaUrl, getPersonalMediaUrl } from "@/lib/media-url";
 
 export default function ExplorePage() {
   const pathname = usePathname();
@@ -354,10 +354,10 @@ export default function ExplorePage() {
                   const title = m.title || m.name;
                   const year = (m.release_date || m.first_air_date || "").split("-")[0];
                   const isTv = m.media_type === "tv" || !m.title;
-                  const overviewHref = getPublicMediaUrl(m.id, { type: isTv ? "tv" : "movie" });
+                  const overviewHref = getPublicMediaUrl(m.id, { type: isTv ? "tv" : "movie", from: "/discover" });
                   const movieJournalHref = session?.user
-                    ? `/media/${m.id}?type=movie&journal=1`
-                    : `/login?redirect=${encodeURIComponent(`/media/${m.id}?type=movie&journal=1`)}`;
+                    ? getPersonalMediaUrl(m.id, { type: "movie", journal: true, from: "/discover" })
+                    : `/login?redirect=${encodeURIComponent(getPersonalMediaUrl(m.id, { type: "movie", journal: true, from: "/discover" }))}`;
                   const tvDetailsHref = overviewHref;
 
                   const rankHref = session?.user

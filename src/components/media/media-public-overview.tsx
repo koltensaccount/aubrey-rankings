@@ -74,6 +74,7 @@ interface MediaPublicOverviewProps {
   seasonEpisodes?: TvEpisodeItem[];
   activeSeasonNumber?: number;
   publicReviews: PublicReviewItem[];
+  from?: string | null;
 }
 
 export function MediaPublicOverview({
@@ -91,10 +92,11 @@ export function MediaPublicOverview({
   seasonEpisodes = [],
   activeSeasonNumber = 1,
   publicReviews,
+  from,
 }: MediaPublicOverviewProps) {
   const isTv = media.mediaType === "tv";
   const isEpisode = media.mediaType === "episode" || (media.seasonNumber !== null && media.episodeNumber !== null);
-  const personalViewUrl = getPersonalMediaUrl(media.id);
+  const personalViewUrl = getPersonalMediaUrl(media.id, { from: from || undefined });
 
   return (
     <div className="space-y-10">

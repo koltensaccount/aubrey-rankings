@@ -151,7 +151,7 @@ export function TimelineEntryCard({
           <div className="flex items-start gap-3.5 sm:gap-4">
             {/* Artwork Poster or Episode Still */}
             <Link
-              href={getPersonalMediaUrl(mediaItem.id)}
+              href={getPersonalMediaUrl(mediaItem.id, { from: "/?tab=journal" })}
               className={`shrink-0 ${isEpisode ? "w-24 sm:w-28 aspect-video" : "w-14 sm:w-16 aspect-[2/3]"} hover:opacity-90 transition-opacity`}
             >
               <CinematicMediaCard
@@ -200,7 +200,7 @@ export function TimelineEntryCard({
               {/* Title in Barlow Condensed */}
               <h3 className="font-display text-xl sm:text-2xl uppercase tracking-tight text-foreground truncate">
                 <Link
-                  href={getPersonalMediaUrl(mediaItem.id)}
+                  href={getPersonalMediaUrl(mediaItem.id, { from: "/?tab=journal" })}
                   className="hover:text-primary transition-colors"
                 >
                   {mediaItem.title}

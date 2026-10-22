@@ -3,6 +3,14 @@ import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import { randomUUID } from "node:crypto";
 import type { UnifiedTimelineCardData } from "../lib/timeline-activity";
+import {
+  sanitizeInternalReturnUrl,
+  getContextualBackInfo,
+  getMediaUrl,
+  getPersonalMediaUrl,
+  getPublicMediaUrl,
+  getRankingMediaUrl,
+} from "../lib/media-url";
 
 // =============================================================================
 // Safety Checks BEFORE Database Modules Initialize
@@ -835,5 +843,123 @@ describe("Phase 15B: Unified Notes, Reviews, Ratings & Activity History", () => 
     assert.equal(isDirty(initialContent, "New Title", initialRating, initialViewing), true, "Title edit is dirty");
     assert.equal(isDirty(initialContent, initialTitle, 5.0, initialViewing), true, "Rating edit is dirty");
     assert.equal(isDirty(initialContent, initialTitle, initialRating, "view_2"), true, "Viewing switch is dirty");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Contextual Back Navigation & Return URL Safety
+  // ---------------------------------------------------------------------------
+  it("Invariant 21: sanitizeInternalReturnUrl rejects external, protocol-relative, and loop targets", () => {
+    // Malicious or external URLs must return null
+    assert.equal(sanitizeInternalReturnUrl("https://evil.com"), null);
+    assert.equal(sanitizeInternalReturnUrl("http://attacker.com/profile"), null);
+    assert.equal(sanitizeInternalReturnUrl("//malicious.com"), null);
+    assert.equal(sanitizeInternalReturnUrl("/\\malicious.com"), null);
+    assert.equal(sanitizeInternalReturnUrl("javascript:alert(1)"), null);
+    assert.equal(sanitizeInternalReturnUrl("data:text/html,evil"), null);
+    assert.equal(sanitizeInternalReturnUrl("mailto:phish@test.com"), null);
+
+    // Media loop destinations must return null to prevent back-navigation loops
+    assert.equal(sanitizeInternalReturnUrl("/media/movie-123"), null);
+    assert.equal(sanitizeInternalReturnUrl("/media/tv_456?view=personal"), null);
+
+    // Valid internal return paths must be preserved with query parameters
+    assert.equal(sanitizeInternalReturnUrl("/"), "/");
+    assert.equal(sanitizeInternalReturnUrl("/?tab=journal"), "/?tab=journal");
+    assert.equal(sanitizeInternalReturnUrl("/?tab=journal&filter=rewatches"), "/?tab=journal&filter=rewatches");
+    assert.equal(sanitizeInternalReturnUrl("/?tab=watched"), "/?tab=watched");
+    assert.equal(sanitizeInternalReturnUrl("/?tab=watchlist"), "/?tab=watchlist");
+    assert.equal(sanitizeInternalReturnUrl("/?tab=rankings"), "/?tab=rankings");
+    assert.equal(sanitizeInternalReturnUrl("/collection/col_12345"), "/collection/col_12345");
+    assert.equal(sanitizeInternalReturnUrl("/discover"), "/discover");
+    assert.equal(sanitizeInternalReturnUrl("/explore?genre=thriller"), "/explore?genre=thriller");
+    assert.equal(sanitizeInternalReturnUrl("/feed"), "/feed");
+    assert.equal(sanitizeInternalReturnUrl("/u/cinemaphile"), "/u/cinemaphile");
+  });
+
+  it("Invariant 22: getContextualBackInfo maps originating surfaces to accurate contextual labels", () => {
+    // 1. Timeline / Journal navigation
+    const journalBack = getContextualBackInfo("/?tab=journal");
+    assert.equal(journalBack.label, "Back to Journal");
+    assert.equal(journalBack.href, "/?tab=journal");
+
+    const defaultHomeBack = getContextualBackInfo("/");
+    assert.equal(defaultHomeBack.label, "Back to Journal");
+    assert.equal(defaultHomeBack.href, "/");
+
+    const filteredJournalBack = getContextualBackInfo("/?tab=journal&filter=rewatches");
+    assert.equal(filteredJournalBack.label, "Back to Journal");
+    assert.equal(filteredJournalBack.href, "/?tab=journal&filter=rewatches");
+
+    // 2. Watched navigation
+    const watchedBack = getContextualBackInfo("/?tab=watched");
+    assert.equal(watchedBack.label, "Back to Watched");
+    assert.equal(watchedBack.href, "/?tab=watched");
+
+    // 3. Watchlist navigation
+    const watchlistBack = getContextualBackInfo("/?tab=watchlist");
+    assert.equal(watchlistBack.label, "Back to Watchlist");
+    assert.equal(watchlistBack.href, "/?tab=watchlist");
+
+    // 4. Rankings tab navigation
+    const rankingsTabBack = getContextualBackInfo("/?tab=rankings");
+    assert.equal(rankingsTabBack.label, "Back to Rankings");
+    assert.equal(rankingsTabBack.href, "/?tab=rankings");
+
+    // 5. Specific Ranking / Collection navigation
+    const rankingBack = getContextualBackInfo("/collection/col_noir_70s");
+    assert.equal(rankingBack.label, "Back to Ranking");
+    assert.equal(rankingBack.href, "/collection/col_noir_70s");
+
+    // 6. Discover / Explore navigation
+    const discoverBack = getContextualBackInfo("/discover");
+    assert.equal(discoverBack.label, "Back to Discover");
+    assert.equal(discoverBack.href, "/discover");
+
+    const exploreBack = getContextualBackInfo("/explore");
+    assert.equal(exploreBack.label, "Back to Discover");
+    assert.equal(exploreBack.href, "/explore");
+
+    // 7. Community Feed navigation
+    const feedBack = getContextualBackInfo("/feed");
+    assert.equal(feedBack.label, "Back to Feed");
+    assert.equal(feedBack.href, "/feed");
+  });
+
+  it("Invariant 23: preserves originating context when toggling between Your View and Title Overview", () => {
+    const origin = "/?tab=journal&filter=rewatches";
+
+    // Media clicked from Journal timeline with origin
+    const personalUrl = getPersonalMediaUrl("med_123", { from: origin });
+    assert.ok(personalUrl.includes("from=%2F%3Ftab%3Djournal%26filter%3Drewatches"));
+
+    // Toggling to Title Overview preserves the originating from param
+    const overviewUrl = getPublicMediaUrl("med_123", { from: origin });
+    assert.ok(overviewUrl.includes("from=%2F%3Ftab%3Djournal%26filter%3Drewatches"));
+
+    // Toggling back to Your View still preserves the originating from param
+    const toggledBackPersonalUrl = getPersonalMediaUrl("med_123", { from: origin });
+    assert.ok(toggledBackPersonalUrl.includes("from=%2F%3Ftab%3Djournal%26filter%3Drewatches"));
+
+    // Ranking media url with origin preserves origin for both owner and visitor
+    const ownerUrl = getRankingMediaUrl("med_123", true, { from: "/collection/col_top10" });
+    assert.ok(ownerUrl.includes("from=%2Fcollection%2Fcol_top10"));
+
+    const visitorUrl = getRankingMediaUrl("med_123", false, { from: "/collection/col_top10" });
+    assert.ok(visitorUrl.includes("from=%2Fcollection%2Fcol_top10"));
+  });
+
+  it("Invariant 24: direct links, bookmarks, and refreshes fall back to safe internal destinations", () => {
+    // When no return path is present or an invalid/external URL was supplied:
+    const fallbackPersonal = getContextualBackInfo(null, "personal");
+    assert.equal(fallbackPersonal.label, "Back to Journal");
+    assert.equal(fallbackPersonal.href, "/?tab=journal");
+
+    const fallbackOverview = getContextualBackInfo(null, "overview");
+    assert.equal(fallbackOverview.label, "Back to Discover");
+    assert.equal(fallbackOverview.href, "/discover");
+
+    const attackedPersonal = getContextualBackInfo("https://attacker.com/exploit", "personal");
+    assert.equal(attackedPersonal.label, "Back to Journal");
+    assert.equal(attackedPersonal.href, "/?tab=journal");
   });
 });

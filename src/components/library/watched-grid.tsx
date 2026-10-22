@@ -162,7 +162,7 @@ export function WatchedGrid({ initialItems }: WatchedGridProps) {
               >
                 {/* Artwork Poster */}
                 <div className="relative">
-                  <Link href={getPersonalMediaUrl(item.id)}>
+                  <Link href={getPersonalMediaUrl(item.id, { from: "/?tab=watched" })}>
                     <CinematicMediaCard
                       title={item.title}
                       posterPath={isEpisode ? item.stillPath || item.posterPath : item.posterPath}
@@ -192,7 +192,7 @@ export function WatchedGrid({ initialItems }: WatchedGridProps) {
                 <div className="p-3 space-y-1">
                   <h4 className="font-display text-base uppercase tracking-tight text-foreground truncate">
                     <Link
-                      href={getPersonalMediaUrl(item.id)}
+                      href={getPersonalMediaUrl(item.id, { from: "/?tab=watched" })}
                       className="hover:text-primary transition-colors"
                     >
                       {item.title}
