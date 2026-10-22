@@ -128,23 +128,34 @@ export async function GET(
     }
 
     // Universal Notes for owner and privacy-gated commentary for visitors
-    const userMediaNotes = isOwner
-      ? await db.query.mediaNotes.findMany({
-          where: eq(mediaNotes.userId, targetUserId),
-        })
-      : [];
-    const notesMap = new Map(userMediaNotes.map((n) => [n.mediaItemId, n.content]));
+    // Fetch collection owner's authoritative media notes so shared commentary can resolve
+    const ownerMediaNotes = await db.query.mediaNotes.findMany({
+      where: eq(mediaNotes.userId, col.userId),
+    });
+    const notesMap = new Map(ownerMediaNotes.map((n) => [n.mediaItemId, n.content]));
 
     const processedEntries = col.entries.map((entry) => {
+      const universalNote = notesMap.get(entry.mediaItemId) || null;
+      // Authoritative note: universal mediaNotes takes precedence, falling back to legacy entry notes
+      const authoritativeNote = universalNote || entry.notes || null;
+      const legacyNote = entry.notes && universalNote && entry.notes !== universalNote ? entry.notes : null;
+
       if (isOwner) {
         return {
           ...entry,
-          universalNote: notesMap.get(entry.mediaItemId) || null,
+          notes: authoritativeNote,
+          universalNote,
+          legacyNote,
+          shareNotes: Boolean(entry.shareNotes),
         };
       }
       return {
         ...entry,
-        notes: entry.shareNotes ? entry.notes : null,
+        // Visitors only see note if owner explicitly enabled shareNotes
+        notes: entry.shareNotes ? authoritativeNote : null,
+        universalNote: null,
+        legacyNote: null,
+        shareNotes: Boolean(entry.shareNotes),
       };
     });
 

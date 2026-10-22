@@ -46,7 +46,7 @@ interface TimelineEntryCardProps {
   ordinalIndex: number; // 1-based index among all logged viewings of this title
   totalViewingsForMedia: number;
   onOpenHistory: (mediaItem: any) => void;
-  onEditEntry?: (entry: any) => void;
+  onEditEntry?: (entry: any, action?: "viewing" | "review" | "rating") => void;
 }
 
 export function TimelineEntryCard({
@@ -277,14 +277,57 @@ export function TimelineEntryCard({
               </button>
 
               {onEditEntry && (
-                <button
-                  type="button"
-                  onClick={() => onEditEntry(entry)}
-                  className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
-                >
-                  <Edit2 size={11} />
-                  <span>Edit</span>
-                </button>
+                <>
+                  {entry.eventType === "viewing_and_review" ? (
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => onEditEntry(entry, "viewing")}
+                        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+                        title="Edit viewing date and details"
+                      >
+                        <Edit2 size={11} />
+                        <span>Edit Viewing</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onEditEntry(entry, "review")}
+                        className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+                        title="Edit written review"
+                      >
+                        <Edit2 size={11} />
+                        <span>Edit Review</span>
+                      </button>
+                    </div>
+                  ) : entry.eventType === "review" ? (
+                    <button
+                      type="button"
+                      onClick={() => onEditEntry(entry, "review")}
+                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+                    >
+                      <Edit2 size={11} />
+                      <span>Edit Review</span>
+                    </button>
+                  ) : entry.eventType === "rating" ? (
+                    <button
+                      type="button"
+                      onClick={() => onEditEntry(entry, "rating")}
+                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+                    >
+                      <Edit2 size={11} />
+                      <span>Edit Rating</span>
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => onEditEntry(entry, "viewing")}
+                      className="inline-flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+                    >
+                      <Edit2 size={11} />
+                      <span>Edit</span>
+                    </button>
+                  )}
+                </>
               )}
             </div>
           </div>

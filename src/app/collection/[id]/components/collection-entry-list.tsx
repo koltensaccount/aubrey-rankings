@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { Plus, Sliders, Trash2, BookOpen } from "lucide-react";
+import { Plus, Sliders, Trash2, BookOpen, Globe, Lock } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { getRankingMediaUrl, getPersonalMediaUrl } from "@/lib/media-url";
 import { TierBoardView } from "./tier-board-view";
@@ -17,6 +17,7 @@ interface CollectionEntryListProps {
   onSetEntryToDelete: (entry: any) => void;
   onQuickAssignTier?: (mediaItem: any, tierId: string | null) => Promise<void>;
   onOpenTierEditor?: () => void;
+  onToggleShareNotes?: (entryId: string, currentVal: boolean) => void;
 }
 
 export function CollectionEntryList({
@@ -29,6 +30,7 @@ export function CollectionEntryList({
   onSetEntryToDelete,
   onQuickAssignTier,
   onOpenTierEditor,
+  onToggleShareNotes,
 }: CollectionEntryListProps) {
   if (processedEntries.length === 0) {
     return (
@@ -111,9 +113,37 @@ export function CollectionEntryList({
                     {media.title}
                   </Link>
                 </h3>
-                {(entry.userRating?.reviewText || entry.notes || (isOwner && entry.universalNote)) && (
-                  <p className="text-xs text-muted-foreground line-clamp-1 italic mt-1">
-                    &ldquo;{entry.userRating?.reviewText || entry.notes || (isOwner ? entry.universalNote : "")}&rdquo;
+                {/* Note Display: Authoritative Universal Note takes precedence */}
+                {(entry.notes || (isOwner && entry.universalNote)) && (
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <p className="text-xs text-muted-foreground line-clamp-1 italic">
+                      &ldquo;{entry.universalNote || entry.notes}&rdquo;
+                    </p>
+                    {isOwner && onToggleShareNotes && (
+                      <button
+                        type="button"
+                        onClick={() => onToggleShareNotes(entry.id, Boolean(entry.shareNotes))}
+                        className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border cursor-pointer transition-colors ${
+                          entry.shareNotes
+                            ? "bg-primary/10 border-primary/30 text-primary-text hover:bg-primary/20"
+                            : "bg-surface border-border text-muted-foreground hover:text-foreground"
+                        }`}
+                        title={
+                          entry.shareNotes
+                            ? "Note is shared with this public ranking. Click to make private."
+                            : "Note is private. Click to share with this ranking."
+                        }
+                      >
+                        {entry.shareNotes ? <Globe size={10} /> : <Lock size={10} />}
+                        <span>{entry.shareNotes ? "Shared with Ranking" : "Private Note"}</span>
+                      </button>
+                    )}
+                  </div>
+                )}
+                {/* Clearly identified legacy commentary provenance if distinct */}
+                {isOwner && entry.legacyNote && entry.legacyNote !== (entry.universalNote || entry.notes) && (
+                  <p className="text-[11px] text-muted-foreground/75 line-clamp-1 italic mt-0.5">
+                    <span className="font-semibold text-foreground/70 not-italic">Legacy Note:</span> &ldquo;{entry.legacyNote}&rdquo;
                   </p>
                 )}
               </div>
@@ -300,11 +330,25 @@ export function CollectionEntryList({
                     <Trash2 size={13} />
                   </button>
                 </div>
-              ) : entry.userRating?.reviewText ? (
-                <div className="mt-2 pt-2 border-t border-border/50">
+              ) : (entry.notes || (isOwner && entry.universalNote)) ? (
+                <div className="mt-2 pt-2 border-t border-border/50 space-y-1">
                   <p className="text-xs text-muted-foreground italic line-clamp-2">
-                    &ldquo;{entry.userRating.reviewText}&rdquo;
+                    &ldquo;{entry.universalNote || entry.notes}&rdquo;
                   </p>
+                  {isOwner && onToggleShareNotes && (
+                    <button
+                      type="button"
+                      onClick={() => onToggleShareNotes(entry.id, Boolean(entry.shareNotes))}
+                      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border cursor-pointer transition-colors ${
+                        entry.shareNotes
+                          ? "bg-primary/10 border-primary/30 text-primary-text hover:bg-primary/20"
+                          : "bg-surface border-border text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {entry.shareNotes ? <Globe size={10} /> : <Lock size={10} />}
+                      <span>{entry.shareNotes ? "Shared" : "Private"}</span>
+                    </button>
+                  )}
                 </div>
               ) : null}
             </div>

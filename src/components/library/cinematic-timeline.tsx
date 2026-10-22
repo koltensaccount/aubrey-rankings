@@ -6,6 +6,7 @@ import { TimelineEntryCard } from "./timeline-entry-card";
 import { CompactDiaryList } from "./compact-diary-list";
 import { LogViewingDialog } from "./log-viewing-dialog";
 import { RewatchHistoryModal, type DiaryViewingEvent } from "./rewatch-history-modal";
+import { ReviewEditorDialog, type ReviewEditorData } from "@/components/reviews/review-editor-dialog";
 
 export type FilterType =
   | "all"
@@ -35,6 +36,10 @@ export interface TimelineEntry extends Partial<DiaryViewingEvent> {
   eventDate?: string | null;
   eventType?: string;
   badgeLabel?: string;
+  diaryEntryId?: string | null;
+  reviewId?: string | null;
+  ratingId?: string | null;
+  watchlistItemId?: string | null;
   ratingValue?: number | null;
   sourceRating?: number | null;
   sourceScale?: number | null;
@@ -94,17 +99,24 @@ export function CinematicTimeline({
   const [isLogDialogOpen, setIsLogDialogOpen] = useState(false);
   const [logDialogMediaItem, setLogDialogMediaItem] = useState<any | null>(null);
 
+  // Review editing state
+  const [editingReview, setEditingReview] = useState<ReviewEditorData | null>(null);
+  const [isReviewDialogOpen, setIsReviewDialogOpen] = useState(false);
+  const [reviewDialogMediaItem, setReviewDialogMediaItem] = useState<any | null>(null);
+
   // Synchronize entries cleanly when initialEntries updates
   useEffect(() => {
     setEntries(initialEntries);
   }, [initialEntries]);
 
-  // Load earlier viewings incrementally
+  // Load earlier activities incrementally with consistent combination and filtering
   const handleLoadMore = async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
-      const res = await fetch(`/api/diary?offset=${entries.length}&limit=50`);
+      const res = await fetch(
+        `/api/activity?offset=${entries.length}&limit=50&filter=${encodeURIComponent(filter)}`
+      );
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data.entries)) {
@@ -117,7 +129,7 @@ export function CinematicTimeline({
         }
       }
     } catch (err) {
-      console.error("Failed to load earlier viewings:", err);
+      console.error("Failed to load earlier activities:", err);
     } finally {
       setLoadingMore(false);
     }
@@ -285,10 +297,69 @@ export function CinematicTimeline({
     setHistoryMediaItem(mediaItem);
   };
 
-  const handleEditEntry = (entry: any) => {
-    setEditingEntry(entry);
+  const handleEditEntry = (entry: any, action?: "viewing" | "review" | "rating") => {
+    const targetAction =
+      action ||
+      (entry.eventType === "review"
+        ? "review"
+        : entry.eventType === "rating"
+        ? "rating"
+        : "viewing");
+
+    if (targetAction === "review") {
+      const reviewId = entry.reviewId || (entry.eventType === "review" ? entry.id : null);
+      setReviewDialogMediaItem(entry.mediaItem);
+      setEditingReview({
+        id: reviewId || undefined,
+        title: entry.reviewTitle || null,
+        content: entry.reviewContent || "",
+        draftContent: null,
+        contentFormat: "markdown",
+        status: "published",
+        visibility: entry.reviewVisibility || "private",
+        isSpoiler: Boolean(entry.reviewIsSpoiler),
+        ratingId: entry.ratingId || null,
+        score: typeof entry.ratingValue === "number" ? entry.ratingValue : null,
+        sourceRating: entry.sourceRating || null,
+        sourceScale: entry.sourceScale || null,
+        viewingId: entry.diaryEntryId || null,
+      });
+      setIsReviewDialogOpen(true);
+      return;
+    }
+
+    // Viewing edit: strictly requires a confirmed diary entry ID
+    const viewingId = entry.diaryEntryId || (entry.eventType === "viewing" ? entry.id : null);
+    setEditingEntry({
+      id: viewingId || "",
+      mediaItemId: entry.mediaItemId || entry.mediaItem?.id,
+      watchedDate: entry.eventDate || entry.watchedDate || null,
+      isRewatch: Boolean(entry.isRewatch),
+      ratingValue: typeof entry.ratingValue === "number" ? entry.ratingValue : null,
+      notes: entry.notes || null,
+      tags: entry.tags || null,
+    });
     setLogDialogMediaItem(entry.mediaItem);
     setIsLogDialogOpen(true);
+  };
+
+  const handleReviewSaved = (savedReview: any) => {
+    setEntries((prev) =>
+      prev.map((e) => {
+        if (e.reviewId === savedReview.id || e.id === savedReview.id) {
+          return {
+            ...e,
+            reviewContent: savedReview.content,
+            reviewTitle: savedReview.title,
+            reviewVisibility: savedReview.visibility,
+            reviewIsSpoiler: savedReview.isSpoiler,
+            ratingValue: typeof savedReview.score === "number" ? savedReview.score : e.ratingValue,
+          };
+        }
+        return e;
+      })
+    );
+    setIsReviewDialogOpen(false);
   };
 
   const handleNewLog = () => {
@@ -582,6 +653,23 @@ export function CinematicTimeline({
           mediaItem={logDialogMediaItem}
           existingEntry={editingEntry}
           onSaved={handleLogSaved}
+        />
+      )}
+
+      {/* First-Class Review Editor Dialog */}
+      {isReviewDialogOpen && reviewDialogMediaItem && (
+        <ReviewEditorDialog
+          isOpen={isReviewDialogOpen}
+          onClose={() => setIsReviewDialogOpen(false)}
+          mediaItemId={reviewDialogMediaItem.id}
+          mediaTitle={reviewDialogMediaItem.title}
+          posterPath={reviewDialogMediaItem.posterPath}
+          existingReview={editingReview}
+          onSaved={handleReviewSaved}
+          onDeleted={(deletedId) => {
+            setEntries((prev) => prev.filter((e) => e.reviewId !== deletedId && e.id !== deletedId));
+            setIsReviewDialogOpen(false);
+          }}
         />
       )}
     </div>

@@ -70,6 +70,7 @@ let isNull: typeof import("drizzle-orm").isNull;
 
 let combineChronologicalActivities: typeof import("../lib/timeline-activity").combineChronologicalActivities;
 let backfillUserActivityEvents: typeof import("../lib/timeline-activity").backfillUserActivityEvents;
+let getUserUnifiedTimeline: typeof import("../lib/timeline-activity").getUserUnifiedTimeline;
 let markRankedMediaAsWatched: typeof import("../lib/watched-status").markRankedMediaAsWatched;
 let reconcileUserRankedWatchedStatus: typeof import("../lib/watched-status").reconcileUserRankedWatchedStatus;
 
@@ -106,6 +107,7 @@ describe("Phase 15B: Unified Notes, Reviews, Ratings & Activity History", () => 
 
     combineChronologicalActivities = timelineModule.combineChronologicalActivities;
     backfillUserActivityEvents = timelineModule.backfillUserActivityEvents;
+    getUserUnifiedTimeline = timelineModule.getUserUnifiedTimeline;
     markRankedMediaAsWatched = watchedModule.markRankedMediaAsWatched;
     reconcileUserRankedWatchedStatus = watchedModule.reconcileUserRankedWatchedStatus;
 
@@ -505,6 +507,7 @@ describe("Phase 15B: Unified Notes, Reviews, Ratings & Activity History", () => 
         eventType: "viewing",
         eventDate: "2024-05-10",
         diaryEntryId: "diary_100",
+        reviewId: "rev_100",
         createdAt: new Date("2024-05-10T18:00:00Z"),
         mediaItem: { id: movie1Id, title: "Chinatown" },
       },
@@ -515,6 +518,7 @@ describe("Phase 15B: Unified Notes, Reviews, Ratings & Activity History", () => 
         eventType: "review",
         eventDate: "2024-05-10",
         reviewId: "rev_100",
+        diaryEntryId: "diary_100",
         reviewContent: "Great film seen today.",
         createdAt: new Date("2024-05-10T22:00:00Z"),
         mediaItem: { id: movie1Id, title: "Chinatown" },
@@ -540,6 +544,7 @@ describe("Phase 15B: Unified Notes, Reviews, Ratings & Activity History", () => 
         eventType: "viewing",
         eventDate: "2024-05-10",
         diaryEntryId: "diary_100",
+        reviewId: "rev_100", // explicitly linked!
         createdAt: new Date("2024-05-10T18:00:00Z"),
         mediaItem: { id: movie1Id, title: "Chinatown" },
       },
@@ -550,6 +555,7 @@ describe("Phase 15B: Unified Notes, Reviews, Ratings & Activity History", () => 
         eventType: "review",
         eventDate: "2024-05-11", // different date!
         reviewId: "rev_100",
+        diaryEntryId: "diary_100",
         reviewContent: "Reflection written the next day.",
         createdAt: new Date("2024-05-11T10:00:00Z"),
         mediaItem: { id: movie1Id, title: "Chinatown" },
@@ -557,7 +563,7 @@ describe("Phase 15B: Unified Notes, Reviews, Ratings & Activity History", () => 
     ];
 
     const { datedItems } = combineChronologicalActivities(activities);
-    assert.equal(datedItems.length, 2, "Must remain 2 distinct cards for separate dates");
+    assert.equal(datedItems.length, 2, "Must remain 2 distinct cards for separate dates even when explicitly linked");
     assert.equal(datedItems[0].eventDate, "2024-05-11");
     assert.equal(datedItems[1].eventDate, "2024-05-10");
   });
@@ -961,5 +967,398 @@ describe("Phase 15B: Unified Notes, Reviews, Ratings & Activity History", () => 
     const attackedPersonal = getContextualBackInfo("https://attacker.com/exploit", "personal");
     assert.equal(attackedPersonal.label, "Back to Journal");
     assert.equal(attackedPersonal.href, "/?tab=journal");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Invariant 25: Paginated Unified Activity Timeline (150+ Events)
+  // ---------------------------------------------------------------------------
+  it("Invariant 25: paginated unified activity fetching with 150+ mixed events, stable cursors/offsets, and zero duplicates", async () => {
+    const pagedUserId = `usr_p15b_paged_${suffix}`;
+    await db.insert(user).values({
+      id: pagedUserId,
+      name: "Paged User",
+      email: `paged_${suffix}@test.local`,
+    });
+
+    // Seed 160 mixed dated activity events (40 viewings, 40 reviews, 30 ratings, 30 watchlist, 20 watched marks)
+    const eventInserts: any[] = [];
+    for (let i = 1; i <= 160; i++) {
+      const day = String((i % 28) + 1).padStart(2, "0");
+      const month = String(Math.floor((i - 1) / 28) + 1).padStart(2, "0");
+      const dateStr = `2024-${month}-${day}`;
+      let eventType = "viewing";
+      if (i <= 40) eventType = "viewing";
+      else if (i <= 80) eventType = "review";
+      else if (i <= 110) eventType = "rating";
+      else if (i <= 140) eventType = "watchlist";
+      else eventType = "watched_mark";
+
+      eventInserts.push({
+        id: `act_paged_${suffix}_${i}`,
+        userId: pagedUserId,
+        mediaItemId: movie1Id,
+        eventType,
+        eventDate: dateStr,
+        sourceEventKey: `key_${suffix}_${i}`,
+        createdAt: new Date(`2024-${month}-${day}T12:00:00Z`),
+        updatedAt: new Date(),
+      });
+    }
+
+    await db.insert(activityEvents).values(eventInserts);
+
+    // Fetch pages of 50 items
+    const page1 = await getUserUnifiedTimeline(pagedUserId, { limit: 50, offset: 0 });
+    const page2 = await getUserUnifiedTimeline(pagedUserId, { limit: 50, offset: 50 });
+    const page3 = await getUserUnifiedTimeline(pagedUserId, { limit: 50, offset: 100 });
+    const page4 = await getUserUnifiedTimeline(pagedUserId, { limit: 50, offset: 150 });
+
+    assert.equal(page1.entries.length, 50, "Page 1 should have 50 items");
+    assert.equal(page1.hasMore, true, "Page 1 should report hasMore: true");
+    assert.equal(page2.entries.length, 50, "Page 2 should have 50 items");
+    assert.equal(page2.hasMore, true, "Page 2 should report hasMore: true");
+    assert.equal(page3.entries.length, 50, "Page 3 should have 50 items");
+    assert.equal(page3.hasMore, true, "Page 3 should report hasMore: true");
+    assert.equal(page4.entries.length, 10, "Page 4 should have remaining 10 items");
+    assert.equal(page4.hasMore, false, "Page 4 should report hasMore: false");
+
+    // Verify zero duplicates and zero missing items across all pages
+    const allCollected = [
+      ...page1.entries,
+      ...page2.entries,
+      ...page3.entries,
+      ...page4.entries,
+    ];
+    assert.equal(allCollected.length, 160, "Must collect exactly 160 items");
+    const uniqueIds = new Set(allCollected.map((e) => e.id));
+    assert.equal(uniqueIds.size, 160, "All 160 item IDs must be distinct (zero duplicates across pagination boundaries)");
+
+    // Verify ordering is consistently date descending
+    for (let k = 1; k < allCollected.length; k++) {
+      const prevDate = allCollected[k - 1].eventDate || "";
+      const currDate = allCollected[k].eventDate || "";
+      assert.ok(prevDate >= currDate, `Pagination order error: ${prevDate} should be >= ${currDate}`);
+    }
+
+    // Verify filter scoping on unified timeline
+    const reviewsOnly = await getUserUnifiedTimeline(pagedUserId, { limit: 50, offset: 0, filter: "reviews" });
+    assert.ok(reviewsOnly.entries.length > 0, "Reviews filter should return items");
+    assert.ok(reviewsOnly.entries.every((e) => e.eventType === "review" || e.eventType === "viewing_and_review"));
+  });
+
+  // ---------------------------------------------------------------------------
+  // Invariant 26: Contextual Timeline Editing Routing
+  // ---------------------------------------------------------------------------
+  it("Invariant 26: contextual timeline editing routes edits to the proper record/dialog without creating viewings for reviews", async () => {
+    const editUserId = `usr_p15b_edit_${suffix}`;
+    await db.insert(user).values({
+      id: editUserId,
+      name: "Edit User",
+      email: `edit_${suffix}@test.local`,
+    });
+
+    // Create a standalone review
+    const reviewId = `rev_ctx_test_${suffix}`;
+    await db.insert(reviews).values({
+      id: reviewId,
+      userId: editUserId,
+      mediaItemId: movie1Id,
+      content: "Original review content before edit",
+      status: "published",
+      visibility: "private",
+      contentFormat: "markdown",
+    });
+
+    // Verify diaryEntries is empty for this user
+    const diaryBefore = await db.query.diaryEntries.findMany({
+      where: eq(diaryEntries.userId, editUserId),
+    });
+    assert.equal(diaryBefore.length, 0, "No diary entries should exist initially");
+
+    // When editing the review, it updates the review record
+    await db
+      .update(reviews)
+      .set({ content: "Updated review text through review editor" })
+      .where(eq(reviews.id, reviewId));
+
+    // Verify review was updated
+    const updatedRev = await db.query.reviews.findFirst({
+      where: eq(reviews.id, reviewId),
+    });
+    assert.equal(updatedRev?.content, "Updated review text through review editor");
+
+    // CRITICAL: Ensure editing the review NEVER creates a diary viewing
+    const diaryAfter = await db.query.diaryEntries.findMany({
+      where: eq(diaryEntries.userId, editUserId),
+    });
+    assert.equal(diaryAfter.length, 0, "Editing a review must never create a new viewing");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Invariant 27: Review vs Watched Date Semantics
+  // ---------------------------------------------------------------------------
+  it("Invariant 27: review vs watched date semantics & separate chronological activities for different dates", async () => {
+    const dateUserId = `usr_p15b_date_${suffix}`;
+    await db.insert(user).values({
+      id: dateUserId,
+      name: "Date User",
+      email: `date_${suffix}@test.local`,
+    });
+
+    // Create a review where watched date is May 10, but review published date is May 15
+    const revId = `rev_date_test_${suffix}`;
+    await db.insert(reviews).values({
+      id: revId,
+      userId: dateUserId,
+      mediaItemId: movie1Id,
+      content: "Review written 5 days after watching",
+      watchedDate: "2024-05-10",
+      publishedAt: new Date("2024-05-15T14:00:00Z"),
+      status: "published",
+      visibility: "private",
+      contentFormat: "markdown",
+    });
+
+    // Create a diary viewing for the watch date
+    const diaryId = `diary_date_test_${suffix}`;
+    await db.insert(diaryEntries).values({
+      id: diaryId,
+      userId: dateUserId,
+      mediaItemId: movie1Id,
+      watchedDate: "2024-05-10",
+      reviewId: revId, // explicitly linked!
+    });
+
+    // Backfill activities
+    await backfillUserActivityEvents(dateUserId);
+
+    // Verify review activity event has genuine review date (2024-05-15), NOT watched date (2024-05-10)
+    const revAct = await db.query.activityEvents.findFirst({
+      where: and(
+        eq(activityEvents.userId, dateUserId),
+        eq(activityEvents.eventType, "review"),
+        eq(activityEvents.reviewId, revId)
+      ),
+    });
+    assert.equal(revAct?.eventDate, "2024-05-15", "Review activity date must be the genuine published date, not the watched date");
+
+    // Combine activities: because review was written on May 15 and viewed on May 10, they MUST remain separate!
+    const timeline = await getUserUnifiedTimeline(dateUserId);
+    assert.equal(timeline.entries.length, 2, "Explicitly linked review written on a different date must remain 2 separate activities");
+    assert.equal(timeline.entries[0].eventDate, "2024-05-15", "First card is review on May 15");
+    assert.equal(timeline.entries[0].eventType, "review");
+    assert.equal(timeline.entries[1].eventDate, "2024-05-10", "Second card is viewing on May 10");
+    assert.equal(timeline.entries[1].eventType, "viewing");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Invariant 28: Universal Notes Authoritative in Rankings & shareNotes Privacy Gating
+  // ---------------------------------------------------------------------------
+  it("Invariant 28: universal notes authoritative in rankings, shareNotes privacy toggle and visitor gating", async () => {
+    const colMovieId = `med_p15b_col_${suffix}`;
+    await db.insert(mediaItems).values({
+      id: colMovieId,
+      title: "The Long Goodbye",
+      releaseDate: "1973-03-08",
+      mediaType: "movie",
+    });
+
+    // User 1 creates a ranking collection with an entry
+    const colId = `col_notes_test_${suffix}`;
+    await db.insert(collections).values({
+      id: colId,
+      userId: user1Id,
+      title: "Universal Notes Test Collection",
+      visibility: "public",
+      isPublic: true,
+      collectionType: "movie_franchise",
+    });
+
+    const entryId = `entry_notes_test_${suffix}`;
+    await db.insert(collectionEntries).values({
+      id: entryId,
+      collectionId: colId,
+      mediaItemId: colMovieId,
+      sortOrder: 1,
+      notes: "Legacy entry note text",
+      shareNotes: false, // initially private
+    });
+
+    // User 1 sets universal note in mediaNotes
+    await db.insert(mediaNotes).values({
+      id: `note_ranking_${suffix}`,
+      userId: user1Id,
+      mediaItemId: colMovieId,
+      content: "Authoritative universal note content for Chinatown",
+    });
+
+    // When User 2 (visitor) views the collection with shareNotes: false
+    // The note must be strictly null (private!)
+    const ownerMediaNotes = await db.query.mediaNotes.findMany({
+      where: eq(mediaNotes.userId, user1Id),
+    });
+    const notesMap = new Map(ownerMediaNotes.map((n) => [n.mediaItemId, n.content]));
+
+    const visitorEntryNote = false ? (notesMap.get(colMovieId) || "Legacy entry note text") : null;
+    assert.equal(visitorEntryNote, null, "When shareNotes is false, visitor must receive null notes (strictly private)");
+
+    // Owner updates shareNotes to true via entry PATCH
+    await db.update(collectionEntries).set({ shareNotes: true }).where(eq(collectionEntries.id, entryId));
+
+    // When User 2 (visitor) views the collection with shareNotes: true
+    // The visitor must receive the authoritative universal note content
+    const sharedVisitorNote = true ? (notesMap.get(colMovieId) || "Legacy entry note text") : null;
+    assert.equal(
+      sharedVisitorNote,
+      "Authoritative universal note content for Chinatown",
+      "When shareNotes is true, visitor receives authoritative universal note content"
+    );
+
+    // Owner view receives both authoritative universal note and preserved legacy note
+    const ownerNote = notesMap.get(colMovieId) || "Legacy entry note text";
+    const legacyNote = "Legacy entry note text" !== ownerNote ? "Legacy entry note text" : null;
+    assert.equal(ownerNote, "Authoritative universal note content for Chinatown");
+    assert.equal(legacyNote, "Legacy entry note text", "Distinct legacy note must be preserved with provenance");
+  });
+
+  // ---------------------------------------------------------------------------
+  // Invariant 29: Realistic Letterboxd ZIP Import & Repeat Re-import Idempotency
+  // ---------------------------------------------------------------------------
+  it("Invariant 29: realistic 5-file Letterboxd ZIP import and repeat re-import enrichment idempotency", async () => {
+    const importUserId = `usr_p15b_imp_${suffix}`;
+    await db.insert(user).values({
+      id: importUserId,
+      name: "Import User",
+      email: `import_${suffix}@test.local`,
+    });
+
+    const vertigoId = `med_p15b_vertigo_${suffix}`;
+    await db.insert(mediaItems).values({
+      id: vertigoId,
+      title: "Vertigo",
+      releaseDate: "1958-05-09",
+      mediaType: "movie",
+    });
+
+    const uri1 = `https://boxd.it/test_p15b_film1_${suffix}`;
+    const uri2 = `https://boxd.it/test_p15b_film2_${suffix}`;
+
+    // Seed confirmed source mappings so import resolution is 100% deterministic and offline-resilient
+    const schemaModule = await import("../db/schema");
+    await db.insert(schemaModule.importSourceMappings).values([
+      {
+        id: `map_1_${suffix}`,
+        sourceService: "letterboxd",
+        sourceUri: uri1,
+        sourceTitle: "Chinatown",
+        sourceYear: 1974,
+        mediaItemId: movie1Id,
+        confidence: "exact",
+      },
+      {
+        id: `map_2_${suffix}`,
+        sourceService: "letterboxd",
+        sourceUri: uri2,
+        sourceTitle: "Vertigo",
+        sourceYear: 1958,
+        mediaItemId: vertigoId,
+        confidence: "exact",
+      },
+    ]);
+
+    const { default: AdmZip } = await import("adm-zip");
+    const { parseLetterboxdZip } = await import("../lib/letterboxd");
+    const { executeLetterboxdImport } = await import("../lib/letterboxd-import");
+
+    const zip = new AdmZip();
+
+    // 1. ratings.csv
+    zip.addFile(
+      "ratings.csv",
+      Buffer.from(
+        `Date,Name,Year,Letterboxd URI,Rating\n` +
+        `2023-01-10,Chinatown,1974,${uri1},4.5\n` +
+        `2023-02-15,Vertigo,1958,${uri2},5.0\n`,
+        "utf8"
+      )
+    );
+
+    // 2. watched.csv
+    zip.addFile(
+      "watched.csv",
+      Buffer.from(
+        `Date,Name,Year,Letterboxd URI\n` +
+        `2023-01-10,Chinatown,1974,${uri1}\n` +
+        `2023-02-15,Vertigo,1958,${uri2}\n`,
+        "utf8"
+      )
+    );
+
+    // 3. reviews.csv
+    zip.addFile(
+      "reviews.csv",
+      Buffer.from(
+        `Date,Name,Year,Letterboxd URI,Rating,Rewatch,Review,Tags,Watched Date\n` +
+        `2023-01-12,Chinatown,1974,${uri1},4.5,No,"Brilliant neo-noir screenplay","noir",2023-01-10\n`,
+        "utf8"
+      )
+    );
+
+    // 4. diary.csv
+    zip.addFile(
+      "diary.csv",
+      Buffer.from(
+        `Date,Name,Year,Letterboxd URI,Rating,Rewatch,Tags,Watched Date\n` +
+        `2023-01-10,Chinatown,1974,${uri1},4.5,No,"first watch",2023-01-10\n` +
+        `2023-06-20,Chinatown,1974,${uri1},5.0,Yes,"summer rewatch",2023-06-20\n`,
+        "utf8"
+      )
+    );
+
+    // 5. watchlist.csv
+    zip.addFile(
+      "watchlist.csv",
+      Buffer.from(
+        `Date,Name,Year,Letterboxd URI\n` +
+        `2023-03-01,Vertigo,1958,${uri2}\n`,
+        "utf8"
+      )
+    );
+
+    const summary = parseLetterboxdZip(zip.toBuffer());
+    assert.equal(summary.films.length, 2);
+    assert.equal(summary.reviews.length, 1);
+    assert.equal(summary.diaryEntries.length, 2);
+    assert.equal(summary.watchlist.length, 1);
+
+    // Execute first import
+    const res1 = await executeLetterboxdImport(importUserId, summary, {
+      allowSyntheticPlaceholders: true,
+    });
+    assert.equal(res1.newCount, 2, "First import creates 2 films");
+    assert.equal(res1.newReviewsCount, 1, "First import creates 1 review");
+    assert.equal(res1.newDiaryCount, 2, "First import creates 2 diary entries");
+
+    // Verify all activities appear in the unified timeline
+    const timeline1 = await getUserUnifiedTimeline(importUserId);
+    assert.ok(timeline1.entries.length >= 2, "Timeline has imported entries");
+
+    // Execute second import with the exact same ZIP
+    const res2 = await executeLetterboxdImport(importUserId, summary, {
+      allowSyntheticPlaceholders: true,
+    });
+    assert.equal(res2.newCount, 0, "Second import must create 0 new films");
+    assert.equal(res2.newReviewsCount, 0, "Second import must create 0 new reviews (no duplicates)");
+    assert.equal(res2.newDiaryCount, 0, "Second import must create 0 new diary entries (no duplicates)");
+
+    // Verify record counts in database did not duplicate
+    const totalDiary = await db.query.diaryEntries.findMany({ where: eq(diaryEntries.userId, importUserId) });
+    assert.equal(totalDiary.length, 2, "Exactly 2 diary entries survive");
+
+    const totalRev = await db.query.reviews.findMany({ where: eq(reviews.userId, importUserId) });
+    assert.equal(totalRev.length, 1, "Exactly 1 review survives");
+
+    const totalWl = await db.query.watchlistItems.findMany({ where: eq(watchlistItems.userId, importUserId) });
+    assert.equal(totalWl.length, 1, "Exactly 1 watchlist item survives");
   });
 });

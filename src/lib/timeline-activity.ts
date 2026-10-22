@@ -106,8 +106,9 @@ export async function backfillUserActivityEvents(
 
   for (const r of userReviews) {
     const key = `rev:${r.id}`;
+    // Genuine review/activity date: strictly published date, never substituted with viewing/watched date or import timestamp
     const pubDate = r.publishedAt ? r.publishedAt.toISOString().slice(0, 10) : null;
-    const eventDate = r.watchedDate || pubDate;
+    const eventDate = pubDate;
 
     await txOrDb
       .insert(activityEvents)
@@ -205,12 +206,25 @@ export function combineChronologicalActivities(
 
     // Check direct link via reviewId or viewingId
     if (act.reviewId && reviewById.has(act.reviewId) && !consumedReviewIds.has(act.reviewId)) {
-      matchingReview = reviewById.get(act.reviewId);
+      const candidate = reviewById.get(act.reviewId);
+      // Explicitly linked reviews written on different days must remain separate chronological activities!
+      if (candidate && candidate.eventDate && act.eventDate && candidate.eventDate === act.eventDate) {
+        matchingReview = candidate;
+      }
     } else if (date) {
-      // Check same-day review for the same media item
+      // Check same-day review for the same media item ONLY if legitimately associated
+      // (e.g. matching viewingId/diaryEntryId or matching Letterboxd source URI)
       const key = `${mediaId}::${date}`;
       const candidates = reviewByMediaAndDate.get(key) || [];
-      const unconsumed = candidates.find((r) => !consumedReviewIds.has(r.reviewId || r.id));
+      const unconsumed = candidates.find((r) => {
+        if (consumedReviewIds.has(r.reviewId || r.id)) return false;
+        const isExplicitlyLinked =
+          r.diaryEntryId === (act.diaryEntryId || act.id) ||
+          act.reviewId === (r.reviewId || r.id);
+        const isSameSourceSession =
+          Boolean(act.sourceUri && r.sourceUri && act.sourceUri === r.sourceUri);
+        return isExplicitlyLinked || isSameSourceSession;
+      });
       if (unconsumed) {
         matchingReview = unconsumed;
       }
@@ -372,4 +386,158 @@ export function combineChronologicalActivities(
   });
 
   return { datedItems, undatedItems };
+}
+
+/**
+ * Fetches and returns paginated, unified chronological activities for a user.
+ * Guarantees identical normalization, combination, filtering, and stable offsets.
+ */
+export async function getUserUnifiedTimeline(
+  userId: string,
+  options: {
+    limit?: number;
+    offset?: number;
+    filter?: ActivityFilter;
+  } = {},
+  txOrDb: any = db
+): Promise<{
+  entries: UnifiedTimelineCardData[];
+  totalCount: number;
+  hasMore: boolean;
+  undatedEntries: UnifiedTimelineCardData[];
+}> {
+  const limit = Math.min(Math.max(options.limit ?? 50, 1), 100);
+  const offset = Math.max(options.offset ?? 0, 0);
+  const filter = options.filter || "all";
+
+  // Ensure activity events are up-to-date
+  await backfillUserActivityEvents(userId, txOrDb);
+
+  // 1. Fetch user activity events with relations
+  const userActivities = await txOrDb.query.activityEvents.findMany({
+    where: eq(activityEvents.userId, userId),
+    orderBy: [desc(activityEvents.eventDate), desc(activityEvents.createdAt), desc(activityEvents.id)],
+    with: {
+      mediaItem: true,
+      diaryEntry: {
+        with: {
+          rating: {
+            with: {
+              ratingSystem: { columns: { scale: true, type: true } },
+              categoryScores: true,
+            },
+          },
+          review: true,
+        },
+      },
+      review: true,
+      rating: {
+        with: {
+          ratingSystem: { columns: { scale: true, type: true } },
+          categoryScores: true,
+        },
+      },
+      watchlistItem: true,
+    },
+  });
+
+  // 2. Compute ordinals and total viewings per media item
+  const ordinalsMap = new Map<string, number>();
+  const mediaTotalsMap = new Map<string, number>();
+
+  const userOrdinals = await txOrDb.execute(sql`
+    SELECT 
+      id,
+      media_item_id as "mediaItemId",
+      ROW_NUMBER() OVER (
+        PARTITION BY media_item_id 
+        ORDER BY 
+          CASE WHEN watched_date IS NOT NULL AND watched_date != '' THEN 0 ELSE 1 END ASC,
+          watched_date ASC,
+          created_at ASC,
+          id ASC
+      )::int as ordinal,
+      COUNT(*) OVER (
+        PARTITION BY media_item_id
+      )::int as "totalViewings"
+    FROM diary_entries
+    WHERE user_id = ${userId}
+  `);
+
+  for (const row of userOrdinals.rows as Array<{
+    id: string;
+    mediaItemId: string;
+    ordinal: number;
+    totalViewings: number;
+  }>) {
+    ordinalsMap.set(row.id, row.ordinal);
+    mediaTotalsMap.set(row.mediaItemId, row.totalViewings);
+  }
+
+  // 3. Normalize and combine
+  const { datedItems, undatedItems } = combineChronologicalActivities(
+    userActivities,
+    ordinalsMap,
+    mediaTotalsMap
+  );
+
+  // 4. Apply filter if specified
+  const applyFilter = (items: UnifiedTimelineCardData[]) => {
+    if (filter === "all") return items;
+    return items.filter((e) => {
+      const isEpisode =
+        e.mediaItem?.mediaType === "episode" ||
+        Boolean(e.mediaItem?.seasonNumber && e.mediaItem?.episodeNumber);
+
+      if (filter === "films") {
+        return e.mediaItem?.mediaType === "movie" || (!isEpisode && e.mediaItem?.mediaType !== "tv");
+      }
+      if (filter === "tv") {
+        return isEpisode || e.mediaItem?.mediaType === "tv";
+      }
+      if (filter === "rewatches") {
+        const ordinal = e.ordinal ?? ordinalsMap.get(e.diaryEntryId || e.id) ?? 1;
+        return Boolean(e.isRewatch || ordinal > 1);
+      }
+      if (filter === "viewings") {
+        return (
+          e.eventType === "viewing" ||
+          e.eventType === "viewing_and_review" ||
+          e.eventType === "watched_mark"
+        );
+      }
+      if (filter === "reviews") {
+        return (
+          e.eventType === "review" ||
+          e.eventType === "viewing_and_review" ||
+          Boolean(e.reviewContent || e.reviewId)
+        );
+      }
+      if (filter === "ratings") {
+        return (
+          e.eventType === "rating" ||
+          typeof e.ratingValue === "number" ||
+          typeof e.sourceRating === "number"
+        );
+      }
+      if (filter === "watchlist") {
+        return e.eventType === "watchlist";
+      }
+      return true;
+    });
+  };
+
+  const filteredDated = applyFilter(datedItems);
+  const filteredUndated = applyFilter(undatedItems);
+
+  const pagedEntries = filteredDated.slice(offset, offset + limit);
+  const totalCount = filteredDated.length;
+  const hasMore = offset + pagedEntries.length < totalCount;
+
+  return {
+    entries: pagedEntries,
+    totalCount,
+    hasMore,
+    undatedEntries: filteredUndated,
+  };
 }

@@ -18,7 +18,7 @@ import { LibraryView, type LibraryTab } from "@/components/library/library-view"
 import type { TimelineEntry } from "@/components/library/cinematic-timeline";
 import type { WatchedItem } from "@/components/library/watched-grid";
 import type { WatchlistGridItem } from "@/components/library/watchlist-grid";
-import { backfillUserActivityEvents, combineChronologicalActivities } from "@/lib/timeline-activity";
+import { getUserUnifiedTimeline } from "@/lib/timeline-activity";
 
 export default async function HomePage({
   searchParams,
@@ -137,81 +137,13 @@ export default async function HomePage({
   const requestedTab = (resolvedSearchParams.tab?.toLowerCase() as LibraryTab) || "journal";
 
   // 1. Fetch User Activity Events (Paginated initial batch with total count)
-  await backfillUserActivityEvents(session.user.id);
-
-  const [userActivities, activityCountRows] = await Promise.all([
-    db.query.activityEvents.findMany({
-      where: eq(activityEvents.userId, session.user.id),
-      orderBy: [desc(activityEvents.eventDate), desc(activityEvents.createdAt)],
-      limit: 100,
-      with: {
-        mediaItem: true,
-        diaryEntry: {
-          with: {
-            rating: {
-              with: {
-                ratingSystem: { columns: { scale: true, type: true } },
-                categoryScores: true,
-              },
-            },
-            review: true,
-          },
-        },
-        review: true,
-        rating: {
-          with: {
-            ratingSystem: { columns: { scale: true, type: true } },
-            categoryScores: true,
-          },
-        },
-        watchlistItem: true,
-      },
-    }),
-    db.select({ count: count() }).from(activityEvents).where(eq(activityEvents.userId, session.user.id)),
-  ]);
-
-  const totalDiaryCount = activityCountRows[0]?.count ?? 0;
-
-  // Calculate lifetime chronological ordinals and total viewing counts per media item
-  const ordinalsMap = new Map<string, number>();
-  const mediaTotalsMap = new Map<string, number>();
-
-  const userOrdinals = await db.execute(sql`
-    SELECT 
-      id,
-      media_item_id as "mediaItemId",
-      ROW_NUMBER() OVER (
-        PARTITION BY media_item_id 
-        ORDER BY 
-          CASE WHEN watched_date IS NOT NULL AND watched_date != '' THEN 0 ELSE 1 END ASC,
-          watched_date ASC,
-          created_at ASC,
-          id ASC
-      )::int as ordinal,
-      COUNT(*) OVER (
-        PARTITION BY media_item_id
-      )::int as "totalViewings"
-    FROM diary_entries
-    WHERE user_id = ${session.user.id}
-  `);
-
-  for (const row of userOrdinals.rows as Array<{
-    id: string;
-    mediaItemId: string;
-    ordinal: number;
-    totalViewings: number;
-  }>) {
-    ordinalsMap.set(row.id, row.ordinal);
-    mediaTotalsMap.set(row.mediaItemId, row.totalViewings);
-  }
-
-  const { datedItems, undatedItems } = combineChronologicalActivities(
-    userActivities,
-    ordinalsMap,
-    mediaTotalsMap
-  );
-
-  const userDiaryEntries = datedItems as unknown as TimelineEntry[];
+  const timelineResult = await getUserUnifiedTimeline(session.user.id, {
+    limit: 100,
+    filter: (resolvedSearchParams.filter as any) || "all",
+  });
+  const userDiaryEntries = timelineResult.entries as unknown as TimelineEntry[];
+  const totalDiaryCount = timelineResult.totalCount;
+  const undatedItems = timelineResult.undatedEntries;
 
   // 2. Fetch User Reviews & Standalone Ratings
   const userReviews = await db.query.reviews.findMany({

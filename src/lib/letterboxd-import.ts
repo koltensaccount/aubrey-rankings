@@ -929,11 +929,8 @@ export async function executeLetterboxdImport(
           ),
       });
 
-      const pubDate = rev.reviewDate
-        ? new Date(rev.reviewDate)
-        : rev.watchedDate
-          ? new Date(rev.watchedDate)
-          : new Date();
+      // Strictly preserve genuine review date; never substitute watchedDate or current import timestamp
+      const pubDate = rev.reviewDate ? new Date(rev.reviewDate) : null;
 
       if (!existingRev) {
         await tx.insert(reviews).values({
@@ -955,7 +952,7 @@ export async function executeLetterboxdImport(
           watchedDate: rev.watchedDate || null,
           tags: rev.tags && rev.tags.length > 0 ? rev.tags : null,
           publishedAt: pubDate,
-          createdAt: pubDate,
+          createdAt: pubDate || new Date(),
           updatedAt: new Date(),
         });
         newReviewsCount++;
@@ -1021,7 +1018,15 @@ export async function executeLetterboxdImport(
 
         const linkedReview = await tx.query.reviews.findFirst({
           where: (r, { and, eq }) =>
-            and(eq(r.userId, userId), eq(r.mediaItemId, mediaItem.id)),
+            and(
+              eq(r.userId, userId),
+              eq(r.mediaItemId, mediaItem.id),
+              d.letterboxdUri
+                ? eq(r.sourceUri, d.letterboxdUri)
+                : d.watchedDate
+                ? eq(r.watchedDate, d.watchedDate)
+                : undefined
+            ),
         });
 
         await tx.insert(diaryEntries).values({

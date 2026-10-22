@@ -102,7 +102,12 @@ export function RatingDialog({
       setScores(scoresMap);
       setSelectedTierId(initialRating.tierId ?? null);
       setReviewText(initialRating.reviewText || "");
-      setPersonalNotes(initialRating.personalNotes || "");
+      setPersonalNotes(
+        initialRating.personalNotes ||
+        initialRating.universalNote ||
+        initialRating.notes ||
+        ""
+      );
       setShareCommentary(Boolean(initialRating.shareCommentary));
       setIsWatched(initialRating.isWatched !== false);
       setIsFavorite(Boolean(initialRating.isFavorite));
@@ -504,13 +509,13 @@ export function RatingDialog({
             </div>
           )}
 
-          {/* Unified Thoughts & Commentary */}
+          {/* Universal Personal Note & Legacy Commentary Preservation */}
           <div className="space-y-2.5">
             <div className="flex items-center justify-between border-b border-border pb-1.5">
               <div className="flex items-center gap-1.5">
                 <MessageSquare size={13} className="text-primary" />
                 <label className="text-xs font-semibold text-foreground uppercase tracking-wider block">
-                  Thoughts & Commentary
+                  Personal Note (Universal)
                 </label>
               </div>
               <button
@@ -520,7 +525,7 @@ export function RatingDialog({
                 title="Publish as standalone first-class review"
               >
                 <Globe size={11} />
-                <span>Publish as Review</span>
+                <span>Write / Publish Review</span>
               </button>
             </div>
 
@@ -528,11 +533,11 @@ export function RatingDialog({
               rows={3}
               placeholder={
                 isEpisode
-                  ? "Write your thoughts, critique, or reflections on this episode..."
-                  : "Write your thoughts, critique, or reflections on this title..."
+                  ? "Write your personal notes on this episode (universal to your library)..."
+                  : "Write your personal notes on this title (universal to your library)..."
               }
-              value={reviewText}
-              onChange={(e) => setReviewText(e.target.value)}
+              value={personalNotes}
+              onChange={(e) => setPersonalNotes(e.target.value)}
               className="w-full text-xs rounded-input p-3 bg-surface border border-border-input text-foreground focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary leading-relaxed resize-none"
             />
 
@@ -547,7 +552,7 @@ export function RatingDialog({
                     className="rounded border-border text-primary focus:ring-primary h-3.5 w-3.5 cursor-pointer"
                   />
                   <span className="text-xs text-muted-foreground font-medium">
-                    Share thoughts with this ranking
+                    Share note with this ranking
                   </span>
                 </label>
                 <span className="text-[10px] text-muted-foreground">
@@ -556,20 +561,16 @@ export function RatingDialog({
               </div>
             )}
 
-            {/* Access and non-destructive preservation of private personal notes */}
-            {Boolean(initialRating?.personalNotes && initialRating.personalNotes.trim().length > 0) && (
+            {/* Non-destructive preservation of distinct legacy commentary */}
+            {Boolean(initialRating?.reviewText && initialRating.reviewText.trim() && initialRating.reviewText !== personalNotes) && (
               <div className="pt-2 border-t border-border/70 space-y-1.5">
                 <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                  <span className="font-semibold text-foreground/80">Private Personal Notes (Owner Only)</span>
-                  <span className="text-[10px]">Private to you</span>
+                  <span className="font-semibold text-foreground/80">Legacy Commentary (Preserved)</span>
+                  <span className="text-[10px]">Historical text</span>
                 </div>
-                <textarea
-                  rows={2}
-                  value={personalNotes}
-                  onChange={(e) => setPersonalNotes(e.target.value)}
-                  placeholder="Private personal notes..."
-                  className="w-full text-xs rounded-input p-2.5 bg-surface/80 border border-border text-foreground leading-relaxed resize-none focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-                />
+                <div className="p-2.5 rounded bg-surface/50 border border-border/80 text-xs text-muted-foreground italic leading-relaxed">
+                  &ldquo;{initialRating.reviewText}&rdquo;
+                </div>
               </div>
             )}
           </div>
