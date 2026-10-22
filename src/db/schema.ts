@@ -231,6 +231,7 @@ export const collectionEntries = pgTable(
       .references(() => mediaItems.id, { onDelete: "cascade" }),
     sortOrder: integer("sort_order").notNull().default(0),
     notes: text("notes"),
+    shareNotes: boolean("share_notes").notNull().default(false),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -347,7 +348,32 @@ export const artworkOverrides = pgTable(
 );
 
 // ==========================================
-// FIRST-CLASS REVIEWS (PHASE 10)
+// UNIVERSAL MEDIA NOTES (PHASE 15B)
+// ==========================================
+
+export const mediaNotes = pgTable(
+  "media_notes",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    mediaItemId: text("media_item_id")
+      .notNull()
+      .references(() => mediaItems.id, { onDelete: "cascade" }),
+    content: text("content").notNull().default(""),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uniq_user_media_notes").on(table.userId, table.mediaItemId),
+    index("idx_media_notes_user").on(table.userId),
+    index("idx_media_notes_media").on(table.mediaItemId),
+  ]
+);
+
+// ==========================================
+// FIRST-CLASS REVIEWS (PHASE 10 & 15B)
 // ==========================================
 
 export const reviews = pgTable(
@@ -363,6 +389,12 @@ export const reviews = pgTable(
     ratingId: text("rating_id").references(() => ratings.id, {
       onDelete: "set null",
     }),
+    viewingId: text("viewing_id").references((): any => diaryEntries.id, {
+      onDelete: "set null",
+    }),
+    ratingValue: real("rating_value"),
+    sourceRating: real("source_rating"),
+    sourceScale: real("source_scale"),
     title: text("title"),
     content: text("content").notNull(),
     draftContent: text("draft_content"),
@@ -387,6 +419,7 @@ export const reviews = pgTable(
     index("idx_reviews_published").on(table.status, table.visibility, table.publishedAt),
     index("idx_reviews_user_media").on(table.userId, table.mediaItemId),
     index("idx_reviews_rating").on(table.ratingId),
+    index("idx_reviews_viewing").on(table.viewingId),
     uniqueIndex("uniq_reviews_source_uri")
       .on(table.userId, table.sourceService, table.sourceUri)
       .where(sql`"source_uri" IS NOT NULL`),
@@ -506,6 +539,60 @@ export const importSourceMappings = pgTable(
       table.sourceYear
     ),
     index("idx_import_mapping_media").on(table.mediaItemId),
+  ]
+);
+
+// ==========================================
+// UNIFIED ACTIVITY EVENTS (PHASE 15B)
+// ==========================================
+
+export const activityEvents = pgTable(
+  "activity_events",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    mediaItemId: text("media_item_id")
+      .notNull()
+      .references(() => mediaItems.id, { onDelete: "cascade" }),
+    eventType: text("event_type").notNull(), // 'viewing' | 'review' | 'rating' | 'watchlist' | 'watched_mark'
+    eventDate: text("event_date"), // YYYY-MM-DD
+    loggedDate: timestamp("logged_date"),
+    diaryEntryId: text("diary_entry_id").references(() => diaryEntries.id, {
+      onDelete: "cascade",
+    }),
+    reviewId: text("review_id").references(() => reviews.id, {
+      onDelete: "cascade",
+    }),
+    ratingId: text("rating_id").references(() => ratings.id, {
+      onDelete: "cascade",
+    }),
+    watchlistItemId: text("watchlist_item_id").references(() => watchlistItems.id, {
+      onDelete: "cascade",
+    }),
+    ratingValue: real("rating_value"),
+    sourceRating: real("source_rating"),
+    sourceScale: real("source_scale"),
+    isRewatch: boolean("is_rewatch").notNull().default(false),
+    notes: text("notes"),
+    sourceService: text("source_service"),
+    sourceUri: text("source_uri"),
+    sourceEventKey: text("source_event_key"),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("uniq_activity_source_event")
+      .on(table.userId, table.sourceEventKey)
+      .where(sql`"source_event_key" IS NOT NULL`),
+    index("idx_activity_user_date").on(table.userId, table.eventDate),
+    index("idx_activity_user_type").on(table.userId, table.eventType),
+    index("idx_activity_user_media").on(table.userId, table.mediaItemId),
+    index("idx_activity_diary").on(table.diaryEntryId),
+    index("idx_activity_review").on(table.reviewId),
+    index("idx_activity_rating").on(table.ratingId),
+    index("idx_activity_watchlist").on(table.watchlistItemId),
   ]
 );
 
@@ -1130,6 +1217,10 @@ export const reviewsRelations = relations(reviews, ({ one, many }) => ({
     fields: [reviews.ratingId],
     references: [ratings.id],
   }),
+  viewing: one(diaryEntries, {
+    fields: [reviews.viewingId],
+    references: [diaryEntries.id],
+  }),
   comments: many(comments),
   likes: many(likes),
   notifications: many(notifications),
@@ -1186,6 +1277,44 @@ export const importSourceMappingsRelations = relations(
   })
 );
 
+export const mediaNotesRelations = relations(mediaNotes, ({ one }) => ({
+  user: one(user, {
+    fields: [mediaNotes.userId],
+    references: [user.id],
+  }),
+  mediaItem: one(mediaItems, {
+    fields: [mediaNotes.mediaItemId],
+    references: [mediaItems.id],
+  }),
+}));
+
+export const activityEventsRelations = relations(activityEvents, ({ one }) => ({
+  user: one(user, {
+    fields: [activityEvents.userId],
+    references: [user.id],
+  }),
+  mediaItem: one(mediaItems, {
+    fields: [activityEvents.mediaItemId],
+    references: [mediaItems.id],
+  }),
+  diaryEntry: one(diaryEntries, {
+    fields: [activityEvents.diaryEntryId],
+    references: [diaryEntries.id],
+  }),
+  review: one(reviews, {
+    fields: [activityEvents.reviewId],
+    references: [reviews.id],
+  }),
+  rating: one(ratings, {
+    fields: [activityEvents.ratingId],
+    references: [ratings.id],
+  }),
+  watchlistItem: one(watchlistItems, {
+    fields: [activityEvents.watchlistItemId],
+    references: [watchlistItems.id],
+  }),
+}));
+
 export type MediaItem = typeof mediaItems.$inferSelect;
 export type NewMediaItem = typeof mediaItems.$inferInsert;
 export type Review = typeof reviews.$inferSelect;
@@ -1198,6 +1327,10 @@ export type UnresolvedImportItem = typeof unresolvedImportItems.$inferSelect;
 export type NewUnresolvedImportItem = typeof unresolvedImportItems.$inferInsert;
 export type ImportSourceMapping = typeof importSourceMappings.$inferSelect;
 export type NewImportSourceMapping = typeof importSourceMappings.$inferInsert;
+export type MediaNote = typeof mediaNotes.$inferSelect;
+export type NewMediaNote = typeof mediaNotes.$inferInsert;
+export type ActivityEvent = typeof activityEvents.$inferSelect;
+export type NewActivityEvent = typeof activityEvents.$inferInsert;
 
 
 

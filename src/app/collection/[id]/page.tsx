@@ -530,6 +530,29 @@ export default function CollectionDetailPage({
     }
   };
 
+  const handleToggleShareNotes = async (entryId: string, currentVal: boolean) => {
+    try {
+      const res = await fetch(`/api/collections/${id}/entries/${entryId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shareNotes: !currentVal }),
+      });
+      if (res.ok) {
+        setCollection((prev: any) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            entries: prev.entries.map((e: any) =>
+              e.id === entryId ? { ...e, shareNotes: !currentVal } : e
+            ),
+          };
+        });
+      }
+    } catch (err) {
+      console.error("Failed to toggle shareNotes:", err);
+    }
+  };
+
   const fetchCollection = useCallback(async () => {
     try {
       if (!collection) {
@@ -869,6 +892,7 @@ export default function CollectionDetailPage({
           onSetEntryToDelete={setEntryToDelete}
           onQuickAssignTier={isOwner ? handleQuickAssignTier : undefined}
           onOpenTierEditor={() => setShowTierEditor(true)}
+          onToggleShareNotes={isOwner ? handleToggleShareNotes : undefined}
         />
 
         <CommentsSection collectionId={collection.id} isOwner={isOwner} />

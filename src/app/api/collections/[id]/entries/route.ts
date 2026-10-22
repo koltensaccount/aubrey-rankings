@@ -6,6 +6,7 @@ import { tmdb } from "@/lib/tmdb";
 import { nanoid } from "@/lib/utils";
 import { eq, and, desc } from "drizzle-orm";
 import { resolveMediaItem } from "@/lib/media-resolution";
+import { markRankedMediaAsWatched } from "@/lib/watched-status";
 
 export async function POST(
   request: NextRequest,
@@ -146,6 +147,9 @@ export async function POST(
       sortOrder: nextOrder,
     }).onConflictDoNothing().returning({id:collectionEntries.id});
     if (!inserted.length) return NextResponse.json({error:"This item is already in this collection"},{status:409});
+
+    // Ranking an item implies Watched status idempotently in global library
+    await markRankedMediaAsWatched(session.user.id, targetMediaItemId!);
 
     // Fetch created entry with mediaItem
     const created = await db.query.collectionEntries.findFirst({

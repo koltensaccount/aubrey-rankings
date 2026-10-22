@@ -166,8 +166,9 @@ export function LogViewingDialog({
       .filter(Boolean);
 
     try {
-      const url = existingEntry?.id ? `/api/diary/${encodeURIComponent(existingEntry.id)}` : "/api/diary";
-      const method = existingEntry?.id ? "PATCH" : "POST";
+      const isRealDiaryId = Boolean(existingEntry?.id && existingEntry.id.startsWith("diary_"));
+      const url = isRealDiaryId ? `/api/diary/${encodeURIComponent(existingEntry!.id)}` : "/api/diary";
+      const method = isRealDiaryId ? "PATCH" : "POST";
 
       let finalMediaId = selectedMedia.id;
       let finalMediaType = selectedMedia.mediaType || "movie";
@@ -484,12 +485,15 @@ export function LogViewingDialog({
 
           {/* Notes */}
           <div className="space-y-1.5">
-            <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">
-              Viewing Notes & Review
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">
+                Viewing Notes
+              </label>
+              <span className="text-[10px] text-muted-foreground/80">Specific to this watch date</span>
+            </div>
             <textarea
               rows={3}
-              placeholder="What did you think of this viewing? Memorable scenes, commentary..."
+              placeholder="Private notes specific to this viewing session..."
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               className="w-full px-3 py-2 rounded-input bg-surface border border-border text-foreground text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary resize-y"

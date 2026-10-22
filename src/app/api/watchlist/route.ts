@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { watchlistItems, mediaItems } from "@/db/schema";
+import { watchlistItems, mediaItems, activityEvents } from "@/db/schema";
 import { resolveMediaItem } from "@/lib/media-resolution";
 import { and, desc, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -89,6 +89,20 @@ export async function POST(req: NextRequest) {
       })
       .returning();
 
+    // Synchronize chronological activity event
+    await db
+      .insert(activityEvents)
+      .values({
+        id: `act_${randomUUID()}`,
+        userId: session.user.id,
+        mediaItemId: resolvedId,
+        eventType: "watchlist",
+        eventDate: new Date().toISOString().slice(0, 10),
+        watchlistItemId: inserted.id,
+        sourceEventKey: `wl:${inserted.id}`,
+      })
+      .onConflictDoNothing();
+
     return NextResponse.json({
       success: true,
       item: inserted,
@@ -129,6 +143,15 @@ export async function DELETE(req: NextRequest) {
           eq(watchlistItems.mediaItemId, resolvedId),
         ),
       );
+
+    // Remove chronological activity event
+    await db.delete(activityEvents).where(
+      and(
+        eq(activityEvents.userId, session.user.id),
+        eq(activityEvents.mediaItemId, resolvedId),
+        eq(activityEvents.eventType, "watchlist"),
+      ),
+    );
 
     return NextResponse.json({
       success: true,

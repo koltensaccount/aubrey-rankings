@@ -397,8 +397,8 @@ export function LibraryView({
                         Boolean(r.mediaItem?.seasonNumber && r.mediaItem?.episodeNumber);
                       const isDraft = r.status === "draft" || r.status === "unpublished";
                       const score = r.rating ? reviewScoreOnTen(r.rating) : null;
-                      const personalViewLink = getPersonalMediaUrl(r.mediaItemId);
-                      const editLink = getPersonalMediaUrl(r.mediaItemId, { journal: true });
+                      const personalViewLink = getPersonalMediaUrl(r.mediaItemId, { from: "/?tab=journal&filter=reviews" });
+                      const editLink = getPersonalMediaUrl(r.mediaItemId, { journal: true, from: "/?tab=journal&filter=reviews" });
 
                       return (
                         <article
@@ -517,7 +517,7 @@ export function LibraryView({
                         rating.mediaItem?.mediaType === "episode" ||
                         Boolean(rating.mediaItem?.seasonNumber && rating.mediaItem?.episodeNumber);
                       const score = reviewScoreOnTen(rating);
-                      const personalViewLink = getPersonalMediaUrl(rating.mediaItemId);
+                      const personalViewLink = getPersonalMediaUrl(rating.mediaItemId, { from: "/?tab=journal&filter=ratings" });
 
                       return (
                         <article
@@ -591,8 +591,8 @@ export function LibraryView({
                       const isEpisode =
                         item.mediaItem?.mediaType === "episode" ||
                         Boolean(item.mediaItem?.seasonNumber && item.mediaItem?.episodeNumber);
-                      const personalViewLink = getPersonalMediaUrl(item.mediaItemId);
-                      const rateLink = getPersonalMediaUrl(item.mediaItemId, { journal: true });
+                      const personalViewLink = getPersonalMediaUrl(item.mediaItemId, { from: "/?tab=watched" });
+                      const rateLink = getPersonalMediaUrl(item.mediaItemId, { journal: true, from: "/?tab=watched" });
 
                       return (
                         <article

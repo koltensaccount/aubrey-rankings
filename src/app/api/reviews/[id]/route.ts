@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { reviews, likes, comments, user, mediaItems, ratings } from "@/db/schema";
+import { reviews, likes, comments, user, mediaItems, ratings, activityEvents, diaryEntries } from "@/db/schema";
 import { eq, and, sql } from "drizzle-orm";
+import { randomUUID } from "crypto";
 import { isBlocked } from "@/lib/safety";
 import { canShowReviewRating, reviewScoreOnTen } from "@/lib/review-rating";
 
@@ -114,6 +115,10 @@ export async function GET(
       status: review.status,
       visibility: review.visibility,
       isSpoiler: review.isSpoiler,
+      ratingValue: review.ratingValue,
+      sourceRating: review.sourceRating,
+      sourceScale: review.sourceScale,
+      viewingId: review.viewingId,
       publishedAt: review.publishedAt,
       createdAt: review.createdAt,
       updatedAt: review.updatedAt,
@@ -188,7 +193,22 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid request payload" }, { status: 400 });
   }
 
-  const { title, content, draftContent, contentFormat, draftContentFormat, status, visibility, isSpoiler, ratingId, shareRating } = body;
+  const {
+    title,
+    content,
+    draftContent,
+    contentFormat,
+    draftContentFormat,
+    status,
+    visibility,
+    isSpoiler,
+    ratingId,
+    shareRating,
+    ratingValue,
+    sourceRating,
+    sourceScale,
+    viewingId,
+  } = body;
   if (shareRating !== undefined && typeof shareRating !== "boolean") return NextResponse.json({ error: "Invalid rating sharing choice" }, { status: 400 });
 
   const validStatuses = ["draft", "published", "unpublished"];
@@ -253,6 +273,34 @@ export async function PATCH(
     }
   }
 
+  // Viewing link update if supplied
+  let newViewingId = review.viewingId;
+  if (viewingId !== undefined) {
+    if (viewingId === null) {
+      newViewingId = null;
+    } else if (typeof viewingId === "string") {
+      const v = await db.query.diaryEntries.findFirst({
+        where: (d, { and, eq }) =>
+          and(eq(d.id, viewingId), eq(d.userId, session.user.id), eq(d.mediaItemId, review.mediaItemId)),
+        columns: { id: true },
+      });
+      if (v) newViewingId = v.id;
+    }
+  }
+
+  // Direct review rating updates
+  let newSourceRating = review.sourceRating;
+  let newSourceScale = review.sourceScale;
+  let newRatingValue = review.ratingValue;
+
+  if (sourceRating !== undefined) {
+    newSourceRating = typeof sourceRating === "number" && !isNaN(sourceRating) ? sourceRating : null;
+    newSourceScale = typeof sourceScale === "number" && sourceScale > 0 ? sourceScale : (newSourceRating !== null ? 5 : null);
+    newRatingValue = newSourceRating !== null && newSourceScale ? (newSourceRating / newSourceScale) * 10 : null;
+  } else if (ratingValue !== undefined) {
+    newRatingValue = typeof ratingValue === "number" && !isNaN(ratingValue) ? ratingValue : null;
+  }
+
   const now = new Date();
   await db
     .update(reviews)
@@ -268,9 +316,52 @@ export async function PATCH(
       shareRating: review.isJournal && typeof shareRating === "boolean" ? shareRating : review.shareRating,
       publishedAt,
       ratingId: newRatingId,
+      viewingId: newViewingId,
+      ratingValue: newRatingValue,
+      sourceRating: newSourceRating,
+      sourceScale: newSourceScale,
       updatedAt: now,
     })
     .where(eq(reviews.id, reviewId));
+
+  // Update chronological activity event
+  if (newStatus === "published") {
+    const eventDate = publishedAt ? publishedAt.toISOString().slice(0, 10) : null;
+    const existingAct = await db.query.activityEvents.findFirst({
+      where: eq(activityEvents.reviewId, reviewId),
+    });
+    if (existingAct) {
+      await db
+        .update(activityEvents)
+        .set({
+          eventDate,
+          ratingValue: newRatingValue,
+          sourceRating: newSourceRating,
+          sourceScale: newSourceScale,
+          updatedAt: now,
+        })
+        .where(eq(activityEvents.id, existingAct.id));
+    } else {
+      await db.insert(activityEvents).values({
+        id: `act_${randomUUID()}`,
+        userId: session.user.id,
+        mediaItemId: review.mediaItemId,
+        eventType: "review",
+        eventDate,
+        loggedDate: now,
+        reviewId,
+        ratingValue: newRatingValue,
+        sourceRating: newSourceRating,
+        sourceScale: newSourceScale,
+        sourceEventKey: `rev:${reviewId}`,
+        createdAt: now,
+        updatedAt: now,
+      }).onConflictDoNothing();
+    }
+  } else {
+    // If unpublished or reverted to draft, remove from public timeline
+    await db.delete(activityEvents).where(eq(activityEvents.reviewId, reviewId));
+  }
 
   const updated = await db.query.reviews.findFirst({
     where: eq(reviews.id, reviewId),
@@ -338,6 +429,20 @@ export async function DELETE(
   if (review.userId !== session.user.id) {
     return NextResponse.json({ error: "Forbidden: Not review author" }, { status: 403 });
   }
+
+  // Disconnect from viewing entries without deleting the viewing history
+  await db
+    .update(diaryEntries)
+    .set({ reviewId: null })
+    .where(eq(diaryEntries.reviewId, reviewId));
+
+  // Remove chronological activity event to prevent stale timeline cards
+  await db.delete(activityEvents).where(
+    and(
+      eq(activityEvents.reviewId, reviewId),
+      eq(activityEvents.userId, session.user.id),
+    ),
+  );
 
   await db.delete(reviews).where(eq(reviews.id, reviewId));
 

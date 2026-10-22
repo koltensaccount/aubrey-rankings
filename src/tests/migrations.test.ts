@@ -2,7 +2,7 @@ import { it } from 'node:test';
 import assert from 'node:assert/strict';
 import { Client } from 'pg';
 import { createRequire } from 'node:module';
-import { mkdtempSync, cpSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, cpSync, writeFileSync, rmSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 const { run } = createRequire(import.meta.url)('../../scripts/migrate.cjs');
@@ -12,6 +12,7 @@ it('release migrations are atomic, repeatable, checksum protected and adopt lega
   const admin = new Client({connectionString:base});
   await admin.connect();
   const directory = mkdtempSync(join(tmpdir(), 'aubrey-migrations-'));
+  const expectedCount = readdirSync(resolve('src/db/migrations')).filter(f => f.endsWith('.sql')).length.toString();
   let db: Client | undefined;
   try {
     await admin.query(`CREATE DATABASE "${name}"`);
@@ -22,7 +23,7 @@ it('release migrations are atomic, repeatable, checksum protected and adopt lega
     await run(options);
     await run(options);
     db = new Client({connectionString}); await db.connect();
-    assert.equal((await db.query('SELECT count(*) FROM aubrey_schema_migrations')).rows[0].count, '19');
+    assert.equal((await db.query('SELECT count(*) FROM aubrey_schema_migrations')).rows[0].count, expectedCount);
     writeFileSync(join(directory,'0013_test_failure.sql'), 'CREATE TABLE must_rollback(id integer); SELECT * FROM missing_relation;');
     await assert.rejects(run(options));
     assert.equal((await db.query("SELECT to_regclass('public.must_rollback') AS name")).rows[0].name, null);
@@ -34,7 +35,7 @@ it('release migrations are atomic, repeatable, checksum protected and adopt lega
     await assert.rejects(run(options), /explicitly verified/);
     await run({...options,baselineThrough:'0004_add_social_features.sql'});
     await assert.rejects(run({...options,baselineThrough:'0004_add_social_features.sql'}), /history already exists/);
-    assert.equal((await db.query('SELECT count(*) FROM aubrey_schema_migrations')).rows[0].count, '19');
+    assert.equal((await db.query('SELECT count(*) FROM aubrey_schema_migrations')).rows[0].count, expectedCount);
   } finally {
     await db?.end();
     await admin.query(`DROP DATABASE IF EXISTS "${name}" WITH (FORCE)`);

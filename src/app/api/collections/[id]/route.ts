@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { collections, collectionEntries, mediaItems, ratings, ratingSystems, follows } from "@/db/schema";
+import { collections, collectionEntries, mediaItems, ratings, ratingSystems, follows, mediaNotes } from "@/db/schema";
 import { eq, and, or, isNull, asc, sql } from "drizzle-orm";
 import { tmdb } from "@/lib/tmdb";
 
@@ -127,9 +127,42 @@ export async function GET(
       followingCount = Number(fgc[0]?.count || 0);
     }
 
+    // Universal Notes for owner and privacy-gated commentary for visitors
+    // Fetch collection owner's authoritative media notes so shared commentary can resolve
+    const ownerMediaNotes = await db.query.mediaNotes.findMany({
+      where: eq(mediaNotes.userId, col.userId),
+    });
+    const notesMap = new Map(ownerMediaNotes.map((n) => [n.mediaItemId, n.content]));
+
+    const processedEntries = col.entries.map((entry) => {
+      const universalNote = notesMap.get(entry.mediaItemId) || null;
+      // Authoritative note: universal mediaNotes takes precedence, falling back to legacy entry notes
+      const authoritativeNote = universalNote || entry.notes || null;
+      const legacyNote = entry.notes && universalNote && entry.notes !== universalNote ? entry.notes : null;
+
+      if (isOwner) {
+        return {
+          ...entry,
+          notes: authoritativeNote,
+          universalNote,
+          legacyNote,
+          shareNotes: Boolean(entry.shareNotes),
+        };
+      }
+      return {
+        ...entry,
+        // Visitors only see note if owner explicitly enabled shareNotes
+        notes: entry.shareNotes ? authoritativeNote : null,
+        universalNote: null,
+        legacyNote: null,
+        shareNotes: Boolean(entry.shareNotes),
+      };
+    });
+
     return NextResponse.json({
       collection: {
         ...col,
+        entries: processedEntries,
         clearLogoUrl,
         isFollowing,
         user: col.user

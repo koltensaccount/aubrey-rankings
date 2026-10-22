@@ -9,6 +9,7 @@ import {
   collectionEntries,
   unresolvedImportItems,
   importSourceMappings,
+  activityEvents,
 } from "@/db/schema";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
@@ -25,6 +26,8 @@ import {
   type SourceFilmCandidate,
 } from "./letterboxd-matching";
 import { TEST_WORKSPACE_USER_ID } from "@/lib/test-workspace";
+import { backfillUserActivityEvents } from "@/lib/timeline-activity";
+import { reconcileUserRankedWatchedStatus } from "@/lib/watched-status";
 
 export function filmIdentity(film: { title: string; year: number | null }) {
   return `${film.title.trim().toLowerCase()}::${film.year ?? ""}`;
@@ -60,6 +63,8 @@ function normalizeSummary(input: LetterboxdImportInput): LetterboxdExportSummary
         tags: [],
       })),
     watchlist: [],
+    ratingEvents: [],
+    watchedEvents: [],
     customLists: [],
     likedFilms: input
       .filter((f) => Boolean(f.isFavorite))
@@ -904,16 +909,27 @@ export async function executeLetterboxdImport(
         continue;
       }
 
-      const existingRev = await tx.query.reviews.findFirst({
-        where: (r, { and, eq }) =>
-          rev.letterboxdUri
-            ? and(
+      let existingRev = rev.letterboxdUri
+        ? await tx.query.reviews.findFirst({
+            where: (r, { and, eq }) =>
+              and(
                 eq(r.userId, userId),
                 eq(r.sourceService, "letterboxd"),
                 eq(r.sourceUri, rev.letterboxdUri),
-              )
-            : and(eq(r.userId, userId), eq(r.mediaItemId, mediaItem.id)),
-      });
+              ),
+          })
+        : null;
+
+      if (!existingRev) {
+        existingRev = await tx.query.reviews.findFirst({
+          where: (r, { and, eq }) =>
+            and(
+              eq(r.userId, userId),
+              eq(r.mediaItemId, mediaItem.id),
+              eq(r.sourceService, "letterboxd"),
+            ),
+        });
+      }
 
       const linkedRating = await tx.query.ratings.findFirst({
         where: (r, { and, eq, isNull }) =>
@@ -924,11 +940,8 @@ export async function executeLetterboxdImport(
           ),
       });
 
-      const pubDate = rev.reviewDate
-        ? new Date(rev.reviewDate)
-        : rev.watchedDate
-          ? new Date(rev.watchedDate)
-          : new Date();
+      // Strictly preserve genuine review date; never substitute watchedDate or current import timestamp
+      const pubDate = rev.reviewDate ? new Date(rev.reviewDate) : null;
 
       if (!existingRev) {
         await tx.insert(reviews).values({
@@ -942,23 +955,31 @@ export async function executeLetterboxdImport(
           visibility: "private", // strictly private
           isJournal: true,
           shareRating: false,
+          ratingValue: typeof rev.rating === "number" ? rev.rating * 2 : null,
+          sourceRating: rev.rating ?? null,
+          sourceScale: typeof rev.rating === "number" ? 5 : null,
           sourceService: "letterboxd",
           sourceUri: rev.letterboxdUri || null,
           watchedDate: rev.watchedDate || null,
           tags: rev.tags && rev.tags.length > 0 ? rev.tags : null,
           publishedAt: pubDate,
-          createdAt: pubDate,
+          createdAt: pubDate || new Date(),
           updatedAt: new Date(),
         });
         newReviewsCount++;
       } else if (existingRev.sourceService === "letterboxd" && !existingRev.draftContent) {
-        // Idempotent update without overwriting Aubrey user edits
+        // Idempotent update: recover authentic publication date and source URI
         await tx
           .update(reviews)
           .set({
             ratingId: linkedRating?.id ?? existingRev.ratingId,
+            ratingValue: typeof rev.rating === "number" ? rev.rating * 2 : existingRev.ratingValue,
+            sourceRating: rev.rating ?? existingRev.sourceRating,
+            sourceScale: typeof rev.rating === "number" ? 5 : existingRev.sourceScale,
+            sourceUri: rev.letterboxdUri || existingRev.sourceUri,
             watchedDate: rev.watchedDate || existingRev.watchedDate,
             tags: rev.tags && rev.tags.length > 0 ? rev.tags : existingRev.tags,
+            ...(pubDate ? { publishedAt: pubDate, createdAt: pubDate } : {}),
             updatedAt: new Date(),
           })
           .where(eq(reviews.id, existingRev.id));
@@ -1008,10 +1029,40 @@ export async function executeLetterboxdImport(
             ),
         });
 
-        const linkedReview = await tx.query.reviews.findFirst({
-          where: (r, { and, eq }) =>
-            and(eq(r.userId, userId), eq(r.mediaItemId, mediaItem.id)),
-        });
+        // Must avoid associating reviews with the wrong viewing or rewatch.
+        // A review is legitimately associated ONLY if:
+        // 1. Both share the exact same non-null watchedDate, OR
+        // 2. The review has no watchedDate, but its publishedAt date matches d.watchedDate.
+        // Reviews on different dates or for different rewatches remain unlinked.
+        let linkedReview = null;
+        if (d.watchedDate) {
+          const targetWatchDate = d.watchedDate;
+          linkedReview = await tx.query.reviews.findFirst({
+            where: (r, { and, eq }) =>
+              and(
+                eq(r.userId, userId),
+                eq(r.mediaItemId, mediaItem.id),
+                eq(r.watchedDate, targetWatchDate),
+              ),
+          });
+
+          if (!linkedReview) {
+            const potential = await tx.query.reviews.findMany({
+              where: (r, { and, eq, isNull }) =>
+                and(
+                  eq(r.userId, userId),
+                  eq(r.mediaItemId, mediaItem.id),
+                  isNull(r.watchedDate),
+                ),
+            });
+            linkedReview =
+              potential.find(
+                (p) =>
+                  p.publishedAt &&
+                  p.publishedAt.toISOString().slice(0, 10) === d.watchedDate,
+              ) || null;
+          }
+        }
 
         await tx.insert(diaryEntries).values({
           id: `diary_${randomUUID()}`,
@@ -1095,6 +1146,15 @@ export async function executeLetterboxdImport(
           updatedAt: new Date(),
         });
         newWatchlistCount++;
+      } else if (w.dateAdded) {
+        // Enrich existing watchlist item with authentic source dateAdded
+        await tx
+          .update(watchlistItems)
+          .set({
+            createdAt: new Date(w.dateAdded),
+            updatedAt: new Date(),
+          })
+          .where(eq(watchlistItems.id, existingWl.id));
       }
     }
 
@@ -1210,6 +1270,63 @@ export async function executeLetterboxdImport(
         details: unsupp.details,
       });
     }
+
+    // ------------------------------------------------------------------
+    // STEP 8: Activity Events for Dated Ratings, Watched Marks & Backfill
+    // ------------------------------------------------------------------
+    for (const re of summary.ratingEvents || []) {
+      const mediaItem = await resolveOrCreateMedia(re.title, re.year, re.letterboxdUri);
+      if (mediaItem) {
+        const uriPart = re.letterboxdUri ? normalizeLetterboxdFilmUri(re.letterboxdUri) : `${re.title.toLowerCase()}::${re.year ?? ""}`;
+        const eventKey = `act:rating:${uriPart}::${re.ratingDate || ""}`;
+        await tx
+          .insert(activityEvents)
+          .values({
+            id: `act_${randomUUID()}`,
+            userId,
+            mediaItemId: mediaItem.id,
+            eventType: "rating",
+            eventDate: re.ratingDate,
+            ratingValue: typeof re.rating === "number" ? re.rating * 2 : null,
+            sourceRating: re.rating,
+            sourceScale: 5,
+            sourceService: "letterboxd",
+            sourceUri: re.letterboxdUri || null,
+            sourceEventKey: eventKey,
+            createdAt: re.ratingDate ? new Date(re.ratingDate) : new Date(),
+            updatedAt: new Date(),
+          })
+          .onConflictDoNothing();
+      }
+    }
+
+    for (const we of summary.watchedEvents || []) {
+      if (we.watchedDate) {
+        const mediaItem = await resolveOrCreateMedia(we.title, we.year, we.letterboxdUri);
+        if (mediaItem) {
+          const uriPart = we.letterboxdUri ? normalizeLetterboxdFilmUri(we.letterboxdUri) : `${we.title.toLowerCase()}::${we.year ?? ""}`;
+          const eventKey = `act:watched_mark:${uriPart}::${we.watchedDate}`;
+          await tx
+            .insert(activityEvents)
+            .values({
+              id: `act_${randomUUID()}`,
+              userId,
+              mediaItemId: mediaItem.id,
+              eventType: "watched_mark",
+              eventDate: we.watchedDate,
+              sourceService: "letterboxd",
+              sourceUri: we.letterboxdUri || null,
+              sourceEventKey: eventKey,
+              createdAt: new Date(we.watchedDate),
+              updatedAt: new Date(),
+            })
+            .onConflictDoNothing();
+        }
+      }
+    }
+
+    await backfillUserActivityEvents(userId, tx);
+    await reconcileUserRankedWatchedStatus(userId, tx);
 
     if (Array.isArray(input)) {
       return { newCount, updatedCount };

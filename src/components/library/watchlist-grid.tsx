@@ -162,7 +162,7 @@ export function WatchlistGrid({ items: initialItems, onItemRemoved, onItemLogged
               >
                 {/* Poster Artwork */}
                 <div className="relative">
-                  <Link href={getPersonalMediaUrl(item.mediaItem.id)}>
+                  <Link href={getPersonalMediaUrl(item.mediaItem.id, { from: "/?tab=watchlist" })}>
                     <CinematicMediaCard
                       title={item.mediaItem.title}
                       posterPath={isEpisode ? item.mediaItem.stillPath || item.mediaItem.posterPath : item.mediaItem.posterPath}
@@ -183,7 +183,7 @@ export function WatchlistGrid({ items: initialItems, onItemRemoved, onItemLogged
                 <div className="p-3 space-y-1">
                   <h4 className="font-display text-base uppercase tracking-tight text-foreground truncate">
                     <Link
-                      href={getPersonalMediaUrl(item.mediaItem.id)}
+                      href={getPersonalMediaUrl(item.mediaItem.id, { from: "/?tab=watchlist" })}
                       className="hover:text-primary transition-colors"
                     >
                       {item.mediaItem.title}

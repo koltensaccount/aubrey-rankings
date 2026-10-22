@@ -1,8 +1,17 @@
+"use client";
+
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Tv, Star, UserCheck, Eye, Bookmark, Sparkles, BookOpen } from "lucide-react";
 import { resolvePosterUrl } from "@/lib/artwork";
 import { getTmdbImageUrl } from "@/lib/tmdb";
-import { getPersonalMediaUrl, getPublicMediaUrl } from "@/lib/media-url";
+import {
+  getPersonalMediaUrl,
+  getPublicMediaUrl,
+  getContextualBackInfo,
+  sanitizeInternalReturnUrl,
+} from "@/lib/media-url";
 
 interface MediaHeroBannerProps {
   media: {
@@ -19,6 +28,7 @@ interface MediaHeroBannerProps {
   };
   activeView: "overview" | "personal";
   isAuthenticated: boolean;
+  from?: string | null;
   hasPersonalActivity?: boolean;
   averageScore?: { average: number; count: number } | null;
   tmdbRating?: { score: number; votes: number | null } | null;
@@ -37,12 +47,76 @@ export function MediaHeroBanner({
   media,
   activeView,
   isAuthenticated,
+  from,
   hasPersonalActivity,
   averageScore,
   tmdbRating,
   seriesDetailsHref,
   personalSummary,
 }: MediaHeroBannerProps) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const urlFrom = searchParams?.get("from") || from || null;
+  const [returnPath, setReturnPath] = useState<string | null>(() => sanitizeInternalReturnUrl(urlFrom));
+
+  useEffect(() => {
+    // 1. If explicit 'from' is present, persist to state and session
+    if (urlFrom) {
+      const sanitized = sanitizeInternalReturnUrl(urlFrom);
+      if (sanitized) {
+        setReturnPath(sanitized);
+        try {
+          sessionStorage.setItem("aubrey_last_origin", sanitized);
+        } catch {}
+        return;
+      }
+    }
+
+    // 2. Otherwise check session storage
+    try {
+      const stored = sessionStorage.getItem("aubrey_last_origin");
+      const sanitizedStored = sanitizeInternalReturnUrl(stored);
+      if (sanitizedStored) {
+        setReturnPath(sanitizedStored);
+        return;
+      }
+    } catch {}
+
+    // 3. Otherwise inspect same-origin document.referrer
+    if (typeof document !== "undefined" && document.referrer) {
+      try {
+        const refUrl = new URL(document.referrer);
+        if (refUrl.origin === window.location.origin) {
+          const sanitizedRef = sanitizeInternalReturnUrl(`${refUrl.pathname}${refUrl.search}`);
+          if (sanitizedRef) {
+            setReturnPath(sanitizedRef);
+          }
+        }
+      } catch {}
+    }
+  }, [urlFrom]);
+
+  const backInfo = getContextualBackInfo(returnPath, activeView);
+
+  const handleBack = (e: React.MouseEvent) => {
+    // Ordinary client navigation prefers browser history to preserve scroll position and filters
+    if (typeof window !== "undefined" && window.history.length > 1) {
+      // Check if previous document referrer was an internal media page to prevent view-toggle loops
+      const prevWasSameMedia =
+        typeof document !== "undefined" &&
+        document.referrer &&
+        document.referrer.includes(`/media/${encodeURIComponent(media.id)}`);
+
+      if (!prevWasSameMedia) {
+        e.preventDefault();
+        router.back();
+        return;
+      }
+    }
+    // Fallback: regular link href navigation takes user directly to backInfo.href
+  };
+
   const stillUrl = media.stillPath ? getTmdbImageUrl(media.stillPath, "original") : null;
   const backdropUrl = media.backdropPath ? getTmdbImageUrl(media.backdropPath, "original") : null;
   const posterUrl = media.posterPath ? resolvePosterUrl(media.posterPath, "w500") : null;
@@ -59,8 +133,8 @@ export function MediaHeroBanner({
         ? `Season ${media.seasonNumber}`
         : null;
 
-  const publicOverviewUrl = getPublicMediaUrl(media.id);
-  const personalViewUrl = getPersonalMediaUrl(media.id);
+  const publicOverviewUrl = getPublicMediaUrl(media.id, { from: returnPath || undefined });
+  const personalViewUrl = getPersonalMediaUrl(media.id, { from: returnPath || undefined });
 
   return (
     <div className="relative w-full overflow-hidden bg-card border-b border-border">
@@ -82,11 +156,12 @@ export function MediaHeroBanner({
         {/* Top Floating Navigation */}
         <div className="absolute top-6 left-4 sm:left-8 z-20 flex items-center gap-2">
           <Link
-            href="/discover"
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card/85 backdrop-blur-sm text-xs font-semibold text-foreground hover:bg-surface transition-colors"
+            href={backInfo.href}
+            onClick={handleBack}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card/85 backdrop-blur-sm text-xs font-semibold text-foreground hover:bg-surface transition-colors cursor-pointer shadow-xs"
           >
             <ArrowLeft size={13} />
-            <span>Back to Explore</span>
+            <span>{backInfo.label}</span>
           </Link>
 
           {seriesDetailsHref && (

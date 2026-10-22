@@ -9,6 +9,7 @@ import {
   diaryEntries,
   watchlistItems,
   mediaItems,
+  activityEvents,
 } from "@/db/schema";
 import { desc, eq, and, isNull, inArray, count, isNotNull, sql } from "drizzle-orm";
 import { getRatingSummary } from "@/lib/scoring";
@@ -17,6 +18,7 @@ import { LibraryView, type LibraryTab } from "@/components/library/library-view"
 import type { TimelineEntry } from "@/components/library/cinematic-timeline";
 import type { WatchedItem } from "@/components/library/watched-grid";
 import type { WatchlistGridItem } from "@/components/library/watchlist-grid";
+import { getUserUnifiedTimeline } from "@/lib/timeline-activity";
 
 export default async function HomePage({
   searchParams,
@@ -134,68 +136,14 @@ export default async function HomePage({
   const resolvedSearchParams = searchParams ? await searchParams : {};
   const requestedTab = (resolvedSearchParams.tab?.toLowerCase() as LibraryTab) || "journal";
 
-  // 1. Fetch User Diary Entries (Paginated initial batch with total count)
-  const [rawDiaryEntries, diaryTotalCountRows] = await Promise.all([
-    db.query.diaryEntries.findMany({
-      where: eq(diaryEntries.userId, session.user.id),
-      orderBy: [desc(diaryEntries.watchedDate), desc(diaryEntries.createdAt)],
-      limit: 50,
-      with: {
-        mediaItem: true,
-        rating: {
-          with: {
-            ratingSystem: { columns: { scale: true, type: true } },
-            categoryScores: true,
-          },
-        },
-        review: true,
-      },
-    }),
-    db.select({ count: count() }).from(diaryEntries).where(eq(diaryEntries.userId, session.user.id)),
-  ]);
-
-  const totalDiaryCount = diaryTotalCountRows[0]?.count ?? 0;
-
-  // Calculate lifetime chronological ordinals and total viewing counts per media item
-  const ordinalsMap = new Map<string, number>();
-  const mediaTotalsMap = new Map<string, number>();
-
-  if (rawDiaryEntries.length > 0) {
-    const userOrdinals = await db.execute(sql`
-      SELECT 
-        id,
-        media_item_id as "mediaItemId",
-        ROW_NUMBER() OVER (
-          PARTITION BY media_item_id 
-          ORDER BY 
-            CASE WHEN watched_date IS NOT NULL AND watched_date != '' THEN 0 ELSE 1 END ASC,
-            watched_date ASC,
-            created_at ASC,
-            id ASC
-        )::int as ordinal,
-        COUNT(*) OVER (
-          PARTITION BY media_item_id
-        )::int as "totalViewings"
-      FROM diary_entries
-      WHERE user_id = ${session.user.id}
-    `);
-
-    for (const row of userOrdinals.rows as Array<{
-      id: string;
-      mediaItemId: string;
-      ordinal: number;
-      totalViewings: number;
-    }>) {
-      ordinalsMap.set(row.id, row.ordinal);
-      mediaTotalsMap.set(row.mediaItemId, row.totalViewings);
-    }
-  }
-
-  const userDiaryEntries = rawDiaryEntries.map((e) => ({
-    ...e,
-    ordinal: ordinalsMap.get(e.id) ?? 1,
-    totalViewings: mediaTotalsMap.get(e.mediaItemId) ?? 1,
-  })) as TimelineEntry[];
+  // 1. Fetch User Activity Events (Paginated initial batch with total count)
+  const timelineResult = await getUserUnifiedTimeline(session.user.id, {
+    limit: 100,
+    filter: (resolvedSearchParams.filter as any) || "all",
+  });
+  const userDiaryEntries = timelineResult.entries as unknown as TimelineEntry[];
+  const totalDiaryCount = timelineResult.totalCount;
+  const undatedItems = timelineResult.undatedEntries;
 
   // 2. Fetch User Reviews & Standalone Ratings
   const userReviews = await db.query.reviews.findMany({
@@ -333,7 +281,7 @@ export default async function HomePage({
   });
 
   // Also check if any loaded diary entry has a rating to attach if userRating is still null
-  rawDiaryEntries.forEach((entry) => {
+  userDiaryEntries.forEach((entry: any) => {
     if (watchedMap.has(entry.mediaItemId)) {
       const item = watchedMap.get(entry.mediaItemId)!;
       if (item.userRating === null || item.userRating === undefined) {
@@ -429,7 +377,7 @@ export default async function HomePage({
         userReviews={userReviews}
         standaloneRatings={ratedStandalone}
         watchedOnlyRecords={watchedOnlyStandalone}
-        undatedEntries={undatedReviews}
+        undatedEntries={undatedItems.length > 0 ? (undatedItems as any) : undatedReviews}
         watchedItems={watchedItems}
         watchlistItems={userWatchlist}
         collections={userCollections}

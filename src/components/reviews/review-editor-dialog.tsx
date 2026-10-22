@@ -31,6 +31,10 @@ export interface ReviewEditorData {
   tierColor?: string | null;
   shareRating?: boolean;
   isJournal?: boolean;
+  sourceRating?: number | null;
+  sourceScale?: number | null;
+  ratingValue?: number | null;
+  viewingId?: string | null;
 }
 
 interface ReviewEditorDialogProps {
@@ -89,6 +93,13 @@ export function ReviewEditorDialog({
   const [ratingSystems, setRatingSystems] = useState<any[]>([]);
   const [ratingSystemId, setRatingSystemId] = useState("");
   const [categoryValues, setCategoryValues] = useState<Record<string, number | null>>({});
+  const [starRating, setStarRating] = useState<number | null>(
+    existingReview?.sourceRating ?? (typeof existingReview?.score === "number" ? existingReview.score / 2 : null)
+  );
+  const [selectedViewingId, setSelectedViewingId] = useState<string | null>(
+    existingReview?.viewingId ?? null
+  );
+  const [userViewings, setUserViewings] = useState<any[]>([]);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -110,6 +121,20 @@ export function ReviewEditorDialog({
       setScoringMethod(initialDetailedRating ? "detailed" : "quick");
       setRatingSystemId(initialDetailedRating?.ratingSystemId || "");
       setCategoryValues(Object.fromEntries(initialDetailedRating?.categoryScores.map((score) => [score.categoryId, score.score]) || []));
+      setStarRating(
+        existingReview?.sourceRating ?? (typeof existingReview?.score === "number" ? existingReview.score / 2 : null)
+      );
+      setSelectedViewingId(existingReview?.viewingId ?? null);
+      if (mediaItemId) {
+        fetch(`/api/diary?mediaItemId=${encodeURIComponent(mediaItemId)}`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => {
+            if (d && Array.isArray(d.entries)) {
+              setUserViewings(d.entries);
+            }
+          })
+          .catch(() => {});
+      }
     }
   }, [isOpen, existingReview, initialQuickScore, initialDetailedRating, journalMode]);
 
@@ -216,6 +241,10 @@ export function ReviewEditorDialog({
             isSpoiler,
             shareRating: existingReview?.isJournal ? shareRating : undefined,
             ratingId: attachRating ? (existingReview?.ratingId || null) : null,
+            ratingValue: starRating !== null ? starRating * 2 : null,
+            sourceRating: starRating,
+            sourceScale: starRating !== null ? 5 : null,
+            viewingId: selectedViewingId || null,
           }),
         });
 
@@ -242,6 +271,10 @@ export function ReviewEditorDialog({
             visibility,
             isSpoiler,
             ratingId: attachRating ? (existingReview?.ratingId || null) : null,
+            ratingValue: starRating !== null ? starRating * 2 : null,
+            sourceRating: starRating,
+            sourceScale: starRating !== null ? 5 : null,
+            viewingId: selectedViewingId || null,
           }),
         });
 
@@ -286,8 +319,29 @@ export function ReviewEditorDialog({
   };
 
 
+  const initialContent = existingReview?.draftContent || existingReview?.content || "";
+  const initialTitle = existingReview?.title || "";
+  const initialRating = existingReview?.sourceRating ?? (typeof existingReview?.score === "number" ? existingReview.score / 2 : null);
+  const initialViewing = existingReview?.viewingId ?? null;
+
+  const isDirty =
+    content !== initialContent ||
+    title !== initialTitle ||
+    starRating !== initialRating ||
+    selectedViewingId !== initialViewing;
+
+  const handleRequestClose = () => {
+    if (saving || deleting) return;
+    if (isDirty) {
+      if (typeof window !== "undefined" && !window.confirm("You have unsaved changes. Discard them?")) {
+        return;
+      }
+    }
+    onClose();
+  };
+
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && !saving && onClose()}>
+    <Dialog open={isOpen} onOpenChange={(open) => !open && handleRequestClose()}>
       <DialogContent className="max-w-2xl flex flex-col overflow-hidden bg-card border border-border-dialog text-foreground p-4 sm:p-6 rounded-dialog shadow-dialog [&_button]:min-h-11 sm:[&_button]:min-h-0">
         <DialogHeader className="space-y-1 shrink-0 pr-10 text-left">
           <div className="flex items-center gap-3">
@@ -340,6 +394,66 @@ export function ReviewEditorDialog({
               disabled={saving || deleting}
             />
           </div>
+
+          {/* Review Rating (5-star half-star rating) */}
+          <div className="space-y-1.5 rounded-card border border-border bg-surface/50 p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Review Rating <span className="normal-case font-normal">(Optional)</span>
+              </span>
+              {starRating !== null && (
+                <button
+                  type="button"
+                  onClick={() => setStarRating(null)}
+                  className="text-[11px] font-semibold text-muted-foreground hover:text-foreground cursor-pointer"
+                >
+                  Clear Rating
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+              {[0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 4.5, 5].map((val) => (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setStarRating(val)}
+                  className={`px-2 py-1 rounded text-xs font-mono font-bold transition-colors cursor-pointer border ${
+                    starRating === val
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : "bg-surface hover:bg-surface-elevated text-muted-foreground border-border"
+                  }`}
+                >
+                  {val}★
+                </button>
+              ))}
+              {starRating !== null && (
+                <span className="ml-2 text-xs font-bold text-foreground font-mono">
+                  {(starRating * 2).toFixed(1)}/10
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Optional Viewing Association */}
+          {userViewings.length > 0 && (
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                Associate with a Viewing <span className="normal-case font-normal">(Optional)</span>
+              </label>
+              <select
+                value={selectedViewingId || ""}
+                onChange={(e) => setSelectedViewingId(e.target.value || null)}
+                className="w-full px-3 py-2 rounded-input bg-surface border border-border-input text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary focus:border-primary"
+              >
+                <option value="">None (Independent Review)</option>
+                {userViewings.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    Watched on {v.watchedDate || "undated"} {v.isRewatch ? "(Rewatch)" : ""}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Review Content */}
           <div className="space-y-1.5">
@@ -663,7 +777,7 @@ export function ReviewEditorDialog({
           <div className="flex flex-wrap items-center gap-2 justify-end">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleRequestClose}
               disabled={saving || deleting}
               className="px-3.5 py-2 rounded-button bg-surface border border-border text-xs font-semibold text-foreground hover:bg-surface-elevated transition-colors cursor-pointer"
             >

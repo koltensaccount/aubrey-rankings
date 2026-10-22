@@ -78,11 +78,12 @@ export function CompactDiaryList({
             <tbody className="divide-y divide-border">
               {entries.map((entry) => {
                 const totalLogs = mediaCountMap.get(entry.mediaItemId) || 1;
-                const formattedDate = entry.watchedDate || "Undated";
+                const formattedDate = (entry as any).eventDate || entry.watchedDate || "Undated";
                 const ratingScore = getScoreOnTen(entry);
                 const isEpisode =
                   entry.mediaItem.mediaType === "episode" ||
                   Boolean(entry.mediaItem.seasonNumber && entry.mediaItem.episodeNumber);
+                const badgeLabel = (entry as any).badgeLabel || (entry.isRewatch ? "Rewatch" : "Watched");
 
                 return (
                   <tr key={entry.id} className="hover:bg-surface/50 transition-colors">
@@ -94,7 +95,7 @@ export function CompactDiaryList({
                     {/* Media Item & Poster */}
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-3">
-                        <Link href={getPersonalMediaUrl(entry.mediaItem.id)} className={`shrink-0 rounded overflow-hidden border border-border bg-surface ${isEpisode ? "w-14 aspect-video" : "w-8 aspect-[2/3]"}`}>
+                        <Link href={getPersonalMediaUrl(entry.mediaItem.id, { from: "/?tab=journal" })} className={`shrink-0 rounded overflow-hidden border border-border bg-surface ${isEpisode ? "w-14 aspect-video" : "w-8 aspect-[2/3]"}`}>
                           <CinematicMediaCard
                             title={entry.mediaItem.title}
                             posterPath={isEpisode ? entry.mediaItem.stillPath || entry.mediaItem.posterPath : entry.mediaItem.posterPath}
@@ -104,7 +105,7 @@ export function CompactDiaryList({
                         </Link>
                         <div className="min-w-0">
                           <Link
-                            href={getPersonalMediaUrl(entry.mediaItem.id)}
+                            href={getPersonalMediaUrl(entry.mediaItem.id, { from: "/?tab=journal" })}
                             className="font-semibold text-foreground hover:text-primary transition-colors truncate block"
                           >
                             {entry.mediaItem.title}
@@ -150,7 +151,7 @@ export function CompactDiaryList({
                             : "bg-surface-raised text-muted-foreground border border-border"
                         }`}
                       >
-                        {entry.isRewatch ? "Rewatch" : "1st viewing"}
+                        {badgeLabel}
                       </span>
                     </td>
 
@@ -208,7 +209,7 @@ export function CompactDiaryList({
                   key={item.id}
                   className="p-3 rounded-card bg-card border border-border flex items-center gap-3"
                 >
-                  <Link href={getPersonalMediaUrl(item.mediaItem.id)} className={`shrink-0 rounded overflow-hidden border border-border ${isEpisode ? "w-16 aspect-video" : "w-10 aspect-[2/3]"}`}>
+                  <Link href={getPersonalMediaUrl(item.mediaItem.id, { from: "/?tab=journal" })} className={`shrink-0 rounded overflow-hidden border border-border ${isEpisode ? "w-16 aspect-video" : "w-10 aspect-[2/3]"}`}>
                     <CinematicMediaCard
                       title={item.mediaItem.title}
                       posterPath={isEpisode ? item.mediaItem.stillPath || item.mediaItem.posterPath : item.mediaItem.posterPath}
@@ -218,7 +219,7 @@ export function CompactDiaryList({
                   </Link>
                   <div className="min-w-0 flex-1">
                     <Link
-                      href={getPersonalMediaUrl(item.mediaItem.id)}
+                      href={getPersonalMediaUrl(item.mediaItem.id, { from: "/?tab=journal" })}
                       className="text-xs font-semibold text-foreground hover:text-primary truncate block"
                     >
                       {item.mediaItem.title}

@@ -522,7 +522,7 @@ export function CommunityFeed({
                     </div>
 
                     <Link
-                      href={getPublicMediaUrl(md.id)}
+                      href={getPublicMediaUrl(md.id, { from: "/feed" })}
                       className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-surface border border-border text-primary-text hover:border-primary/50 transition-colors shrink-0"
                     >
                       {isTvEp ? "Episode" : "Film"}
@@ -541,7 +541,7 @@ export function CommunityFeed({
                     <div className="min-w-0 flex-1 space-y-2">
                       <div className="flex items-center justify-between gap-2">
                         <Link
-                          href={getPublicMediaUrl(md.id)}
+                          href={getPublicMediaUrl(md.id, { from: "/feed" })}
                           className="font-display text-lg uppercase font-bold text-foreground hover:text-primary-text transition-colors line-clamp-1"
                         >
                           {md.title}

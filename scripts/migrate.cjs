@@ -38,7 +38,7 @@ async function run({ connectionString = process.env.DATABASE_URL, directory = pr
             if (!columns.some(c => c.column_name === col[1] && c.data_type === expected)) throw new Error(`Baseline missing/mismatched column: ${table}.${col[1]}`);
           }
         }
-        for (const match of sql.matchAll(/ALTER TABLE "(\w+)" ADD COLUMN IF NOT EXISTS "(\w+)" (text|real)/g)) {
+        for (const match of sql.matchAll(/ALTER TABLE "(\w+)" ADD COLUMN IF NOT EXISTS "(\w+)" (text|real|boolean)/g)) {
           const r = await client.query('SELECT 1 FROM information_schema.columns WHERE table_schema=\'public\' AND table_name=$1 AND column_name=$2 AND data_type=$3', [match[1], match[2], match[3]]);
           if (!r.rowCount) throw new Error(`Baseline missing column: ${match[1]}.${match[2]}`);
         }

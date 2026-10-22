@@ -1,11 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { ratings, categoryScores, collections, ratingSystems } from "@/db/schema";
+import { ratings, categoryScores, collections, ratingSystems, mediaNotes } from "@/db/schema";
 import { calculateWeightedAverage, withSavedWeights } from "@/lib/scoring";
 import { normalizeRatingScores } from "@/lib/rating-validation";
 import { nanoid } from "@/lib/utils";
 import { eq, and, isNull, sql } from "drizzle-orm";
+import { randomUUID } from "crypto";
+import { markRankedMediaAsWatched } from "@/lib/watched-status";
 
 export async function POST(request: NextRequest) {
   const session = await getServerSession();
@@ -251,6 +253,36 @@ export async function POST(request: NextRequest) {
               collectionId: collectionId || null,
               ...values,
             });
+
+        // Sync universal mediaNotes ONLY if personalNotes is explicitly provided with non-empty string,
+        // preventing accidental overwrites or erasures from rating updates
+        if (typeof personalNotes === "string" && personalNotes.trim().length > 0) {
+          const trimmed = personalNotes.trim();
+          const existingNote = await tx.query.mediaNotes.findFirst({
+            where: (mn: any, { and, eq }: any) =>
+              and(eq(mn.userId, session.user.id), eq(mn.mediaItemId, mediaItemId)),
+          });
+          if (existingNote) {
+            await tx
+              .update(mediaNotes)
+              .set({ content: trimmed, updatedAt: new Date() })
+              .where(eq(mediaNotes.id, existingNote.id));
+          } else {
+            await tx.insert(mediaNotes).values({
+              id: `note_${randomUUID()}`,
+              userId: session.user.id,
+              mediaItemId,
+              content: trimmed,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            });
+          }
+        }
+
+        // Ranking an item implies Watched status idempotently in global library
+        if (collectionId) {
+          await markRankedMediaAsWatched(session.user.id, mediaItemId, tx);
+        }
 
         if (isScoresUpdate) {
           // Replace atomically for both input formats; remove categories from any previous system.
