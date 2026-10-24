@@ -136,14 +136,14 @@ export async function GET(
 
     const processedEntries = col.entries.map((entry) => {
       const universalNote = notesMap.get(entry.mediaItemId) ?? null;
-      // Authoritative note: universal mediaNotes takes precedence, falling back to legacy entry notes
+      // Current Notes are canonical; only visitors retain intentionally shared legacy commentary.
       const authoritativeNote = notesMap.has(entry.mediaItemId) ? universalNote : entry.notes || null;
       const legacyNote = entry.notes && entry.notes !== universalNote ? entry.notes : null;
 
       if (isOwner) {
         return {
           ...entry,
-          notes: authoritativeNote,
+          notes: universalNote,
           universalNote,
           legacyNote,
           shareNotes: Boolean(entry.shareNotes),

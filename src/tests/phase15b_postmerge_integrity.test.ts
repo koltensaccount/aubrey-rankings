@@ -93,6 +93,9 @@ const { latestDatedRatedReview, personalReviewScore } = await import("../lib/rev
 
   it("Notes edit/read/clear respects canonical tombstones, legacy text and visitor privacy", async () => {
     const entryCtx = { params: Promise.resolve({ id: colId, entryId }) };
+    const legacyOnly = await (await readCollection(req(`/api/collections/${colId}`), ctx(colId))).json();
+    assert.equal(legacyOnly.collection.entries[0].notes, null);
+    assert.equal(legacyOnly.collection.entries[0].legacyNote, "Historical ranking passage");
     assert.equal((await saveNotes(req("/api/notes", "PUT", { mediaItemId: mediaId, content: "Current private thought" }))).status, 200);
     let owner = await (await readCollection(req(`/api/collections/${colId}`), ctx(colId))).json();
     assert.equal(owner.collection.entries[0].universalNote, "Current private thought");
