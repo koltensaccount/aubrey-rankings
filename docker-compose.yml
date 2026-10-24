@@ -53,6 +53,21 @@ services:
       - aubrey_internal
       - docker_default
 
+  # Opt-in, one-shot operational command. It shares only the internal database
+  # network and Compose-provided database URL; it is never exposed as HTTP.
+  aubrey-maintenance:
+    image: ${AUBREY_IMAGE:-ghcr.io/koltensaccount/aubrey-rankings:latest}
+    profiles: ["maintenance"]
+    depends_on:
+      aubrey-db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://aubrey:${DB_PASSWORD:?DB_PASSWORD is required}@aubrey-db:5432/aubrey_rankings
+    entrypoint: ["node", "scripts/reconcile-activity.cjs"]
+    networks:
+      - aubrey_internal
+
 volumes:
   aubrey_pgdata:
     name: aubrey_pgdata

@@ -30,10 +30,13 @@ Timeline reads no longer reconcile data or write to the database. Existing users
 can be reconciled explicitly, per user, after migration:
 
 ```sh
-DATABASE_URL=<intended-database-url> npx tsx scripts/reconcile-activity.ts <user-id>
+AUBREY_IMAGE=$(docker inspect --format '{{.Image}}' aubrey-web) \
+  docker compose --profile maintenance run --rm --no-deps aubrey-maintenance <user-id>
 ```
 
-The command runs in a transaction and is idempotent. It rebuilds missing source
+The image bundles the revision-matched maintenance command at build time. Compose
+supplies its existing internal database URL; no TypeScript tooling, credentials,
+or maintenance HTTP route is installed on the host. The command runs in a transaction and is idempotent. It rebuilds missing source
 activities and refreshes derived fields, without assigning dates to legacy
 standalone scores/status when their historical activity date is unknown.
 Reimport also invokes reconciliation for the importing user. No production

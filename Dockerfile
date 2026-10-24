@@ -19,6 +19,7 @@ ENV BETTER_AUTH_SECRET="build_placeholder_secret_for_compilation_only"
 ARG APP_REVISION=unknown
 ENV APP_REVISION=$APP_REVISION
 RUN npm run build
+RUN node scripts/build-maintenance-runner.mjs
 
 # Stage 4: Production Runner
 FROM base AS runner
@@ -50,6 +51,7 @@ COPY --from=builder /app/scripts/auto-update.sh ./scripts/auto-update.sh
 COPY --from=builder /app/scripts/backup.sh ./scripts/backup.sh
 COPY --from=builder /app/scripts/check-releases.sh ./scripts/check-releases.sh
 COPY --from=builder /app/scripts/install-updater.sh ./scripts/install-updater.sh
+COPY --from=builder --chown=nextjs:nodejs /app/.maintenance/reconcile-activity.cjs ./scripts/reconcile-activity.cjs
 COPY --from=builder /app/src/db/migrations ./migrations
 
 USER nextjs
