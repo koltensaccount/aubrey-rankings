@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { canShowReviewRating, reviewScoreOnTen } from "@/lib/review-rating";
+import { canShowReviewRating, reviewScoreOnTen, resolveReviewScoreOnTen } from "@/lib/review-rating";
 import { getCommunityAverage } from "@/lib/community-rating";
 import { db } from "@/db";
 import { mediaItems, ratings, collections, user, reviews } from "@/db/schema";
@@ -154,6 +154,7 @@ export async function GET(
               sourceService: true,
               ratingSystemId: true,
               tierId: true,
+              collectionId: true,
             },
             with: {
               ratingSystem: { columns: { scale: true, type: true } },
@@ -178,7 +179,7 @@ export async function GET(
       title: r.title,
       reviewText: r.content,
       contentFormat: r.contentFormat,
-      score: r.rating && canShowReviewRating(r) ? reviewScoreOnTen(r.rating) : null,
+      score: canShowReviewRating(r) ? resolveReviewScoreOnTen(r) : null,
       scale: 10,
       tier: canShowReviewRating(r) && r.rating?.tier
         ? {
@@ -189,7 +190,9 @@ export async function GET(
         : null,
       isSpoiler: r.isSpoiler,
       watchDate: null,
-      publishedAt: r.publishedAt,
+      sourceService: r.sourceService,
+      sourceReviewDate: r.sourceReviewDate,
+      publishedAt: r.sourceService === "letterboxd" ? r.sourceReviewDate : r.publishedAt,
       updatedAt: r.updatedAt,
       createdAt: r.createdAt,
       author: {
@@ -222,6 +225,9 @@ export async function GET(
     stats: {
       totalReviews: reviewsList.length,
       averageScore,
+      starsAverage: community ? community.starsAverage : null,
+      totalRatings: community ? community.count : 0,
+      distribution: community ? community.distribution : null,
     },
   });
 }

@@ -93,15 +93,24 @@ describe("Phase 13D review score consent", () => {
 
 describe("community rating eligibility and TMDB metadata", () => {
   const item = (i: number, scale = 10): CommunityRatingCandidate => ({ userId: `u${i}`, mediaItemId: "m", status: "published", visibility: "public", isJournal: true, shareRating: true, rating: { userId: `u${i}`, mediaItemId: "m", collectionId: null, tierId: null, sourceRating: null, sourceService: null, calculatedOverallScore: scale * 0.8, ratingSystemId: scale === 10 ? null : "rubric", ratingSystem: scale === 10 ? null : { scale, type: "numerical" } } });
-  it("requires 10 distinct eligible users and normalizes mixed scales", () => {
+  it("includes all eligible public ratings independently and normalizes mixed scales", () => {
     const nine = Array.from({ length: 9 }, (_, i) => item(i, i % 2 ? 5 : 100));
-    assert.equal(communityAverage("m", [...nine, nine[0]]), null);
-    assert.deepEqual(communityAverage("m", [...nine, item(9)]), { average: 8, count: 10 });
+    const withDuplicateUser = communityAverage("m", [...nine, nine[0]]);
+    assert.equal(withDuplicateUser?.count, 10);
+    assert.equal(withDuplicateUser?.average, 8);
+    const tenDistinct = communityAverage("m", [...nine, item(9)]);
+    assert.equal(tenDistinct?.count, 10);
+    assert.equal(tenDistinct?.average, 8);
+    assert.equal(tenDistinct?.starsAverage, 4);
+    assert.equal(tenDistinct?.distribution.buckets.length, 5);
   });
-  it("excludes unshared, nonpublic, imported, collection, tier and invalid scores", () => {
+  it("excludes unshared, nonpublic, invalid, collection, and tier scores", () => {
     const bad = [item(1), item(2), item(3), item(4), item(5), item(6), item(7), item(8)];
     bad[0].shareRating = false; bad[1].visibility = "unlisted"; bad[2].rating!.sourceRating = 4; bad[3].rating!.collectionId = "c"; bad[4].rating!.tierId = "t"; bad[5].rating!.calculatedOverallScore = NaN; bad[6].mediaItemId = "other"; bad[7].status = "draft";
-    assert.equal(communityAverage("m", [...Array.from({ length: 9 }, (_, i) => item(i + 20)), ...bad]), null);
+    assert.equal(communityAverage("m", bad), null);
+    const withValid = communityAverage("m", [item(99), ...bad]);
+    assert.equal(withValid?.count, 1);
+    assert.equal(withValid?.average, 8);
   });
   it("never invents TMDB scores or votes", () => {
     assert.equal(tmdbAudienceRating(null), null); assert.equal(tmdbAudienceRating({ vote_average: 0, vote_count: 0 }), null);

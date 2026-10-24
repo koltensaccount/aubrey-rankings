@@ -30,7 +30,7 @@ interface MediaHeroBannerProps {
   isAuthenticated: boolean;
   from?: string | null;
   hasPersonalActivity?: boolean;
-  averageScore?: { average: number; count: number } | null;
+  averageScore?: { average: number; count: number; starsAverage?: number; distribution?: any } | null;
   tmdbRating?: { score: number; votes: number | null } | null;
   seriesDetailsHref?: string | null;
   personalSummary?: {
@@ -219,12 +219,16 @@ export function MediaHeroBanner({
           {/* Public Overview Metrics */}
           {activeView === "overview" && (
             <div className="flex flex-wrap items-center gap-3 pt-1">
-              {averageScore && (
+              {averageScore && averageScore.count > 0 ? (
                 <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-surface/90 border border-border text-xs font-semibold backdrop-blur-xs">
                   <Star size={13} className="text-primary fill-primary" />
                   <span>★ {averageScore.average.toFixed(1)} / 10 Aubrey community</span>
-                  <span className="text-muted-foreground">({averageScore.count} ratings)</span>
+                  <span className="text-muted-foreground">({averageScore.count} {averageScore.count === 1 ? "rating" : "ratings"})</span>
                 </div>
+              ) : (
+                <span className="text-xs text-muted-foreground">
+                  No community ratings yet
+                </span>
               )}
               {tmdbRating && (
                 <p className="text-xs text-muted-foreground">
