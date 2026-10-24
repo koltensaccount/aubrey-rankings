@@ -7,9 +7,9 @@ import {
   watchlistItems,
   mediaItems,
 } from "@/db/schema";
-import { eq, and, desc, isNotNull, sql } from "drizzle-orm";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "crypto";
-import { reviewScoreOnTen } from "@/lib/review-rating";
+import type { ActivityDatabase } from "@/lib/activity-sync";
 
 export type ActivityFilter =
   | "all"
@@ -64,18 +64,23 @@ export interface UnifiedTimelineCardData {
  */
 export async function backfillUserActivityEvents(
   userId: string,
-  txOrDb: any = db
+  txOrDb: ActivityDatabase = db
 ): Promise<void> {
   // 0. Clean up any orphaned activity events where underlying source record was deleted
   await txOrDb.execute(sql`
     DELETE FROM activity_events
     WHERE user_id = ${userId}
       AND (
-        (diary_entry_id IS NOT NULL AND diary_entry_id NOT IN (SELECT id FROM diary_entries WHERE user_id = ${userId}))
-        OR (review_id IS NOT NULL AND review_id NOT IN (SELECT id FROM reviews WHERE user_id = ${userId} AND status = 'published'))
-        OR (watchlist_item_id IS NOT NULL AND watchlist_item_id NOT IN (SELECT id FROM watchlist_items WHERE user_id = ${userId}))
+        (event_type = 'viewing' AND diary_entry_id IS NOT NULL AND diary_entry_id NOT IN (SELECT id FROM diary_entries WHERE user_id = ${userId}))
+        OR (event_type = 'review' AND review_id IS NOT NULL AND review_id NOT IN (SELECT id FROM reviews WHERE user_id = ${userId} AND status = 'published'))
+        OR (event_type = 'watchlist' AND watchlist_item_id IS NOT NULL AND watchlist_item_id NOT IN (SELECT id FROM watchlist_items WHERE user_id = ${userId}))
       )
   `);
+
+  const existingEvents = await txOrDb.query.activityEvents.findMany({ where: eq(activityEvents.userId, userId) });
+  const viewingEvents = new Map(existingEvents.filter((a) => a.eventType === "viewing").map((a) => [a.diaryEntryId, a]));
+  const reviewEvents = new Map(existingEvents.filter((a) => a.eventType === "review").map((a) => [a.reviewId, a]));
+  const watchlistEvents = new Map(existingEvents.filter((a) => a.eventType === "watchlist").map((a) => [a.watchlistItemId, a]));
 
   // 1. Backfill from diary entries
   const userDiaries = await txOrDb.query.diaryEntries.findMany({
@@ -84,13 +89,7 @@ export async function backfillUserActivityEvents(
 
   for (const d of userDiaries) {
     const key = d.sourceEventKey || `diary:${d.id}`;
-    const existing = await txOrDb.query.activityEvents.findFirst({
-      where: and(
-        eq(activityEvents.userId, userId),
-        eq(activityEvents.eventType, "viewing"),
-        eq(activityEvents.diaryEntryId, d.id),
-      ),
-    });
+    const existing = viewingEvents.get(d.id);
 
     if (existing) {
       if (
@@ -98,7 +97,7 @@ export async function backfillUserActivityEvents(
         existing.ratingValue !== d.ratingValue ||
         existing.sourceRating !== d.sourceRating ||
         existing.isRewatch !== d.isRewatch ||
-        existing.notes !== d.notes
+        existing.notes !== d.notes || existing.reviewId !== d.reviewId || existing.sourceScale !== d.sourceScale
       ) {
         await txOrDb
           .update(activityEvents)
@@ -106,6 +105,7 @@ export async function backfillUserActivityEvents(
             eventDate: d.watchedDate || null,
             ratingValue: d.ratingValue,
             sourceRating: d.sourceRating,
+            reviewId: d.reviewId,
             sourceScale: d.sourceScale,
             isRewatch: d.isRewatch,
             notes: d.notes,
@@ -149,27 +149,22 @@ export async function backfillUserActivityEvents(
   for (const r of userReviews) {
     const key = `rev:${r.id}`;
     // Genuine review/activity date: strictly published date, never substituted with viewing/watched date or import timestamp
-    const pubDate = r.publishedAt ? r.publishedAt.toISOString().slice(0, 10) : null;
+    const pubDate = r.sourceService === "letterboxd" ? r.sourceReviewDate : r.publishedAt ? r.publishedAt.toISOString().slice(0, 10) : null;
     const eventDate = pubDate;
 
-    const existing = await txOrDb.query.activityEvents.findFirst({
-      where: and(
-        eq(activityEvents.userId, userId),
-        eq(activityEvents.eventType, "review"),
-        eq(activityEvents.reviewId, r.id),
-      ),
-    });
+    const existing = reviewEvents.get(r.id);
 
     if (existing) {
       if (
         existing.eventDate !== eventDate ||
         existing.ratingValue !== r.ratingValue ||
-        existing.sourceRating !== r.sourceRating
+        existing.sourceRating !== r.sourceRating || existing.diaryEntryId !== r.viewingId || existing.sourceScale !== r.sourceScale
       ) {
         await txOrDb
           .update(activityEvents)
           .set({
             eventDate,
+            diaryEntryId: r.viewingId,
             ratingValue: r.ratingValue,
             sourceRating: r.sourceRating,
             sourceScale: r.sourceScale,
@@ -210,15 +205,9 @@ export async function backfillUserActivityEvents(
 
   for (const w of userWl) {
     const key = `wl:${w.id}`;
-    const dateAdded = w.createdAt ? w.createdAt.toISOString().slice(0, 10) : null;
+    const dateAdded = w.sourceService ? w.sourceAddedDate : w.createdAt ? w.createdAt.toISOString().slice(0, 10) : null;
 
-    const existing = await txOrDb.query.activityEvents.findFirst({
-      where: and(
-        eq(activityEvents.userId, userId),
-        eq(activityEvents.eventType, "watchlist"),
-        eq(activityEvents.watchlistItemId, w.id),
-      ),
-    });
+    const existing = watchlistEvents.get(w.id);
 
     if (existing) {
       if (existing.eventDate !== dateAdded) {
@@ -248,6 +237,20 @@ export async function backfillUserActivityEvents(
         .onConflictDoNothing();
     }
   }
+  // Legacy standalone ratings have no verified historical scoring date. Keep
+  // their scores/status accessible as undated activity, never borrow watchDate.
+  await txOrDb.execute(sql`
+    INSERT INTO activity_events (id, user_id, media_item_id, event_type, event_date, rating_id, rating_value, source_event_key, created_at, updated_at)
+    SELECT 'act_backfill_rating_' || r.id, r.user_id, r.media_item_id,
+      CASE WHEN r.calculated_overall_score IS NOT NULL OR r.tier_id IS NOT NULL THEN 'rating' ELSE 'watched_mark' END,
+      NULL, r.id, r.calculated_overall_score, 'rating:' || r.id, r.created_at, r.updated_at
+    FROM ratings r WHERE r.user_id = ${userId} AND r.collection_id IS NULL AND r.source_service IS NULL
+      AND (r.calculated_overall_score IS NOT NULL OR r.tier_id IS NOT NULL OR r.is_watched)
+      AND NOT EXISTS (SELECT 1 FROM activity_events a WHERE a.user_id = r.user_id AND a.rating_id = r.id AND a.event_type IN ('rating', 'watched_mark'))
+      AND (r.calculated_overall_score IS NOT NULL OR r.tier_id IS NOT NULL OR NOT EXISTS (SELECT 1 FROM diary_entries d WHERE d.user_id = r.user_id AND d.media_item_id = r.media_item_id))
+    ON CONFLICT DO NOTHING
+  `);
+
 }
 
 /**
@@ -302,7 +305,7 @@ export function combineChronologicalActivities(
       }
     } else if (date) {
       // Check same-day review for the same media item ONLY if legitimately associated
-      // (e.g. matching viewingId/diaryEntryId or matching Letterboxd source URI)
+      // (matching viewingId/diaryEntryId)
       const key = `${mediaId}::${date}`;
       const candidates = reviewByMediaAndDate.get(key) || [];
       const unconsumed = candidates.find((r) => {
@@ -310,9 +313,7 @@ export function combineChronologicalActivities(
         const isExplicitlyLinked =
           r.diaryEntryId === (act.diaryEntryId || act.id) ||
           act.reviewId === (r.reviewId || r.id);
-        const isSameSourceSession =
-          Boolean(act.sourceUri && r.sourceUri && act.sourceUri === r.sourceUri);
-        return isExplicitlyLinked || isSameSourceSession;
+        return isExplicitlyLinked;
       });
       if (unconsumed) {
         matchingReview = unconsumed;
@@ -349,7 +350,7 @@ export function combineChronologicalActivities(
         sourceScale: act.sourceScale ?? matchingReview.sourceScale ?? null,
         isRewatch,
         notes: act.notes,
-        reviewContent: matchingReview.review?.content || matchingReview.notes || matchingReview.reviewContent,
+        reviewContent: matchingReview.review?.content ?? matchingReview.reviewContent,
         reviewTitle: matchingReview.review?.title || matchingReview.reviewTitle,
         reviewVisibility: matchingReview.review?.visibility || matchingReview.reviewVisibility || "private",
         reviewIsSpoiler: Boolean(matchingReview.review?.isSpoiler ?? matchingReview.reviewIsSpoiler),
@@ -407,7 +408,7 @@ export function combineChronologicalActivities(
         ratingValue: act.ratingValue,
         sourceRating: act.sourceRating,
         sourceScale: act.sourceScale,
-        reviewContent: act.review?.content || act.notes || act.reviewContent,
+        reviewContent: act.review?.content ?? act.reviewContent,
         reviewTitle: act.review?.title || act.reviewTitle,
         reviewVisibility: act.review?.visibility || act.reviewVisibility || "private",
         reviewIsSpoiler: Boolean(act.review?.isSpoiler ?? act.reviewIsSpoiler),
@@ -471,7 +472,7 @@ export function combineChronologicalActivities(
     }
     const aTime = new Date(a.createdAt).getTime();
     const bTime = new Date(b.createdAt).getTime();
-    return bTime - aTime;
+    return bTime - aTime || b.id.localeCompare(a.id);
   });
 
   return { datedItems, undatedItems };
@@ -488,7 +489,7 @@ export async function getUserUnifiedTimeline(
     offset?: number;
     filter?: ActivityFilter;
   } = {},
-  txOrDb: any = db
+  txOrDb: ActivityDatabase = db
 ): Promise<{
   entries: UnifiedTimelineCardData[];
   totalCount: number;
@@ -499,134 +500,100 @@ export async function getUserUnifiedTimeline(
   const offset = Math.max(options.offset ?? 0, 0);
   const filter = options.filter || "all";
 
-  // Ensure activity events are up-to-date
-  await backfillUserActivityEvents(userId, txOrDb);
-
-  // 1. Fetch user activity events with relations
+  // Reads never repair history. Reconciliation is an explicit maintenance action.
+  // Select card identities BEFORE loading relations. Pair only explicit links on
+  // the same genuine date, and choose each source at most once. This keeps card
+  // offsets stable, including when a review/viewing pair straddles a page edge.
+  const selected = await txOrDb.execute(sql`
+    WITH source AS (
+      SELECT a.*, m.media_type, m.season_number, m.episode_number,
+        CASE WHEN a.event_type = 'review' THEN
+          CASE WHEN r.source_service = 'letterboxd' THEN r.source_review_date ELSE to_char(r.published_at, 'YYYY-MM-DD') END
+        WHEN a.event_type = 'viewing' THEN d.watched_date
+        WHEN a.event_type = 'watchlist' THEN
+          CASE WHEN w.source_service IS NOT NULL THEN w.source_added_date ELSE to_char(w.created_at, 'YYYY-MM-DD') END
+        ELSE a.event_date END AS true_date,
+        d.review_id AS linked_review_id, r.viewing_id AS linked_viewing_id,
+        CASE WHEN a.event_type = 'viewing' THEN d.rating_value WHEN a.event_type = 'review' THEN r.rating_value ELSE a.rating_value END AS true_rating,
+        CASE WHEN a.event_type = 'viewing' THEN d.source_rating WHEN a.event_type = 'review' THEN r.source_rating ELSE a.source_rating END AS true_source_rating,
+        d.is_rewatch AS true_rewatch
+      FROM activity_events a
+      JOIN media_items m ON m.id = a.media_item_id
+      LEFT JOIN diary_entries d ON d.id = a.diary_entry_id AND d.user_id = a.user_id
+      LEFT JOIN reviews r ON r.id = a.review_id AND r.user_id = a.user_id
+      LEFT JOIN watchlist_items w ON w.id = a.watchlist_item_id AND w.user_id = a.user_id
+      WHERE a.user_id = ${userId}
+        AND (a.event_type <> 'review' OR r.status = 'published')
+        AND (a.event_type <> 'viewing' OR d.id IS NOT NULL)
+        AND (a.event_type <> 'watchlist' OR w.id IS NOT NULL)
+    ), review_pairs AS (
+      SELECT DISTINCT ON (r.id) v.id AS viewing, r.id AS review
+      FROM source v JOIN source r ON v.event_type = 'viewing' AND r.event_type = 'review'
+        AND v.media_item_id = r.media_item_id AND v.true_date = r.true_date
+        AND (v.linked_review_id = r.review_id OR r.linked_viewing_id = v.diary_entry_id)
+      ORDER BY r.id, v.id
+    ), pairs AS (
+      SELECT DISTINCT ON (viewing) viewing, review FROM review_pairs ORDER BY viewing, review
+    ), cards AS (
+      SELECT s.id, p.review AS partner, s.true_date, s.created_at,
+        s.diary_entry_id, s.media_item_id
+      FROM source s LEFT JOIN pairs p ON p.viewing = s.id
+      LEFT JOIN source pr ON pr.id = p.review
+      WHERE NOT EXISTS (SELECT 1 FROM pairs x WHERE x.review = s.id)
+        AND (${filter} = 'all'
+          OR (${filter} = 'films' AND s.media_type = 'movie')
+          OR (${filter} = 'tv' AND (s.media_type IN ('tv', 'episode') OR s.season_number IS NOT NULL))
+          OR (${filter} = 'viewings' AND s.event_type IN ('viewing', 'watched_mark'))
+          OR (${filter} = 'reviews' AND (s.event_type = 'review' OR p.review IS NOT NULL))
+          OR (${filter} = 'watchlist' AND s.event_type = 'watchlist')
+          OR (${filter} = 'ratings' AND (s.event_type = 'rating' OR s.true_rating IS NOT NULL OR s.true_source_rating IS NOT NULL OR pr.true_rating IS NOT NULL OR pr.true_source_rating IS NOT NULL))
+          OR (${filter} = 'rewatches' AND s.event_type = 'viewing' AND (s.true_rewatch OR EXISTS (
+            SELECT 1 FROM diary_entries earlier JOIN diary_entries current ON current.id = s.diary_entry_id
+            WHERE earlier.user_id = ${userId} AND earlier.media_item_id = s.media_item_id
+            AND (coalesce(earlier.watched_date, '9999'), earlier.created_at, earlier.id) < (coalesce(current.watched_date, '9999'), current.created_at, current.id)
+          )))
+        )
+    ), dated AS (
+      SELECT *, count(*) OVER ()::int AS total FROM cards WHERE true_date IS NOT NULL
+      ORDER BY true_date DESC, created_at DESC, id DESC LIMIT ${limit} OFFSET ${offset}
+    )
+    SELECT id, partner, true_date AS "eventDate", total, false AS undated FROM dated
+    UNION ALL
+    SELECT id, partner, true_date, (SELECT count(*)::int FROM cards WHERE true_date IS NOT NULL), true FROM cards WHERE true_date IS NULL
+    UNION ALL
+    SELECT NULL, NULL, NULL, (SELECT count(*)::int FROM cards WHERE true_date IS NOT NULL), false
+  `);
+  type SelectedCard = { id: string | null; partner: string | null; eventDate: string | null; total: number; undated: boolean };
+  const rows = selected.rows as SelectedCard[];
+  const ids = rows.flatMap((r) => r.id ? [r.id, ...(r.partner ? [r.partner] : [])] : []);
+  const totalCount = rows[0]?.total ?? 0;
+  if (!ids.length) return { entries: [], undatedEntries: [], totalCount, hasMore: offset < totalCount };
   const userActivities = await txOrDb.query.activityEvents.findMany({
-    where: eq(activityEvents.userId, userId),
-    orderBy: [desc(activityEvents.eventDate), desc(activityEvents.createdAt), desc(activityEvents.id)],
-    with: {
-      mediaItem: true,
-      diaryEntry: {
-        with: {
-          rating: {
-            with: {
-              ratingSystem: { columns: { scale: true, type: true } },
-              categoryScores: true,
-            },
-          },
-          review: true,
-        },
-      },
-      review: true,
-      rating: {
-        with: {
-          ratingSystem: { columns: { scale: true, type: true } },
-          categoryScores: true,
-        },
-      },
-      watchlistItem: true,
-    },
+    where: and(eq(activityEvents.userId, userId), inArray(activityEvents.id, ids)),
+    with: { mediaItem: true, diaryEntry: true, review: true },
   });
-
-  // 2. Compute ordinals and total viewings per media item
   const ordinalsMap = new Map<string, number>();
   const mediaTotalsMap = new Map<string, number>();
-
+  const mediaIds = [...new Set(userActivities.map((a: { mediaItemId: string }) => a.mediaItemId))];
   const userOrdinals = await txOrDb.execute(sql`
-    SELECT 
-      id,
-      media_item_id as "mediaItemId",
-      ROW_NUMBER() OVER (
-        PARTITION BY media_item_id 
-        ORDER BY 
-          CASE WHEN watched_date IS NOT NULL AND watched_date != '' THEN 0 ELSE 1 END ASC,
-          watched_date ASC,
-          created_at ASC,
-          id ASC
-      )::int as ordinal,
-      COUNT(*) OVER (
-        PARTITION BY media_item_id
-      )::int as "totalViewings"
-    FROM diary_entries
-    WHERE user_id = ${userId}
+    SELECT id, media_item_id AS "mediaItemId",
+      row_number() OVER (PARTITION BY media_item_id ORDER BY watched_date ASC NULLS LAST, created_at, id)::int AS ordinal,
+      count(*) OVER (PARTITION BY media_item_id)::int AS "totalViewings"
+    FROM diary_entries WHERE user_id = ${userId} AND media_item_id IN (${sql.join(mediaIds.map((id) => sql`${id}`), sql`, `)})
   `);
-
-  for (const row of userOrdinals.rows as Array<{
-    id: string;
-    mediaItemId: string;
-    ordinal: number;
-    totalViewings: number;
-  }>) {
+  for (const row of userOrdinals.rows as Array<{ id: string; mediaItemId: string; ordinal: number; totalViewings: number }>) {
     ordinalsMap.set(row.id, row.ordinal);
     mediaTotalsMap.set(row.mediaItemId, row.totalViewings);
   }
-
-  // 3. Normalize and combine
-  const { datedItems, undatedItems } = combineChronologicalActivities(
-    userActivities,
-    ordinalsMap,
-    mediaTotalsMap
-  );
-
-  // 4. Apply filter if specified
-  const applyFilter = (items: UnifiedTimelineCardData[]) => {
-    if (filter === "all") return items;
-    return items.filter((e) => {
-      const isEpisode =
-        e.mediaItem?.mediaType === "episode" ||
-        Boolean(e.mediaItem?.seasonNumber && e.mediaItem?.episodeNumber);
-
-      if (filter === "films") {
-        return e.mediaItem?.mediaType === "movie" || (!isEpisode && e.mediaItem?.mediaType !== "tv");
-      }
-      if (filter === "tv") {
-        return isEpisode || e.mediaItem?.mediaType === "tv";
-      }
-      if (filter === "rewatches") {
-        const ordinal = e.ordinal ?? ordinalsMap.get(e.diaryEntryId || e.id) ?? 1;
-        return Boolean(e.isRewatch || ordinal > 1);
-      }
-      if (filter === "viewings") {
-        return (
-          e.eventType === "viewing" ||
-          e.eventType === "viewing_and_review" ||
-          e.eventType === "watched_mark"
-        );
-      }
-      if (filter === "reviews") {
-        return (
-          e.eventType === "review" ||
-          e.eventType === "viewing_and_review" ||
-          Boolean(e.reviewContent || e.reviewId)
-        );
-      }
-      if (filter === "ratings") {
-        return (
-          e.eventType === "rating" ||
-          typeof e.ratingValue === "number" ||
-          typeof e.sourceRating === "number"
-        );
-      }
-      if (filter === "watchlist") {
-        return e.eventType === "watchlist";
-      }
-      return true;
-    });
-  };
-
-  const filteredDated = applyFilter(datedItems);
-  const filteredUndated = applyFilter(undatedItems);
-
-  const pagedEntries = filteredDated.slice(offset, offset + limit);
-  const totalCount = filteredDated.length;
-  const hasMore = offset + pagedEntries.length < totalCount;
-
-  return {
-    entries: pagedEntries,
-    totalCount,
-    hasMore,
-    undatedEntries: filteredUndated,
-  };
+  const datesById = new Map(rows.flatMap((r) => r.id ? [[r.id, r.eventDate] as const, ...(r.partner ? [[r.partner, r.eventDate] as const] : [])] : []));
+  const normalized = userActivities.map((a) => {
+    const source = a.eventType === "viewing" ? a.diaryEntry : a.eventType === "review" ? a.review : undefined;
+    const eventDate = datesById.get(a.id) ?? null;
+    return { ...a, eventDate, ...(source ? { ratingValue: source.ratingValue, sourceRating: source.sourceRating, sourceScale: source.sourceScale } : {}),
+      ...(a.eventType === "viewing" && a.diaryEntry ? { isRewatch: a.diaryEntry.isRewatch, reviewId: a.diaryEntry.reviewId, notes: a.diaryEntry.notes } : {}),
+      ...(a.eventType === "review" && a.review ? { diaryEntryId: a.review.viewingId } : {}),
+    };
+  });
+  const { datedItems, undatedItems } = combineChronologicalActivities(normalized, ordinalsMap, mediaTotalsMap);
+  return { entries: datedItems, undatedEntries: undatedItems, totalCount, hasMore: offset + rows.filter((r) => r.id && !r.undated).length < totalCount };
 }

@@ -1,5 +1,7 @@
 "use client";
 
+import { personalReviewScore } from "@/lib/review-rating";
+
 import { useState, useEffect, useMemo, useRef } from "react";
 import {
   Dialog,
@@ -67,7 +69,7 @@ export function ReviewEditorDialog({
   const isEditing = Boolean(existingReview?.id);
   const [title, setTitle] = useState(existingReview?.title || "");
   const [content, setContent] = useState(
-    existingReview?.draftContent || existingReview?.content || ""
+    existingReview?.draftContent ?? existingReview?.content ?? ""
   );
   const [contentFormat, setContentFormat] = useState<ReviewContentFormat>(
     existingReview?.draftContent ? existingReview.draftContentFormat || existingReview.contentFormat || "plain" : existingReview?.contentFormat || "markdown"
@@ -94,7 +96,7 @@ export function ReviewEditorDialog({
   const [ratingSystemId, setRatingSystemId] = useState("");
   const [categoryValues, setCategoryValues] = useState<Record<string, number | null>>({});
   const [starRating, setStarRating] = useState<number | null>(
-    existingReview?.sourceRating ?? (typeof existingReview?.score === "number" ? existingReview.score / 2 : null)
+    personalReviewScore(existingReview ?? {}) === null ? null : personalReviewScore(existingReview ?? {})! / 2
   );
   const [selectedViewingId, setSelectedViewingId] = useState<string | null>(
     existingReview?.viewingId ?? null
@@ -105,7 +107,7 @@ export function ReviewEditorDialog({
   useEffect(() => {
     if (isOpen) {
       setTitle(existingReview?.title || "");
-      setContent(existingReview?.draftContent || existingReview?.content || "");
+      setContent(existingReview?.draftContent ?? existingReview?.content ?? "");
       setContentFormat(existingReview?.draftContent ? existingReview.draftContentFormat || existingReview.contentFormat || "plain" : existingReview?.contentFormat || "markdown");
       setMode("write");
       setVisibility(existingReview?.visibility || "private");
@@ -122,7 +124,7 @@ export function ReviewEditorDialog({
       setRatingSystemId(initialDetailedRating?.ratingSystemId || "");
       setCategoryValues(Object.fromEntries(initialDetailedRating?.categoryScores.map((score) => [score.categoryId, score.score]) || []));
       setStarRating(
-        existingReview?.sourceRating ?? (typeof existingReview?.score === "number" ? existingReview.score / 2 : null)
+        personalReviewScore(existingReview ?? {}) === null ? null : personalReviewScore(existingReview ?? {})! / 2
       );
       setSelectedViewingId(existingReview?.viewingId ?? null);
       if (mediaItemId) {
@@ -319,16 +321,20 @@ export function ReviewEditorDialog({
   };
 
 
-  const initialContent = existingReview?.draftContent || existingReview?.content || "";
+  const initialContent = existingReview?.draftContent ?? existingReview?.content ?? "";
   const initialTitle = existingReview?.title || "";
-  const initialRating = existingReview?.sourceRating ?? (typeof existingReview?.score === "number" ? existingReview.score / 2 : null);
+  const initialRating = personalReviewScore(existingReview ?? {}) === null ? null : personalReviewScore(existingReview ?? {})! / 2;
   const initialViewing = existingReview?.viewingId ?? null;
 
   const isDirty =
     content !== initialContent ||
     title !== initialTitle ||
     starRating !== initialRating ||
-    selectedViewingId !== initialViewing;
+    selectedViewingId !== initialViewing ||
+    visibility !== (existingReview?.visibility || "private") ||
+    isSpoiler !== Boolean(existingReview?.isSpoiler) ||
+    shareRating !== Boolean(existingReview?.shareRating) ||
+    (journalMode && (quickScoreTouched || JSON.stringify(categoryValues) !== JSON.stringify(Object.fromEntries(initialDetailedRating?.categoryScores.map((s) => [s.categoryId, s.score]) || []))));
 
   const handleRequestClose = () => {
     if (saving || deleting) return;

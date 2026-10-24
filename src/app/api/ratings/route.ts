@@ -1,3 +1,4 @@
+import { syncStandaloneRatingActivity } from "@/lib/activity-sync";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
@@ -10,7 +11,7 @@ import { randomUUID } from "crypto";
 import { markRankedMediaAsWatched } from "@/lib/watched-status";
 
 export async function POST(request: NextRequest) {
-  const session = await getServerSession();
+  const session = await getServerSession(request);
   if (!session)
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await request.json().catch(() => null);
@@ -217,14 +218,8 @@ export async function POST(request: NextRequest) {
             parsedWatchDate === undefined
               ? (existing?.watchDate ?? null)
               : parsedWatchDate,
-          reviewText:
-            reviewText === undefined
-              ? (existing?.reviewText ?? null)
-              : reviewText,
-          personalNotes:
-            personalNotes === undefined
-              ? (existing?.personalNotes ?? null)
-              : personalNotes,
+          reviewText: existing?.reviewText ?? null,
+          personalNotes: existing?.personalNotes ?? null,
           shareCommentary:
             shareCommentary === undefined
               ? (existing?.shareCommentary ?? false)
@@ -254,29 +249,15 @@ export async function POST(request: NextRequest) {
               ...values,
             });
 
-        // Sync universal mediaNotes ONLY if personalNotes is explicitly provided with non-empty string,
-        // preventing accidental overwrites or erasures from rating updates
-        if (typeof personalNotes === "string" && personalNotes.trim().length > 0) {
-          const trimmed = personalNotes.trim();
-          const existingNote = await tx.query.mediaNotes.findFirst({
-            where: (mn: any, { and, eq }: any) =>
-              and(eq(mn.userId, session.user.id), eq(mn.mediaItemId, mediaItemId)),
+        // Compatibility input writes only canonical Notes, including intentional clearing.
+        if (personalNotes !== undefined) {
+          await tx.insert(mediaNotes).values({
+            id: `note_${randomUUID()}`, userId: session.user.id, mediaItemId,
+            content: typeof personalNotes === "string" ? personalNotes.trim() : "",
+          }).onConflictDoUpdate({
+            target: [mediaNotes.userId, mediaNotes.mediaItemId],
+            set: { content: typeof personalNotes === "string" ? personalNotes.trim() : "", updatedAt: new Date() },
           });
-          if (existingNote) {
-            await tx
-              .update(mediaNotes)
-              .set({ content: trimmed, updatedAt: new Date() })
-              .where(eq(mediaNotes.id, existingNote.id));
-          } else {
-            await tx.insert(mediaNotes).values({
-              id: `note_${randomUUID()}`,
-              userId: session.user.id,
-              mediaItemId,
-              content: trimmed,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-            });
-          }
         }
 
         // Ranking an item implies Watched status idempotently in global library
@@ -305,6 +286,7 @@ export async function POST(request: NextRequest) {
         where: (r, { eq }) => eq(r.id, ratingId),
         with: { categoryScores: true, tier: true },
       });
+      if (rating && (!existing || isScoresUpdate || tierId !== undefined || rating.isWatched !== existing.isWatched)) await syncStandaloneRatingActivity(rating, tx);
       return NextResponse.json({
         success: true,
         ratingId,
@@ -331,7 +313,7 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
-  const session = await getServerSession();
+  const session = await getServerSession(request);
   if (!session) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }

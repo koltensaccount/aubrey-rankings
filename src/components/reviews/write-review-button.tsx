@@ -105,7 +105,7 @@ export function WriteReviewButton({
         }
       >
         <Pencil size={13} />
-        <span>{existingReview || initialQuickScore !== null || initialDetailedRating ? "Edit Journal Entry" : "Add to Journal"}</span>
+        <span>{existingReview && !isCanonicalButton ? "Edit Review" : "Write Review"}</span>
       </button>
 
       <ReviewEditorDialog
@@ -114,10 +114,9 @@ export function WriteReviewButton({
         mediaItemId={mediaItemId}
         mediaTitle={mediaTitle}
         posterPath={posterPath}
-        existingReview={existingReview}
+        existingReview={isCanonicalButton ? null : existingReview}
         initialQuickScore={initialQuickScore}
         initialDetailedRating={initialDetailedRating}
-        journalMode
         onSaved={(createdReview) => {
           handleClose();
           if (createdReview?.id && createdReview?.status === "published" && createdReview?.visibility !== "private") {

@@ -112,7 +112,11 @@ export default async function ReviewPage({ params }: ReviewPageProps) {
     isSpoiler: review.isSpoiler,
     isJournal: review.isJournal,
     shareRating: isAuthor ? review.shareRating : false,
-    publishedAt: review.publishedAt ? review.publishedAt.toISOString() : null,
+    ratingValue: canShowReviewRating(review, session?.user.id) ? review.ratingValue : null,
+    sourceRating: canShowReviewRating(review, session?.user.id) ? review.sourceRating : null,
+    sourceScale: canShowReviewRating(review, session?.user.id) ? review.sourceScale : null,
+    viewingId: isAuthor ? review.viewingId : null,
+    publishedAt: review.sourceService === "letterboxd" ? review.sourceReviewDate : review.publishedAt ? review.publishedAt.toISOString() : null,
     createdAt: review.createdAt.toISOString(),
     updatedAt: review.updatedAt.toISOString(),
     author: {

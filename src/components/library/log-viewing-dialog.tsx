@@ -1,5 +1,6 @@
 "use client";
 
+import { viewingSaveTarget } from "@/lib/viewing-request";
 import { useEffect, useState } from "react";
 import { X, Calendar, Star, Film, Tv, Check, Search, ChevronRight } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
@@ -29,7 +30,7 @@ interface LogViewingDialogProps {
     notes?: string | null;
     tags?: string[] | null;
   } | null;
-  onSaved: (savedEntry: any) => void;
+  onSaved: (savedEntry: any) => void | Promise<void>;
 }
 
 export function LogViewingDialog({
@@ -52,7 +53,7 @@ export function LogViewingDialog({
   const [tvEpisode, setTvEpisode] = useState<number>(initialMediaItem?.episodeNumber || 1);
 
   const [watchedDate, setWatchedDate] = useState(
-    existingEntry?.watchedDate || new Date().toISOString().slice(0, 10)
+    existingEntry ? existingEntry.watchedDate || "" : new Date().toISOString().slice(0, 10)
   );
   const [isRewatch, setIsRewatch] = useState(existingEntry?.isRewatch || false);
   const [ratingValue, setRatingValue] = useState<number | null>(
@@ -78,7 +79,7 @@ export function LogViewingDialog({
 
   useEffect(() => {
     if (existingEntry) {
-      setWatchedDate(existingEntry.watchedDate || new Date().toISOString().slice(0, 10));
+      setWatchedDate(existingEntry.watchedDate || "");
       setIsRewatch(Boolean(existingEntry.isRewatch));
       setRatingValue(typeof existingEntry.ratingValue === "number" ? existingEntry.ratingValue : null);
       setNotes(existingEntry.notes || "");
@@ -166,9 +167,7 @@ export function LogViewingDialog({
       .filter(Boolean);
 
     try {
-      const isRealDiaryId = Boolean(existingEntry?.id && existingEntry.id.startsWith("diary_"));
-      const url = isRealDiaryId ? `/api/diary/${encodeURIComponent(existingEntry!.id)}` : "/api/diary";
-      const method = isRealDiaryId ? "PATCH" : "POST";
+      const { url, method } = viewingSaveTarget(existingEntry);
 
       let finalMediaId = selectedMedia.id;
       let finalMediaType = selectedMedia.mediaType || "movie";
@@ -194,7 +193,7 @@ export function LogViewingDialog({
           watchedDate: watchedDate || null,
           isRewatch,
           ratingValue,
-          notes: notes.trim() || null,
+
           tags: tagsArray.length > 0 ? tagsArray : null,
         }),
       });
@@ -204,7 +203,7 @@ export function LogViewingDialog({
         throw new Error(data.error || "Failed to save viewing log");
       }
 
-      onSaved(data.entry || { ...data, mediaItem: selectedMedia });
+      await onSaved(data.entry || { ...data, mediaItem: selectedMedia });
       onClose();
     } catch (err: any) {
       setError(err.message || "Something went wrong saving your viewing log.");
@@ -483,11 +482,11 @@ export function LogViewingDialog({
             </div>
           </div>
 
-          {/* Notes */}
-          <div className="space-y-1.5">
+          {/* Historical writing remains accessible without creating another Notes field. */}
+          {notes && <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold uppercase tracking-wider text-muted-foreground block">
-                Viewing Notes
+                Legacy Viewing Notes (read only)
               </label>
               <span className="text-[10px] text-muted-foreground/80">Specific to this watch date</span>
             </div>
@@ -495,10 +494,10 @@ export function LogViewingDialog({
               rows={3}
               placeholder="Private notes specific to this viewing session..."
               value={notes}
-              onChange={(e) => setNotes(e.target.value)}
+              readOnly
               className="w-full px-3 py-2 rounded-input bg-surface border border-border text-foreground text-xs placeholder:text-muted-foreground/60 focus:outline-none focus:ring-1 focus:ring-primary resize-y"
             />
-          </div>
+          </div>}
 
           {/* Tags */}
           <div className="space-y-1.5">

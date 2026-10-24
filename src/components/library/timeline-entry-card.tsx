@@ -118,7 +118,7 @@ export function TimelineEntryCard({
 
   // Visibility indicator
   const visibility = entry.reviewVisibility || entry.review?.visibility || "private";
-  const reviewContent = entry.reviewContent || entry.review?.content || entry.notes;
+  const reviewContent = entry.reviewContent || entry.review?.content;
   const isSpoiler = Boolean(entry.reviewIsSpoiler ?? entry.review?.isSpoiler);
 
   return (

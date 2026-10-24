@@ -1,5 +1,6 @@
 "use client";
 
+import { personalReviewScore } from "@/lib/review-rating";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -42,6 +43,10 @@ interface ReviewDetailClientProps {
     isSpoiler: boolean;
     isJournal: boolean;
     shareRating: boolean;
+    ratingValue?: number | null;
+    sourceRating?: number | null;
+    sourceScale?: number | null;
+    viewingId?: string | null;
     publishedAt: string | null;
     createdAt: string;
     updatedAt: string;
@@ -119,7 +124,7 @@ export function ReviewDetailClient({
         day: "numeric",
         year: "numeric",
       })
-    : "Unpublished Draft";
+    : review.status === "published" ? "Review date unknown" : "Unpublished Draft";
 
   const media = review.mediaItem;
   const isTv = media.mediaType === "tv" || media.mediaType === "episode" || Boolean(media.seasonNumber);
@@ -256,7 +261,8 @@ export function ReviewDetailClient({
           </div>
 
           {/* Score or Tier Badge */}
-          {review.rating && (
+          {personalReviewScore(review) !== null && <div className="text-sm font-semibold text-primary-text">★ {personalReviewScore(review)?.toFixed(1)} / 10</div>}
+          {personalReviewScore(review) === null && review.rating && (
             <div className="flex items-center gap-2 self-start sm:self-auto">
               {review.rating.tier ? (
                 <div
@@ -377,6 +383,10 @@ export function ReviewDetailClient({
           isJournal: review.isJournal,
           shareRating: review.shareRating,
           ratingId: review.rating?.id || null,
+          ratingValue: review.ratingValue,
+          sourceRating: review.sourceRating,
+          sourceScale: review.sourceScale,
+          viewingId: review.viewingId,
         }}
         onSaved={(updated) => {
           setReview((prev) => ({
@@ -390,7 +400,11 @@ export function ReviewDetailClient({
             visibility: updated.visibility,
             isSpoiler: updated.isSpoiler,
             shareRating: updated.shareRating,
-            publishedAt: updated.publishedAt,
+            ratingValue: updated.ratingValue,
+            sourceRating: updated.sourceRating,
+            sourceScale: updated.sourceScale,
+            viewingId: updated.viewingId,
+            publishedAt: updated.sourceService === "letterboxd" ? updated.sourceReviewDate : updated.publishedAt,
             updatedAt: updated.updatedAt,
           }));
         }}

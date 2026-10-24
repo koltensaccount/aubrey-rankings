@@ -407,6 +407,9 @@ export const reviews = pgTable(
     shareRating: boolean("share_rating").notNull().default(false),
     sourceService: text("source_service"),
     sourceUri: text("source_uri"),
+    sourceEventKey: text("source_event_key"),
+    sourceReviewDate: text("source_review_date"),
+    sourceSnapshot: jsonb("source_snapshot").$type<{ content: string; rating: number | null }>(),
     watchedDate: text("watched_date"),
     tags: jsonb("tags"),
     publishedAt: timestamp("published_at"),
@@ -420,9 +423,9 @@ export const reviews = pgTable(
     index("idx_reviews_user_media").on(table.userId, table.mediaItemId),
     index("idx_reviews_rating").on(table.ratingId),
     index("idx_reviews_viewing").on(table.viewingId),
-    uniqueIndex("uniq_reviews_source_uri")
-      .on(table.userId, table.sourceService, table.sourceUri)
-      .where(sql`"source_uri" IS NOT NULL`),
+    index("idx_reviews_source_uri").on(table.userId, table.sourceService, table.sourceUri),
+    uniqueIndex("uniq_reviews_source_event").on(table.userId, table.sourceService, table.sourceEventKey)
+      .where(sql`"source_event_key" IS NOT NULL`),
   ]
 );
 
@@ -441,6 +444,8 @@ export const watchlistItems = pgTable(
       .notNull()
       .references(() => mediaItems.id, { onDelete: "cascade" }),
     notes: text("notes"),
+    sourceService: text("source_service"),
+    sourceAddedDate: text("source_added_date"),
     createdAt: timestamp("created_at").notNull().defaultNow(),
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
   },
@@ -587,6 +592,7 @@ export const activityEvents = pgTable(
       .on(table.userId, table.sourceEventKey)
       .where(sql`"source_event_key" IS NOT NULL`),
     index("idx_activity_user_date").on(table.userId, table.eventDate),
+    index("idx_activity_user_date_id").on(table.userId, table.eventDate.desc(), table.createdAt.desc(), table.id.desc()),
     index("idx_activity_user_type").on(table.userId, table.eventType),
     index("idx_activity_user_media").on(table.userId, table.mediaItemId),
     index("idx_activity_diary").on(table.diaryEntryId),
