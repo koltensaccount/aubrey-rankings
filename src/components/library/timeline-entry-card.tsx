@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { isRewatchActivity, isViewingActivity } from "@/lib/viewing-ordinals";
 import { Star, History, Lock, Globe, Link2, Edit2 } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
@@ -62,7 +63,7 @@ export function TimelineEntryCard({
     Boolean(mediaItem.seasonNumber && mediaItem.episodeNumber);
 
   // Rewatch ordinal calculation strictly reflecting known logged events
-  const isRewatch = Boolean(entry.isRewatch || ordinalIndex > 1);
+  const isRewatch = isRewatchActivity(entry, ordinalIndex);
 
   const ordinalSuffix =
     ordinalIndex === 1
@@ -73,7 +74,7 @@ export function TimelineEntryCard({
       ? "3rd"
       : `${ordinalIndex}th`;
 
-  let badgeLabel = entry.badgeLabel || "1st Logged Viewing";
+  let badgeLabel = entry.badgeLabel || (isViewingActivity(entry) ? "1st Logged Viewing" : "Activity");
   if (!entry.badgeLabel) {
     if (isRewatch) {
       if (totalViewingsForMedia > 1 && ordinalIndex > 1) {
@@ -118,7 +119,7 @@ export function TimelineEntryCard({
 
   // Visibility indicator
   const visibility = entry.reviewVisibility || entry.review?.visibility || "private";
-  const reviewContent = entry.reviewContent || entry.review?.content || entry.notes;
+  const reviewContent = entry.reviewContent || entry.review?.content;
   const isSpoiler = Boolean(entry.reviewIsSpoiler ?? entry.review?.isSpoiler);
 
   return (

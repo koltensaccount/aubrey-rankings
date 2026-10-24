@@ -323,7 +323,7 @@ describe("Phase 14A: Personal Library Foundation & Letterboxd Importer", () => {
 
     const w1 = userWl.find((w) => w.mediaItem.title.includes("Watchlist Item One"));
     assert.ok(w1);
-    assert.equal(w1.createdAt.toISOString().slice(0, 10), "2025-11-20");
+    assert.equal(w1.sourceAddedDate, "2025-11-20");
     trackedMediaIds.push(w1.mediaItemId);
   });
 
@@ -780,7 +780,7 @@ Position,Name,Year,URL,Description
     const summaryRatingChange = parseLetterboxdZip(zipWithRatingChange.toBuffer());
     const res3 = await executeLetterboxdImport(ownerId, summaryRatingChange);
     assert.equal(res3.newDiaryCount, 0); // No duplicate viewing created
-    assert.equal(res3.updatedDiaryCount, 1); // Mutated rating was updated
+    assert.equal(res3.updatedDiaryCount, 0); // Preserve established viewing scores on reimport
 
     const userDiaryUpdatedRating = await db.query.diaryEntries.findMany({
       where: eq(diaryEntries.userId, ownerId),
@@ -789,8 +789,8 @@ Position,Name,Year,URL,Description
     const canonicalEntriesRating = userDiaryUpdatedRating.filter((d) => d.mediaItem.title.includes("Canonical Boxd Film"));
     assert.equal(canonicalEntriesRating.length, 3);
     const entryWatchedJan1 = canonicalEntriesRating.find((d) => d.watchedDate === "2026-01-01");
-    assert.equal(entryWatchedJan1?.sourceRating, 3.5);
-    assert.equal(entryWatchedJan1?.ratingValue, 7.0);
+    assert.equal(entryWatchedJan1?.sourceRating, 4);
+    assert.equal(entryWatchedJan1?.ratingValue, 8);
 
     // 4. Re-import after tags change in Letterboxd
     const zipWithTagChange = new AdmZip();
@@ -803,7 +803,7 @@ Position,Name,Year,URL,Description
     const summaryTagChange = parseLetterboxdZip(zipWithTagChange.toBuffer());
     const res4 = await executeLetterboxdImport(ownerId, summaryTagChange);
     assert.equal(res4.newDiaryCount, 0);
-    assert.equal(res4.updatedDiaryCount, 1);
+    assert.equal(res4.updatedDiaryCount, 0);
 
     const userDiaryUpdatedTags = await db.query.diaryEntries.findMany({
       where: eq(diaryEntries.userId, ownerId),
@@ -812,7 +812,7 @@ Position,Name,Year,URL,Description
     const canonicalEntriesTags = userDiaryUpdatedTags.filter((d) => d.mediaItem.title.includes("Canonical Boxd Film"));
     assert.equal(canonicalEntriesTags.length, 3);
     const entryWatchedJan1Tags = canonicalEntriesTags.find((d) => d.watchedDate === "2026-01-01");
-    assert.deepEqual(entryWatchedJan1Tags?.tags, ["fest", "director-qa"]);
+    assert.deepEqual(entryWatchedJan1Tags?.tags, ["fest"]);
 
     // 5. Verify reconciliation matches database records exactly
     assert.equal(res4.reconciliation.diary.total, 3);

@@ -293,7 +293,7 @@ export default async function MediaDetailsPage({
             },
           },
         },
-        orderBy: [desc(reviews.updatedAt)],
+        orderBy: [desc(reviews.publishedAt), desc(reviews.id)],
       })
     : [];
 
@@ -449,7 +449,9 @@ export default async function MediaDetailsPage({
           }
         : null,
       isSpoiler: r.isSpoiler,
-      publishedAt: r.publishedAt,
+      sourceService: r.sourceService,
+      sourceReviewDate: r.sourceReviewDate,
+      publishedAt: r.sourceService === "letterboxd" ? r.sourceReviewDate : r.publishedAt,
       updatedAt: r.updatedAt,
       author: {
         id: r.user.id,
@@ -564,16 +566,6 @@ export default async function MediaDetailsPage({
     : null;
 
   const personalReviewsProp: PersonalReviewData[] = ownerReviews.map((r) => {
-    const reviewScore = r.rating ? reviewScoreOnTen({
-      calculatedOverallScore: r.rating.calculatedOverallScore,
-      sourceRating: r.rating.sourceRating,
-      sourceScale: r.rating.sourceScale,
-      sourceService: r.rating.sourceService,
-      ratingSystemId: r.rating.ratingSystemId,
-      tierId: r.rating.tierId,
-      ratingSystem: r.rating.ratingSystem ? { scale: r.rating.ratingSystem.scale, type: r.rating.ratingSystem.type } : null,
-      categoryScores: [],
-    }) ?? r.rating.calculatedOverallScore : null;
 
     return {
       id: r.id,
@@ -592,10 +584,12 @@ export default async function MediaDetailsPage({
       sourceRating: r.sourceRating ?? null,
       sourceScale: r.sourceScale ?? null,
       viewingId: r.viewingId ?? null,
-      score: r.ratingValue ?? (typeof r.sourceRating === "number" && r.sourceScale ? (r.sourceRating / r.sourceScale) * 10 : null) ?? reviewScore,
+      score: r.ratingValue ?? (typeof r.sourceRating === "number" && r.sourceScale ? (r.sourceRating / r.sourceScale) * 10 : null),
       tierName: r.rating?.tier?.name ?? null,
       tierColor: r.rating?.tier?.color ?? null,
-      publishedAt: r.publishedAt,
+      sourceService: r.sourceService,
+      sourceReviewDate: r.sourceReviewDate,
+      publishedAt: r.sourceService === "letterboxd" ? r.sourceReviewDate : r.publishedAt,
       updatedAt: r.updatedAt,
       createdAt: r.createdAt,
     };
@@ -669,7 +663,7 @@ export default async function MediaDetailsPage({
             ownerDiaryEntries={personalDiaryProp}
             ownerRankedCollections={ownerRankedCollections}
             shouldAutoOpen={shouldAutoOpen}
-            universalNote={ownerUniversalNote?.content || ownerGlobalRating?.personalNotes || ""}
+            universalNote={ownerUniversalNote?.content ?? ""}
           />
         ) : (
           <MediaPublicOverview

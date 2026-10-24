@@ -1015,6 +1015,23 @@ describe("Phase 15B: Unified Notes, Reviews, Ratings & Activity History", () => 
 
     await db.insert(activityEvents).values(eventInserts);
 
+    for (const e of eventInserts) {
+      if (e.eventType === "viewing") {
+        await db.insert(diaryEntries).values({ id: `d_${e.id}`, userId: pagedUserId, mediaItemId: movie1Id, watchedDate: e.eventDate });
+        e.diaryEntryId = `d_${e.id}`;
+      } else if (e.eventType === "review") {
+        await db.insert(reviews).values({ id: `r_${e.id}`, userId: pagedUserId, mediaItemId: movie1Id, content: "Persisted review", status: "published", publishedAt: new Date(e.eventDate) });
+        e.reviewId = `r_${e.id}`;
+      } else if (e.eventType === "watchlist") {
+        // A watchlist row is unique per user/title; use independent persisted media.
+        const m = `m_${e.id}`;
+        await db.insert(mediaItems).values({ id: m, title: "Watchlist fixture", mediaType: "movie" });
+        await db.insert(watchlistItems).values({ id: `w_${e.id}`, userId: pagedUserId, mediaItemId: m, createdAt: new Date(e.eventDate) });
+        e.mediaItemId = m;
+        e.watchlistItemId = `w_${e.id}`;
+      }
+      await db.update(activityEvents).set({ diaryEntryId: e.diaryEntryId, reviewId: e.reviewId, watchlistItemId: e.watchlistItemId, mediaItemId: e.mediaItemId }).where(eq(activityEvents.id, e.id));
+    }
     // Fetch pages of 50 items
     const page1 = await getUserUnifiedTimeline(pagedUserId, { limit: 50, offset: 0 });
     const page2 = await getUserUnifiedTimeline(pagedUserId, { limit: 50, offset: 50 });
@@ -1052,6 +1069,8 @@ describe("Phase 15B: Unified Notes, Reviews, Ratings & Activity History", () => 
     const reviewsOnly = await getUserUnifiedTimeline(pagedUserId, { limit: 50, offset: 0, filter: "reviews" });
     assert.ok(reviewsOnly.entries.length > 0, "Reviews filter should return items");
     assert.ok(reviewsOnly.entries.every((e) => e.eventType === "review" || e.eventType === "viewing_and_review"));
+    await db.delete(user).where(eq(user.id, pagedUserId));
+    await db.delete(mediaItems).where(inArray(mediaItems.id, eventInserts.filter((e) => e.eventType === "watchlist").map((e) => e.mediaItemId)));
   });
 
   // ---------------------------------------------------------------------------
@@ -1406,6 +1425,7 @@ describe("Phase 15B: Unified Notes, Reviews, Ratings & Activity History", () => 
       watchedDate: null,
     });
 
+    await backfillUserActivityEvents(testUserId);
     // Query 'all' filter with limit 2
     const allP1 = await getUserUnifiedTimeline(testUserId, { limit: 2, offset: 0, filter: "all" });
     assert.equal(allP1.entries.length, 2, "First page has 2 dated entries");
@@ -1413,6 +1433,7 @@ describe("Phase 15B: Unified Notes, Reviews, Ratings & Activity History", () => 
     assert.equal(allP1.hasMore, true, "Has more is true");
     assert.equal(allP1.undatedEntries.length, 1, "Undated critique appears in undatedEntries");
 
+    await backfillUserActivityEvents(testUserId);
     // Query 'all' filter with limit 2, offset 2
     const allP2 = await getUserUnifiedTimeline(testUserId, { limit: 2, offset: 2, filter: "all" });
     assert.equal(allP2.entries.length, 1, "Second page has remaining 1 dated entry");
@@ -1483,6 +1504,7 @@ describe("Phase 15B: Unified Notes, Reviews, Ratings & Activity History", () => 
     const wlId = `wl_legacy_${Date.now()}`;
     await db.insert(watchlistItems).values({
       id: wlId,
+      sourceService: "letterboxd",
       userId: testUserId,
       mediaItemId: mId,
       createdAt: new Date("2025-01-01T00:00:00Z"),
@@ -1538,7 +1560,8 @@ describe("Phase 15B: Unified Notes, Reviews, Ratings & Activity History", () => 
 
     // Verify watchlist date was enriched to "2020-03-10"
     const updatedWl = await db.query.watchlistItems.findFirst({ where: eq(watchlistItems.id, wlId) });
-    assert.equal(updatedWl?.createdAt?.toISOString().slice(0, 10), "2020-03-10", "Watchlist item enriched with authentic source dateAdded");
+    assert.equal(updatedWl?.sourceAddedDate, "2020-03-10", "Watchlist item enriched with authentic source dateAdded");
+    assert.equal(updatedWl?.createdAt?.toISOString().slice(0, 10), "2025-01-01", "Audit date preserved");
 
     // Clean up
     await db.delete(reviews).where(eq(reviews.userId, testUserId));

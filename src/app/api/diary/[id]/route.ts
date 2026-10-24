@@ -1,3 +1,5 @@
+import { syncViewingActivity } from "@/lib/activity-sync";
+import { isValidWatchDate } from "@/lib/letterboxd";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
@@ -64,13 +66,14 @@ export async function PATCH(
     }
 
     const body = await req.json();
+    if (body.watchedDate != null && body.watchedDate !== "" && (typeof body.watchedDate !== "string" || !isValidWatchDate(body.watchedDate.trim()))) return NextResponse.json({ error: "Invalid viewing date" }, { status: 400 });
     const updateData: Partial<typeof diaryEntries.$inferInsert> = {
       updatedAt: new Date(),
     };
 
     if (body.watchedDate !== undefined) {
       updateData.watchedDate =
-        typeof body.watchedDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(body.watchedDate.trim())
+        typeof body.watchedDate === "string" && isValidWatchDate(body.watchedDate.trim())
           ? body.watchedDate.trim()
           : null;
     }
@@ -94,38 +97,14 @@ export async function PATCH(
       updateData.sourceScale = updateData.sourceRating !== null ? 5 : null;
     }
 
-    if (body.notes !== undefined) {
-      updateData.notes = typeof body.notes === "string" ? body.notes.trim() : null;
-    }
-
     if (body.tags !== undefined) {
       updateData.tags = Array.isArray(body.tags) ? body.tags : null;
     }
 
-    await db
-      .update(diaryEntries)
-      .set(updateData)
-      .where(eq(diaryEntries.id, id));
-
-    // Synchronize chronological activity event representation
-    const existingAct = await db.query.activityEvents.findFirst({
-      where: and(
-        eq(activityEvents.diaryEntryId, id),
-        eq(activityEvents.userId, session.user.id),
-      ),
+    await db.transaction(async (tx) => {
+      const [saved] = await tx.update(diaryEntries).set(updateData).where(eq(diaryEntries.id, id)).returning();
+      await syncViewingActivity(saved, tx);
     });
-    if (existingAct) {
-      await db
-        .update(activityEvents)
-        .set({
-          eventDate: updateData.watchedDate !== undefined ? updateData.watchedDate : existingAct.eventDate,
-          ratingValue: updateData.ratingValue !== undefined ? updateData.ratingValue : existingAct.ratingValue,
-          sourceRating: updateData.sourceRating !== undefined ? updateData.sourceRating : existingAct.sourceRating,
-          sourceScale: updateData.sourceScale !== undefined ? updateData.sourceScale : existingAct.sourceScale,
-          updatedAt: new Date(),
-        })
-        .where(eq(activityEvents.id, existingAct.id));
-    }
 
     const updated = await db.query.diaryEntries.findFirst({
       where: eq(diaryEntries.id, id),
@@ -168,13 +147,18 @@ export async function DELETE(
       return NextResponse.json({ error: "Entry not found" }, { status: 404 });
     }
 
-    await db.delete(activityEvents).where(
+    await db.transaction(async (tx) => {
+    await tx.delete(activityEvents).where(
       and(
         eq(activityEvents.diaryEntryId, id),
+        eq(activityEvents.eventType, "viewing"),
         eq(activityEvents.userId, session.user.id),
       ),
     );
-    await db.delete(diaryEntries).where(eq(diaryEntries.id, id));
+    await tx.update(activityEvents).set({ diaryEntryId: null }).where(and(eq(activityEvents.diaryEntryId, id), eq(activityEvents.userId, session.user.id)));
+    await tx.delete(diaryEntries).where(eq(diaryEntries.id, id));
+
+    });
 
     return NextResponse.json({ success: true, deletedId: id });
   } catch (error: any) {

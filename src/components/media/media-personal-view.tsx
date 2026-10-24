@@ -1,5 +1,8 @@
 "use client";
 
+import { formatReviewDate } from "@/lib/review-date";
+import { latestDatedRatedReview, personalReviewScore } from "@/lib/review-rating";
+
 import { useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -74,6 +77,8 @@ export interface PersonalReviewData {
   sourceRating?: number | null;
   sourceScale?: number | null;
   viewingId?: string | null;
+  sourceService?: string | null;
+  sourceReviewDate?: string | null;
   publishedAt: Date | string | null;
   updatedAt: Date | string | null;
   createdAt: Date | string | null;
@@ -158,18 +163,11 @@ export function MediaPersonalView({
   const publicOverviewUrl = getPublicMediaUrl(media.id, { from: searchParams?.get("from") || undefined });
 
   // Latest rated review score is the user's primary review rating
-  const latestRatedReview = ownerReviews.find((r) => {
-    if (typeof r.ratingValue === "number" && !isNaN(r.ratingValue)) return true;
-    if (typeof r.sourceRating === "number" && !isNaN(r.sourceRating)) return true;
-    if (typeof r.score === "number" && !isNaN(r.score)) return true;
-    return false;
-  });
-  const latestReviewScore = latestRatedReview
-    ? (latestRatedReview.ratingValue ?? (typeof latestRatedReview.sourceRating === "number" ? latestRatedReview.sourceRating * 2 : null) ?? latestRatedReview.score)
-    : null;
+  const latestRatedReview = latestDatedRatedReview(ownerReviews);
+  const latestReviewScore = latestRatedReview ? personalReviewScore(latestRatedReview) : null;
 
-  const displayScore = latestReviewScore ?? (ownerRating?.normalizedScore ?? ownerRating?.calculatedOverallScore ?? null);
-  const isImportedRating = Boolean(ownerRating?.sourceRating !== null && ownerRating?.sourceRating !== undefined);
+  const displayScore = latestReviewScore ?? ownerRating?.normalizedScore ?? null;
+  const isImportedRating = Boolean(!latestRatedReview && ownerRating?.sourceRating !== null && ownerRating?.sourceRating !== undefined);
   const hasRatingContent = displayScore !== null || Boolean(ownerRating?.tier);
 
   return (
@@ -295,10 +293,10 @@ export function MediaPersonalView({
             <div className="flex items-center gap-2">
               <Star size={18} className="text-primary-text" />
               <h3 className="font-display text-lg uppercase font-bold text-foreground">
-                Your Rating
+                {latestRatedReview ? "Your Review Score" : "Standalone Rating"}
               </h3>
             </div>
-            {ownerRating && (
+            {ownerRating && !latestRatedReview && (
               <span className="text-[11px] font-mono uppercase tracking-wider text-muted-foreground">
                 Standalone
               </span>
@@ -318,7 +316,7 @@ export function MediaPersonalView({
                     </span>
                   </>
                 )}
-                {ownerRating?.tier && (
+                {!latestRatedReview && ownerRating?.tier && (
                   <span
                     className={`${displayScore !== null ? "ml-auto" : ""} px-2 py-0.5 rounded text-xs font-mono font-bold text-white shadow-xs`}
                     style={{ backgroundColor: ownerRating.tier.color }}
@@ -328,6 +326,7 @@ export function MediaPersonalView({
                 )}
               </div>
 
+              {latestRatedReview && <p className="text-xs text-muted-foreground">Latest dated rated {latestRatedReview.sourceService === "letterboxd" ? "Letterboxd " : ""}review · {formatReviewDate(latestRatedReview.sourceReviewDate ?? latestRatedReview.publishedAt) ?? "Review date unknown"}</p>}
               {isImportedRating && (
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span className="px-2 py-0.5 rounded bg-surface border border-border font-medium text-foreground">
@@ -339,14 +338,14 @@ export function MediaPersonalView({
                 </div>
               )}
 
-              {ownerRating?.ratingSystemName && !isImportedRating && (
+              {ownerRating?.ratingSystemName && !isImportedRating && !latestRatedReview && (
                 <p className="text-xs text-muted-foreground">
                   Using system: <strong className="text-foreground">{ownerRating.ratingSystemName}</strong>
                 </p>
               )}
 
               {/* Multi-criteria category scores if present */}
-              {ownerRating?.categoryScores && ownerRating.categoryScores.length > 0 && (
+              {!latestRatedReview && ownerRating?.categoryScores && ownerRating.categoryScores.length > 0 && (
                 <div className="space-y-2 pt-2 border-t border-border">
                   <h4 className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     Criteria Breakdown
@@ -372,7 +371,7 @@ export function MediaPersonalView({
               {ownerRating?.personalNotes && (
                 <div className="pt-2 border-t border-border text-xs text-muted-foreground space-y-1">
                   <span className="font-semibold text-foreground uppercase text-[10px] tracking-wider">
-                    Rating Notes
+                    Legacy Rating Notes (read only)
                   </span>
                   <p className="italic bg-surface p-2.5 rounded-lg border border-border text-foreground">
                     {ownerRating.personalNotes}
@@ -465,7 +464,7 @@ export function MediaPersonalView({
       {/* Universal Notes Section */}
       <MediaNotesCard
         mediaItemId={journalMediaId}
-        initialNotes={universalNote || ownerRating?.personalNotes}
+        initialNotes={universalNote ?? ""}
       />
 
       {/* Section 3: Personal Reviews & Drafts */}
@@ -515,7 +514,7 @@ export function MediaPersonalView({
               const format = (rev.draftContentFormat || rev.contentFormat || "plain") as "plain" | "markdown";
               const isExpanded = expandedReviews.has(rev.id);
               const isLong = displayContent.length > 300;
-              const reviewScore = rev.ratingValue ?? (typeof rev.sourceRating === "number" ? rev.sourceRating * 2 : null) ?? rev.score;
+              const reviewScore = personalReviewScore(rev);
 
               return (
                 <article
