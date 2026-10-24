@@ -135,10 +135,10 @@ export async function GET(
     const notesMap = new Map(ownerMediaNotes.map((n) => [n.mediaItemId, n.content]));
 
     const processedEntries = col.entries.map((entry) => {
-      const universalNote = notesMap.get(entry.mediaItemId) || null;
+      const universalNote = notesMap.get(entry.mediaItemId) ?? null;
       // Authoritative note: universal mediaNotes takes precedence, falling back to legacy entry notes
-      const authoritativeNote = universalNote || entry.notes || null;
-      const legacyNote = entry.notes && universalNote && entry.notes !== universalNote ? entry.notes : null;
+      const authoritativeNote = notesMap.has(entry.mediaItemId) ? universalNote : entry.notes || null;
+      const legacyNote = entry.notes && entry.notes !== universalNote ? entry.notes : null;
 
       if (isOwner) {
         return {

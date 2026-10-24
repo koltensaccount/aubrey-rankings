@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Lock, Edit3, Check, X, Loader2, StickyNote } from "lucide-react";
 
 interface MediaNotesCardProps {
@@ -18,9 +18,21 @@ export function MediaNotesCard({
   const [isEditing, setIsEditing] = useState(false);
   const [draftContent, setDraftContent] = useState(initialNotes || "");
   const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    fetch(`/api/notes?mediaItemId=${encodeURIComponent(mediaItemId)}`, { cache: "no-store" })
+      .then((res) => { if (!res.ok) throw new Error("Unable to load Notes"); return res.json(); })
+      .then((data) => { if (!cancelled) { setNotes(data.notes ?? ""); setDraftContent(data.notes ?? ""); setLoading(false); } })
+      .catch((err) => { if (!cancelled) setError(err.message); });
+    return () => { cancelled = true; };
+  }, [mediaItemId]);
+
   const handleStartEdit = () => {
+    if (loading) return;
     setDraftContent(notes);
     setError(null);
     setIsEditing(true);
@@ -81,6 +93,7 @@ export function MediaNotesCard({
           <button
             type="button"
             onClick={handleStartEdit}
+            disabled={loading}
             className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-button text-xs font-medium text-muted-foreground hover:text-foreground bg-surface hover:bg-surface-elevated border border-border transition-colors cursor-pointer"
           >
             <Edit3 size={12} />
@@ -92,6 +105,8 @@ export function MediaNotesCard({
       <p className="text-[11px] text-muted-foreground">
         Your universal private notes for this title appear across your Library, your rankings, and your timeline.
       </p>
+
+      {error && !isEditing && <p role="alert" className="text-xs text-destructive">{error}</p>}
 
       {/* Editing State */}
       {isEditing ? (

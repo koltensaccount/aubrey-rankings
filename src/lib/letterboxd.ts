@@ -1,4 +1,5 @@
 import AdmZip from "adm-zip";
+import { createHash } from "node:crypto";
 
 export interface ParsedLetterboxdFilm {
   title: string;
@@ -55,6 +56,8 @@ export function buildDiaryEventKey(d: {
 }
 
 export interface ParsedReview {
+  sourceEventKey?: string;
+  occurrenceIndex?: number;
   title: string;
   year: number | null;
   letterboxdUri: string;
@@ -64,6 +67,16 @@ export interface ParsedReview {
   isRewatch: boolean;
   review: string;
   tags: string[];
+}
+
+/** Export review URLs identify a review when present; film URLs require a row identity.
+ * Content is included only for otherwise indistinguishable same-day rows. Occurrences
+ * preserve genuine identical duplicates within the same export.
+ */
+export function buildReviewEventKey(r: ParsedReview): string {
+  const uri = r.letterboxdUri.trim().replace(/\/+$/, "");
+  if (/letterboxd\.com\/(?!film\/)[^/]+\/film\/[^/]+(?:\/\d+)?$/.test(uri)) return `review-url:${uri}`;
+  return `review:${createHash("sha256").update(JSON.stringify([canonicalFilmKey(r), r.reviewDate, r.watchedDate, r.isRewatch, r.review, r.rating ?? null, r.occurrenceIndex ?? 1])).digest("hex")}`;
 }
 
 export interface ParsedWatchlistItem {
@@ -271,6 +284,7 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
   const titleYearToFilms = new Map<string, Set<ParsedLetterboxdFilm>>();
   const diaryEntries: ParsedDiaryEntry[] = [];
   const reviews: ParsedReview[] = [];
+  const reviewOccurrences = new Map<string, number>();
   const watchlist: ParsedWatchlistItem[] = [];
   const ratingEvents: ParsedRatingEvent[] = [];
   const watchedEvents: ParsedWatchedEvent[] = [];
@@ -538,7 +552,7 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
           }
 
           if (review) {
-            reviews.push({
+            const parsedReview: ParsedReview = {
               title: name.trim(),
               year: parseYear(year),
               letterboxdUri: uri.trim(),
@@ -548,7 +562,12 @@ export function parseLetterboxdZip(zipBuffer: Buffer): LetterboxdExportSummary {
               isRewatch,
               review,
               tags,
-            });
+            };
+            const signature = buildReviewEventKey(parsedReview);
+            parsedReview.occurrenceIndex = (reviewOccurrences.get(signature) ?? 0) + 1;
+            reviewOccurrences.set(signature, parsedReview.occurrenceIndex);
+            parsedReview.sourceEventKey = buildReviewEventKey(parsedReview);
+            reviews.push(parsedReview);
           }
         }
       }

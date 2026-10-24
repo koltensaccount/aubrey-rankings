@@ -69,6 +69,7 @@ export function RatingDialog({
   const [reviewText, setReviewText] = useState("");
   const [personalNotes, setPersonalNotes] = useState("");
   const [notesDirty, setNotesDirty] = useState(false);
+  const [notesLoading, setNotesLoading] = useState(true);
   const [showReviewEditor, setShowReviewEditor] = useState(false);
   const [isWatched, setIsWatched] = useState(true);
   const [isFavorite, setIsFavorite] = useState(false);
@@ -102,12 +103,7 @@ export function RatingDialog({
       setScores(scoresMap);
       setSelectedTierId(initialRating.tierId ?? null);
       setReviewText(initialRating.reviewText || "");
-      setPersonalNotes(
-        initialRating.personalNotes ||
-        initialRating.universalNote ||
-        initialRating.notes ||
-        ""
-      );
+      setPersonalNotes("");
       setNotesDirty(false);
       setIsWatched(initialRating.isWatched !== false);
       setIsFavorite(Boolean(initialRating.isFavorite));
@@ -125,12 +121,23 @@ export function RatingDialog({
       setNotesDirty(false);
       setIsWatched(true);
       setIsFavorite(false);
-      setWatchDate(new Date().toISOString().split("T")[0]);
+      setWatchDate("");
       setForceNewRubric(false);
     }
     setShowClearConfirm(false);
     setError(null);
   }, [initialRating, mediaItem, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen || !mediaItem) return;
+    let cancelled = false;
+    setNotesLoading(true);
+    fetch(`/api/notes?mediaItemId=${encodeURIComponent(mediaItem.id)}`, { cache: "no-store" })
+      .then(async (res) => { if (!res.ok) throw new Error("Unable to load Notes"); return res.json(); })
+      .then((data) => { if (!cancelled) { setPersonalNotes(data.notes ?? ""); setNotesLoading(false); } })
+      .catch((err) => { if (!cancelled) setError(err.message); });
+    return () => { cancelled = true; };
+  }, [isOpen, mediaItem]);
 
   // Check for mismatched historical category IDs
   const historicalScores = useMemo(() => {
@@ -290,8 +297,8 @@ export function RatingDialog({
         mediaItemId: mediaItem.id,
         collectionId: collectionId || null,
         watchDate: watchDate ? new Date(watchDate).toISOString() : null,
-        reviewText: reviewText.trim() || null,
-        ...(notesDirty && personalNotes.trim() ? { personalNotes: personalNotes.trim() } : {}),
+
+        ...(notesDirty ? { personalNotes: personalNotes.trim() } : {}),
         isWatched,
         isFavorite,
       };
@@ -328,7 +335,7 @@ export function RatingDialog({
           categoryScores: !isTier && isUpdatingScores
             ? categoryScoresArray
             : initialRating?.categoryScores ?? [],
-          reviewText: reviewText.trim() || null,
+
           personalNotes: personalNotes.trim() || null,
           isWatched,
           isFavorite,
@@ -535,6 +542,7 @@ export function RatingDialog({
                   : "Write your personal notes on this title (universal to your library)..."
               }
               value={personalNotes}
+              disabled={notesLoading}
               onChange={(e) => {
                 setPersonalNotes(e.target.value);
                 setNotesDirty(true);

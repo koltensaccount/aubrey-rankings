@@ -58,3 +58,24 @@ export function tmdbAudienceRating(metadata: unknown): { score: number; votes: n
   if (typeof votes === "number" && (!Number.isFinite(votes) || votes <= 0)) return null;
   return { score, votes: typeof votes === "number" && Number.isInteger(votes) && votes > 0 ? votes : null };
 }
+
+/** A review's own score, independent of mutable ranking/standalone ratings. */
+export function personalReviewScore(review: { ratingValue?: number | null; sourceRating?: number | null; sourceScale?: number | null; score?: number | null }): number | null {
+  if (typeof review.ratingValue === "number" && Number.isFinite(review.ratingValue)) return review.ratingValue;
+  if (typeof review.sourceRating === "number" && Number.isFinite(review.sourceRating) && typeof review.sourceScale === "number" && review.sourceScale > 0) return review.sourceRating / review.sourceScale * 10;
+  return typeof review.score === "number" && Number.isFinite(review.score) ? review.score : null;
+}
+
+export function latestDatedRatedReview<T extends { id: string; status: string; publishedAt: Date | string | null; sourceService?: string | null; sourceReviewDate?: string | null; ratingValue?: number | null; sourceRating?: number | null; sourceScale?: number | null; score?: number | null }>(items: readonly T[]): T | undefined {
+  const date = (r: T) => r.sourceService === "letterboxd" ? r.sourceReviewDate || null : r.publishedAt ? new Date(r.publishedAt).toISOString() : null;
+  return items.filter((r) => r.status === "published" && date(r) && personalReviewScore(r) !== null)
+    .sort((a, b) => date(b)!.localeCompare(date(a)!) || b.id.localeCompare(a.id))[0];
+}
+
+export function validReviewScoreInput(input: { ratingValue?: unknown; sourceRating?: unknown; sourceScale?: unknown }): boolean {
+  const { ratingValue, sourceRating, sourceScale } = input;
+  if (ratingValue !== undefined && ratingValue !== null && (typeof ratingValue !== "number" || !Number.isFinite(ratingValue) || ratingValue < 0 || ratingValue > 10)) return false;
+  if (sourceScale !== undefined && sourceScale !== null && (typeof sourceScale !== "number" || !Number.isFinite(sourceScale) || sourceScale <= 0)) return false;
+  const scale = typeof sourceScale === "number" ? sourceScale : 5;
+  return sourceRating === undefined || sourceRating === null || (typeof sourceRating === "number" && Number.isFinite(sourceRating) && sourceRating >= 0 && sourceRating <= scale);
+}

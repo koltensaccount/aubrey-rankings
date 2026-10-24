@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Calendar, List, Plus, Sparkles, Filter, Loader2 } from "lucide-react";
 import { TimelineEntryCard } from "./timeline-entry-card";
 import { CompactDiaryList } from "./compact-diary-list";
@@ -118,6 +118,7 @@ export function CinematicTimeline({
   const undatedFromFilter = activeData.undated;
 
   const [loadingMore, setLoadingMore] = useState(false);
+  const [timelineError, setTimelineError] = useState<string | null>(null);
 
   // Dialog state
   const [historyMediaItem, setHistoryMediaItem] = useState<any | null>(null);
@@ -135,10 +136,14 @@ export function CinematicTimeline({
   const [isRatingDialogOpen, setIsRatingDialogOpen] = useState(false);
   const [ratingDialogMediaItem, setRatingDialogMediaItem] = useState<any | null>(null);
 
+  const filterRef = useRef(filter);
+  const revisionRef = useRef(0);
+
   // Synchronize entries cleanly when initialEntries updates
   useEffect(() => {
-    setDataByFilter((prev) => ({
-      ...prev,
+    const revision = ++revisionRef.current;
+    const currentFilter = filterRef.current;
+    setDataByFilter({
       all: {
         entries: initialEntries,
         undated: undatedEntries,
@@ -146,18 +151,27 @@ export function CinematicTimeline({
           hasMoreInitial ||
           (typeof totalDiaryCount === "number" && initialEntries.length < totalDiaryCount),
       },
-    }));
+    });
+    if (currentFilter !== "all") {
+      fetch(`/api/activity?offset=0&limit=50&filter=${encodeURIComponent(currentFilter)}`, { cache: "no-store" })
+        .then((res) => { if (!res.ok) throw new Error("Unable to refresh activity"); return res.json(); })
+        .then((data) => { if (revision === revisionRef.current) setDataByFilter((prev) => ({ ...prev, [currentFilter]: { entries: data.entries, undated: data.undatedEntries, hasMore: data.hasMore } })); })
+        .catch(console.error);
+    }
   }, [initialEntries, undatedEntries, hasMoreInitial, totalDiaryCount]);
 
-  // Handle switching filter: fetch if not already cached for this filter
+  // Refetch when switching filters so edits never revive stale categories.
   const handleFilterChange = async (newFilter: FilterType) => {
     setFilter(newFilter);
-    if (!dataByFilter[newFilter]) {
+    filterRef.current = newFilter;
+    const revision = revisionRef.current;
+    {
       try {
         setLoadingMore(true);
         const res = await fetch(`/api/activity?offset=0&limit=50&filter=${encodeURIComponent(newFilter)}`);
         if (res.ok) {
           const data = await res.json();
+          if (revision !== revisionRef.current) return;
           setDataByFilter((prev) => ({
             ...prev,
             [newFilter]: {
@@ -179,12 +193,14 @@ export function CinematicTimeline({
   const handleLoadMore = async () => {
     if (loadingMore || !hasMore) return;
     setLoadingMore(true);
+    const revision = revisionRef.current;
     try {
       const res = await fetch(
         `/api/activity?offset=${entries.length}&limit=50&filter=${encodeURIComponent(filter)}`
       );
       if (res.ok) {
         const data = await res.json();
+        if (revision !== revisionRef.current) return;
         if (Array.isArray(data.entries)) {
           setDataByFilter((prev) => {
             const current = prev[filter] || { entries: [], undated: [], hasMore: false };
@@ -383,7 +399,7 @@ export function CinematicTimeline({
     setHistoryMediaItem(mediaItem);
   };
 
-  const handleEditEntry = (entry: any, action?: "viewing" | "review" | "rating") => {
+  const handleEditEntry = async (entry: any, action?: "viewing" | "review" | "rating") => {
     const targetAction =
       action ||
       (entry.eventType === "review"
@@ -393,24 +409,19 @@ export function CinematicTimeline({
         : "viewing");
 
     if (targetAction === "review") {
-      const reviewId = entry.reviewId || (entry.eventType === "review" ? entry.id : null);
-      setReviewDialogMediaItem(entry.mediaItem);
-      setEditingReview({
-        id: reviewId || undefined,
-        title: entry.reviewTitle || null,
-        content: entry.reviewContent || "",
-        draftContent: null,
-        contentFormat: "markdown",
-        status: "published",
-        visibility: entry.reviewVisibility || "private",
-        isSpoiler: Boolean(entry.reviewIsSpoiler),
-        ratingId: entry.ratingId || null,
-        score: typeof entry.ratingValue === "number" ? entry.ratingValue : null,
-        sourceRating: entry.sourceRating || null,
-        sourceScale: entry.sourceScale || null,
-        viewingId: entry.diaryEntryId || null,
-      });
-      setIsReviewDialogOpen(true);
+      const reviewId = entry.reviewId;
+      if (!reviewId) return;
+      try {
+        setTimelineError(null);
+        const res = await fetch(`/api/reviews/${encodeURIComponent(reviewId)}`, { cache: "no-store" });
+        if (!res.ok) throw new Error("Unable to load the selected review");
+        const data: { review: ReviewEditorData } = await res.json();
+        setReviewDialogMediaItem(entry.mediaItem);
+        setEditingReview(data.review);
+        setIsReviewDialogOpen(true);
+      } catch (error) {
+        setTimelineError(error instanceof Error ? error.message : "Unable to load review");
+      }
       return;
     }
 
@@ -423,7 +434,7 @@ export function CinematicTimeline({
           calculatedOverallScore: entry.ratingValue,
           sourceRating: entry.sourceRating,
           sourceScale: entry.sourceScale,
-          watchDate: entry.eventDate || entry.watchedDate,
+          watchDate: entry.rating?.watchDate || null,
           isWatched: true,
         }
       );
@@ -432,127 +443,68 @@ export function CinematicTimeline({
     }
 
     // Viewing edit: strictly requires a confirmed diary entry ID
-    const viewingId = entry.diaryEntryId || (entry.eventType === "viewing" ? entry.id : null);
+    const viewingId = entry.diaryEntryId;
     if (!viewingId) {
       // Never create a viewing when editing another activity
       return;
     }
 
-    setEditingEntry({
-      id: viewingId,
-      mediaItemId: entry.mediaItemId || entry.mediaItem?.id,
-      watchedDate: entry.eventDate || entry.watchedDate || null,
-      isRewatch: Boolean(entry.isRewatch),
-      ratingValue: typeof entry.ratingValue === "number" ? entry.ratingValue : null,
-      notes: entry.notes || null,
-      tags: entry.tags || null,
-    });
-    setLogDialogMediaItem(entry.mediaItem);
-    setIsLogDialogOpen(true);
+    try {
+      setTimelineError(null);
+      const res = await fetch(`/api/diary/${encodeURIComponent(viewingId)}`, { cache: "no-store" });
+      if (!res.ok) throw new Error("Unable to load the selected viewing");
+      const data: { entry: NonNullable<Parameters<typeof LogViewingDialog>[0]["existingEntry"]> } = await res.json();
+      setEditingEntry(data.entry);
+      setLogDialogMediaItem(entry.mediaItem);
+      setIsLogDialogOpen(true);
+    } catch (error) {
+      setTimelineError(error instanceof Error ? error.message : "Unable to load viewing");
+    }
   };
 
-  const handleRatingSaved = (savedRating: any) => {
-    setDataByFilter((prev) => {
-      const updated: typeof prev = {};
-      for (const [k, v] of Object.entries(prev)) {
-        updated[k] = {
-          ...v,
-          entries: v.entries.map((e) => {
-            if (
-              e.ratingId === savedRating.id ||
-              (e.mediaItemId === savedRating.mediaItemId && e.eventType === "rating")
-            ) {
-              return {
-                ...e,
-                ratingValue:
-                  typeof savedRating.calculatedOverallScore === "number"
-                    ? savedRating.calculatedOverallScore
-                    : e.ratingValue,
-              };
-            }
-            return e;
-          }),
-        };
-      }
-      return updated;
-    });
+  const reloadTimeline = async () => {
+    setTimelineError(null);
+    try {
+    // Invalidate every cached category, retaining the active filter.
+    const revision = ++revisionRef.current;
+    setDataByFilter({});
+    const res = await fetch(`/api/activity?offset=0&limit=50&filter=${encodeURIComponent(filter)}`, { cache: "no-store" });
+    if (!res.ok) throw new Error("Unable to refresh timeline");
+    const data = await res.json();
+    if (revision !== revisionRef.current) return;
+    setDataByFilter({ [filter]: { entries: data.entries, undated: data.undatedEntries, hasMore: data.hasMore } });
+    } catch (error) {
+      setTimelineError(error instanceof Error ? error.message : "Unable to refresh timeline");
+    }
+  };
+  const handleRatingSaved = async (saved: unknown) => {
     setIsRatingDialogOpen(false);
-    if (onEntryUpdated) onEntryUpdated(savedRating);
+    onEntryUpdated?.(saved);
+    await reloadTimeline();
   };
-
-  const handleReviewSaved = (savedReview: any) => {
-    setDataByFilter((prev) => {
-      const updated: typeof prev = {};
-      for (const [k, v] of Object.entries(prev)) {
-        updated[k] = {
-          ...v,
-          entries: v.entries.map((e) => {
-            if (e.reviewId === savedReview.id || e.id === savedReview.id) {
-              return {
-                ...e,
-                reviewContent: savedReview.content,
-                reviewTitle: savedReview.title,
-                reviewVisibility: savedReview.visibility,
-                reviewIsSpoiler: savedReview.isSpoiler,
-                ratingValue: typeof savedReview.score === "number" ? savedReview.score : e.ratingValue,
-              };
-            }
-            return e;
-          }),
-        };
-      }
-      return updated;
-    });
+  const handleReviewSaved = async (saved: unknown) => {
     setIsReviewDialogOpen(false);
-    if (onEntryUpdated) onEntryUpdated(savedReview);
+    onEntryUpdated?.(saved);
+    await reloadTimeline();
   };
-
   const handleNewLog = () => {
     setEditingEntry(null);
     setLogDialogMediaItem(null);
     setIsLogDialogOpen(true);
   };
-
-  const handleLogSaved = (savedEntry: any) => {
-    setDataByFilter((prev) => {
-      const updated: typeof prev = {};
-      for (const [k, v] of Object.entries(prev)) {
-        const idx = v.entries.findIndex((e) => e.id === savedEntry.id);
-        if (idx >= 0) {
-          const copy = [...v.entries];
-          copy[idx] = { ...copy[idx], ...savedEntry };
-          updated[k] = { ...v, entries: copy };
-        } else {
-          updated[k] = { ...v, entries: [savedEntry, ...v.entries] };
-        }
-      }
-      return updated;
-    });
-
-    if (editingEntry) {
-      if (onEntryUpdated) onEntryUpdated(savedEntry);
-    } else {
-      if (onViewingLogged) onViewingLogged(savedEntry);
-    }
+  const handleLogSaved = async (saved: unknown) => {
+    if (editingEntry) onEntryUpdated?.(saved);
+    else onViewingLogged?.(saved);
+    await reloadTimeline();
   };
-
-  const handleEntryDeleted = (deletedId: string) => {
-    setDataByFilter((prev) => {
-      const updated: typeof prev = {};
-      for (const [k, v] of Object.entries(prev)) {
-        updated[k] = {
-          ...v,
-          entries: v.entries.filter((e) => e.id !== deletedId && e.diaryEntryId !== deletedId && e.reviewId !== deletedId),
-          undated: v.undated.filter((u) => u.id !== deletedId && u.diaryEntryId !== deletedId && u.reviewId !== deletedId),
-        };
-      }
-      return updated;
-    });
-    if (onEntryDeleted) onEntryDeleted(deletedId);
+  const handleEntryDeleted = async (id: string) => {
+    onEntryDeleted?.(id);
+    await reloadTimeline();
   };
 
   return (
     <div className="space-y-8">
+      {timelineError && <p role="alert" className="text-xs text-destructive">{timelineError}</p>}
       {/* Journal Controls Bar: View Switcher, Filter Chips, Add Action */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 py-2 border-b border-border">
         {/* Left: Section Subheading & Supporting Copy */}
@@ -637,7 +589,7 @@ export function CinematicTimeline({
       </div>
 
       {/* Main Content Presentation */}
-      {entries.length === 0 ? (
+      {entries.length === 0 && undatedFromFilter.length === 0 ? (
         /* Empty State */
         <div className="py-20 text-center rounded-2xl border border-dashed border-border bg-card/50 p-8 sm:p-12 space-y-4 max-w-xl mx-auto">
           <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 text-primary flex items-center justify-center mx-auto">
@@ -660,7 +612,7 @@ export function CinematicTimeline({
             </button>
           </div>
         </div>
-      ) : filteredEntries.length === 0 ? (
+      ) : filteredEntries.length === 0 && undatedTimelineEntries.length === 0 ? (
         /* Filter Empty State */
         <div className="py-12 text-center text-xs text-muted-foreground">
           No viewings match the &ldquo;{filter}&rdquo; filter.{" "}
@@ -792,12 +744,13 @@ export function CinematicTimeline({
           onClose={() => setHistoryMediaItem(null)}
           mediaItem={historyMediaItem}
           onLogNewViewing={() => {
+            setEditingEntry(null);
             setLogDialogMediaItem(historyMediaItem);
             setIsLogDialogOpen(true);
           }}
           onEditEntry={(entry) => {
             setHistoryMediaItem(null);
-            handleEditEntry(entry);
+            handleEditEntry({ ...entry, diaryEntryId: entry.id });
           }}
           onEntryDeleted={(id) => {
             handleEntryDeleted(id);

@@ -1,3 +1,4 @@
+import { syncReviewActivity, syncStandaloneRatingActivity } from "@/lib/activity-sync";
 import { NextRequest, NextResponse } from "next/server";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { getServerSession } from "@/lib/server-session";
@@ -104,11 +105,11 @@ export async function POST(request: NextRequest) {
     let review = null;
     if (reviewInput) {
       const id = typeof reviewInput.id === "string" ? reviewInput.id : null;
-      const existingReview = await tx.query.reviews.findFirst({
+      const existingReview = id ? await tx.query.reviews.findFirst({
         where: (r, { and, eq }) => id
           ? and(eq(r.id, id), eq(r.userId, session.user.id), eq(r.mediaItemId, resolvedMediaId), eq(r.isJournal, true))
           : and(eq(r.userId, session.user.id), eq(r.mediaItemId, resolvedMediaId), eq(r.isJournal, true)),
-      });
+      }) : undefined;
       if (id && !existingReview) fail(404, "Review not found or access denied");
       const content = typeof reviewInput.content === "string" ? reviewInput.content : "";
       if (reviewInput.shareRating !== undefined && typeof reviewInput.shareRating !== "boolean") fail(400, "Invalid rating sharing choice");
@@ -134,6 +135,7 @@ export async function POST(request: NextRequest) {
           shareRating,
           isSpoiler: Boolean(reviewInput.isSpoiler),
           ratingId: reviewRatingId,
+          ...(quickScore !== undefined ? { ratingValue: quickScore } : {}),
           publishedAt: status === "published" ? (existingReview.publishedAt ?? now) : null,
           updatedAt: now,
         }).where(eq(reviews.id, reviewId));
@@ -143,11 +145,17 @@ export async function POST(request: NextRequest) {
           title: typeof reviewInput.title === "string" && reviewInput.title.trim() ? reviewInput.title.trim() : null,
           content, draftContent: status === "draft" ? content : null, contentFormat: "markdown", draftContentFormat: status === "draft" ? "markdown" : null,
           status, visibility, isSpoiler: Boolean(reviewInput.isSpoiler), publishedAt: status === "published" ? now : null, createdAt: now, updatedAt: now,
+          ratingValue: quickScore ?? null,
           isJournal: true,
           shareRating,
         });
       }
       review = await tx.query.reviews.findFirst({ where: (r, { eq }) => eq(r.id, reviewId) });
+    }
+    if (review) await syncReviewActivity(review, tx);
+    if (journalRatingId && (quickScore !== undefined || detailedRating)) {
+      const saved = await tx.query.ratings.findFirst({ where: eq(ratings.id, journalRatingId) });
+      if (saved) await syncStandaloneRatingActivity(saved, tx);
     }
     return NextResponse.json({ ratingId: journalRatingId, review, mediaItemId: resolvedMediaId });
   });

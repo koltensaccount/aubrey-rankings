@@ -1,3 +1,4 @@
+import { isValidWatchDate } from "@/lib/letterboxd";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
@@ -109,7 +110,8 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { mediaItemId, watchedDate, isRewatch, ratingValue, notes, tags } = body;
+    if (body.watchedDate != null && body.watchedDate !== "" && (typeof body.watchedDate !== "string" || !isValidWatchDate(body.watchedDate.trim()))) return NextResponse.json({ error: "Invalid viewing date" }, { status: 400 });
+    const { mediaItemId, watchedDate, isRewatch, ratingValue, tags } = body;
 
     if (!mediaItemId) {
       return NextResponse.json(
@@ -163,9 +165,9 @@ export async function POST(req: NextRequest) {
 
     const entryId = randomUUID();
     const formattedWatchedDate =
-      typeof watchedDate === "string" && /^\d{4}-\d{2}-\d{2}$/.test(watchedDate.trim())
+      typeof watchedDate === "string" && isValidWatchDate(watchedDate.trim())
         ? watchedDate.trim()
-        : new Date().toISOString().slice(0, 10);
+        : null;
 
     const parsedRating =
       typeof ratingValue === "number" && !isNaN(ratingValue)
@@ -191,7 +193,7 @@ export async function POST(req: NextRequest) {
       ratingValue: parsedRating,
       sourceRating,
       sourceScale,
-      notes: typeof notes === "string" ? notes.trim() : null,
+      notes: null,
       tags: Array.isArray(tags) ? tags : null,
     });
 
@@ -209,7 +211,7 @@ export async function POST(req: NextRequest) {
       sourceRating,
       sourceScale,
       isRewatch: finalIsRewatch,
-      notes: typeof notes === "string" ? notes.trim() : null,
+      notes: null,
       sourceEventKey: `diary:${entryId}`,
       createdAt: now,
       updatedAt: now,

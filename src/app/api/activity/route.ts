@@ -12,7 +12,10 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const limitParam = parseInt(searchParams.get("limit") || "50", 10);
     const offsetParam = parseInt(searchParams.get("offset") || "0", 10);
-    const filter = (searchParams.get("filter") || "all") as ActivityFilter;
+    const requestedFilter = searchParams.get("filter") || "all";
+    const filters: ActivityFilter[] = ["all", "viewings", "reviews", "ratings", "watchlist", "films", "tv", "rewatches"];
+    const filter = filters.find((value) => value === requestedFilter);
+    if (!filter || !Number.isFinite(limitParam) || !Number.isFinite(offsetParam)) return NextResponse.json({ error: "Invalid timeline pagination or filter" }, { status: 400 });
 
     const result = await getUserUnifiedTimeline(session.user.id, {
       limit: limitParam,

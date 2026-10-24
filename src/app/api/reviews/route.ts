@@ -1,7 +1,9 @@
+import { syncReviewActivity } from "@/lib/activity-sync";
+import { validReviewScoreInput } from "@/lib/review-rating";
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
-import { reviews, mediaItems, user, ratings, ratingTiers, activityEvents, diaryEntries } from "@/db/schema";
+import { reviews, mediaItems, user, ratings, ratingTiers, diaryEntries } from "@/db/schema";
 import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import { requireRateLimit } from "@/lib/request-limits";
@@ -109,7 +111,7 @@ export async function GET(request: NextRequest) {
       sourceRating: r.sourceRating,
       sourceScale: r.sourceScale,
       viewingId: r.viewingId,
-      publishedAt: r.publishedAt,
+      publishedAt: r.sourceService === "letterboxd" ? (r.sourceReviewDate ? new Date(r.sourceReviewDate) : null) : r.publishedAt,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
       author: {
@@ -180,6 +182,7 @@ export async function POST(request: NextRequest) {
     sourceScale,
     viewingId,
   } = body;
+  if (!validReviewScoreInput({ ratingValue, sourceRating, sourceScale })) return NextResponse.json({ error: "Invalid review score or source scale" }, { status: 400 });
 
   if (!mediaItemId || typeof mediaItemId !== "string") {
     return NextResponse.json({ error: "mediaItemId is required" }, { status: 400 });
@@ -262,7 +265,8 @@ export async function POST(request: NextRequest) {
   const now = new Date();
   const publishedAt = reviewStatus === "published" ? now : null;
 
-  await db.insert(reviews).values({
+  await db.transaction(async (tx) => {
+    const [saved] = await tx.insert(reviews).values({
     id: reviewId,
     userId: session.user.id,
     mediaItemId: resolvedMediaId,
@@ -284,27 +288,10 @@ export async function POST(request: NextRequest) {
     publishedAt,
     createdAt: now,
     updatedAt: now,
-  });
+    }).returning();
 
-  // Track chronological activity event if published
-  if (reviewStatus === "published") {
-    const eventDate = publishedAt ? publishedAt.toISOString().slice(0, 10) : null;
-    await db.insert(activityEvents).values({
-      id: `act_${randomUUID()}`,
-      userId: session.user.id,
-      mediaItemId: resolvedMediaId,
-      eventType: "review",
-      eventDate,
-      loggedDate: now,
-      reviewId,
-      ratingValue: parsedRatingValue,
-      sourceRating: parsedSourceRating,
-      sourceScale: parsedSourceScale,
-      sourceEventKey: `rev:${reviewId}`,
-      createdAt: now,
-      updatedAt: now,
-    }).onConflictDoNothing();
-  }
+    await syncReviewActivity(saved, tx);
+  });
 
   const created = await db.query.reviews.findFirst({
     where: eq(reviews.id, reviewId),

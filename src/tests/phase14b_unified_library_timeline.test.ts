@@ -418,7 +418,7 @@ describe("Phase 14B: Unified Library & Cinematic Viewing Timeline", () => {
     );
     assert.equal(patchRes.status, 200);
     const patchData = await patchRes.json();
-    assert.equal(patchData.entry.notes, "Updated note: Christopher Nolan masterpiece.");
+    assert.equal(patchData.entry.notes, entry.notes, "Viewing edits preserve historical notes without creating new Notes writing");
 
     // Attempt to edit by visitor (must fail closed)
     const visitorPatchRes = await patchDiaryItem(
