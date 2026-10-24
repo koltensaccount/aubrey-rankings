@@ -123,7 +123,7 @@ export async function GET(
       sourceRating: review.sourceRating,
       sourceScale: review.sourceScale,
       viewingId: review.viewingId,
-      publishedAt: review.sourceService === "letterboxd" ? (review.sourceReviewDate ? new Date(review.sourceReviewDate) : null) : review.publishedAt,
+      publishedAt: review.sourceService === "letterboxd" ? review.sourceReviewDate : review.publishedAt,
       createdAt: review.createdAt,
       updatedAt: review.updatedAt,
       author: {

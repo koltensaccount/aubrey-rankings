@@ -111,7 +111,7 @@ export async function GET(request: NextRequest) {
       sourceRating: r.sourceRating,
       sourceScale: r.sourceScale,
       viewingId: r.viewingId,
-      publishedAt: r.sourceService === "letterboxd" ? (r.sourceReviewDate ? new Date(r.sourceReviewDate) : null) : r.publishedAt,
+      publishedAt: r.sourceService === "letterboxd" ? r.sourceReviewDate : r.publishedAt,
       createdAt: r.createdAt,
       updatedAt: r.updatedAt,
       author: {

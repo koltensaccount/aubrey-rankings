@@ -8,10 +8,8 @@ DROP INDEX IF EXISTS uniq_reviews_source_uri;
 ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS source_service text;
 ALTER TABLE watchlist_items ADD COLUMN IF NOT EXISTS source_added_date text;
 CREATE INDEX IF NOT EXISTS idx_activity_user_date_id ON activity_events(user_id, event_date DESC, created_at DESC, id DESC);
--- Old imported watchlist dates are ambiguous. Identify import provenance without
--- changing audit dates or inventing source dates. Reimport can recover source dates.
-UPDATE watchlist_items w SET source_service = 'legacy_unknown'
-WHERE source_service IS NULL AND EXISTS (
- SELECT 1 FROM ratings m WHERE m.user_id = w.user_id
- AND m.media_item_id = w.media_item_id AND m.source_service = 'letterboxd'
-);
+-- Old watchlist rows have no verified per-item provenance. An imported rating
+-- for the same user/title does not prove the watchlist entry was imported.
+-- Preserve existing timestamps and any explicit source metadata. Leave unproven
+-- provenance unset; recovering historical import dates requires authentic source
+-- information, never inference from another activity.

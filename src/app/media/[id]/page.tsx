@@ -451,7 +451,7 @@ export default async function MediaDetailsPage({
       isSpoiler: r.isSpoiler,
       sourceService: r.sourceService,
       sourceReviewDate: r.sourceReviewDate,
-      publishedAt: r.sourceService === "letterboxd" ? (r.sourceReviewDate ? new Date(r.sourceReviewDate) : null) : r.publishedAt,
+      publishedAt: r.sourceService === "letterboxd" ? r.sourceReviewDate : r.publishedAt,
       updatedAt: r.updatedAt,
       author: {
         id: r.user.id,
@@ -589,7 +589,7 @@ export default async function MediaDetailsPage({
       tierColor: r.rating?.tier?.color ?? null,
       sourceService: r.sourceService,
       sourceReviewDate: r.sourceReviewDate,
-      publishedAt: r.sourceService === "letterboxd" ? (r.sourceReviewDate ? new Date(r.sourceReviewDate) : null) : r.publishedAt,
+      publishedAt: r.sourceService === "letterboxd" ? r.sourceReviewDate : r.publishedAt,
       updatedAt: r.updatedAt,
       createdAt: r.createdAt,
     };

@@ -7,9 +7,14 @@ with review-event uniqueness, and adds separate verified source dates. No data
 reset or destructive consolidation is required.
 
 Imported reviews without verified source dates remain undated, including for
-latest-rated-review selection. Potentially imported legacy watchlist dates are
-marked `legacy_unknown`; their audit timestamps remain intact. Native watchlist
-entries retain their native dates. A published review with an unknown source date
+latest-rated-review selection. Pre-0020 watchlist rows lack
+per-item source provenance: an imported rating for the same title cannot establish
+whether a watchlist item was native or imported. The migration leaves these rows
+unclassified and preserves their timestamps, including authentic native dates.
+Some old import timestamps may therefore remain indistinguishable from native
+watchlist dates; neither a source nor a replacement date can be inferred safely.
+Explicitly stored source metadata is preserved; new imports use separate verified
+source dates. Authentic source information is required to resolve old ambiguity. A published review with an unknown source date
 is still published; it is not treated as a draft.
 
 To recover original dates for existing imports, reimport the original Letterboxd

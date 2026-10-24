@@ -1,5 +1,6 @@
 "use client";
 
+import { formatReviewDate } from "@/lib/review-date";
 import { personalReviewScore } from "@/lib/review-rating";
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -118,13 +119,8 @@ export function ReviewDetailClient({
     } catch {}
   };
 
-  const formattedDate = review.publishedAt
-    ? new Date(review.publishedAt).toLocaleDateString("en-US", {
-        month: "long",
-        day: "numeric",
-        year: "numeric",
-      })
-    : review.status === "published" ? "Review date unknown" : "Unpublished Draft";
+  const formattedDate = formatReviewDate(review.publishedAt) ??
+    (review.status === "published" ? "Review date unknown" : "Unpublished Draft");
 
   const media = review.mediaItem;
   const isTv = media.mediaType === "tv" || media.mediaType === "episode" || Boolean(media.seasonNumber);

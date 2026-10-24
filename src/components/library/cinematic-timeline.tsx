@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useEffect, useRef } from "react";
+import { getViewingOrdinals, isRewatchActivity } from "@/lib/viewing-ordinals";
 import { Calendar, List, Plus, Sparkles, Filter, Loader2 } from "lucide-react";
 import { TimelineEntryCard } from "./timeline-entry-card";
 import { CompactDiaryList } from "./compact-diary-list";
@@ -226,52 +227,8 @@ export function CinematicTimeline({
     }
   };
 
-  // Compute total viewings and chronological ordinals per media item
-  // Ordinals strictly reflect known logged events in ascending order across lifetime history
-  const { mediaOrdinalsMap, mediaTotalCountMap } = useMemo(() => {
-    const ordinalsMap = new Map<string, number>(); // entry.id -> ordinal (1, 2, 3...)
-    const totalCountMap = new Map<string, number>(); // mediaItemId -> total count
-
-    // 1. Populate from entry-level metadata if provided by the server/database
-    entries.forEach((e) => {
-      if (typeof e.ordinal === "number") {
-        ordinalsMap.set(e.id, e.ordinal);
-      }
-      if (typeof e.totalViewings === "number") {
-        const cur = totalCountMap.get(e.mediaItemId) || 0;
-        totalCountMap.set(e.mediaItemId, Math.max(cur, e.totalViewings));
-      }
-    });
-
-    // 2. For any entries without server ordinals, compute locally
-    const byMedia = new Map<string, TimelineEntry[]>();
-    entries.forEach((e) => {
-      const list = byMedia.get(e.mediaItemId) || [];
-      list.push(e);
-      byMedia.set(e.mediaItemId, list);
-    });
-
-    // For each media item, sort chronologically ascending to assign ordinals if missing
-    byMedia.forEach((mediaEntries, mediaId) => {
-      if (!totalCountMap.has(mediaId)) {
-        totalCountMap.set(mediaId, mediaEntries.length);
-      }
-
-      const sortedAsc = [...mediaEntries].sort((a, b) => {
-        const dateA = a.watchedDate || "";
-        const dateB = b.watchedDate || "";
-        return dateA.localeCompare(dateB);
-      });
-
-      sortedAsc.forEach((entry, idx) => {
-        if (!ordinalsMap.has(entry.id)) {
-          ordinalsMap.set(entry.id, idx + 1);
-        }
-      });
-    });
-
-    return { mediaOrdinalsMap: ordinalsMap, mediaTotalCountMap: totalCountMap };
-  }, [entries]);
+  // Prefer lifetime server metadata; local fallback counts actual viewings only.
+  const { mediaOrdinalsMap, mediaTotalCountMap } = useMemo(() => getViewingOrdinals(entries), [entries]);
 
   // Filter entries
   const filteredEntries = useMemo(() => {
@@ -288,7 +245,7 @@ export function CinematicTimeline({
       }
       if (filter === "rewatches") {
         const ordinal = e.ordinal ?? mediaOrdinalsMap.get(e.id) ?? 1;
-        return Boolean(e.isRewatch || ordinal > 1);
+        return isRewatchActivity(e, ordinal);
       }
       if (filter === "viewings") {
         return (

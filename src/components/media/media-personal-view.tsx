@@ -1,5 +1,6 @@
 "use client";
 
+import { formatReviewDate } from "@/lib/review-date";
 import { latestDatedRatedReview, personalReviewScore } from "@/lib/review-rating";
 
 import { useState } from "react";
@@ -325,7 +326,7 @@ export function MediaPersonalView({
                 )}
               </div>
 
-              {latestRatedReview && <p className="text-xs text-muted-foreground">Latest dated rated {latestRatedReview.sourceService === "letterboxd" ? "Letterboxd " : ""}review · {latestRatedReview.sourceReviewDate || new Date(latestRatedReview.publishedAt!).toLocaleDateString()}</p>}
+              {latestRatedReview && <p className="text-xs text-muted-foreground">Latest dated rated {latestRatedReview.sourceService === "letterboxd" ? "Letterboxd " : ""}review · {formatReviewDate(latestRatedReview.sourceReviewDate ?? latestRatedReview.publishedAt) ?? "Review date unknown"}</p>}
               {isImportedRating && (
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                   <span className="px-2 py-0.5 rounded bg-surface border border-border font-medium text-foreground">

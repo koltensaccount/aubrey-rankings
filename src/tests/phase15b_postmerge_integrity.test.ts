@@ -21,7 +21,7 @@ const { GET: readCollection } = await import("../app/api/collections/[id]/route"
 const { PATCH: editEntry } = await import("../app/api/collections/[id]/entries/[entryId]/route");
 const { POST: saveRating } = await import("../app/api/ratings/route");
 const { POST: createReview } = await import("../app/api/reviews/route");
-const { PATCH: editReview } = await import("../app/api/reviews/[id]/route");
+const { GET: readReview, PATCH: editReview } = await import("../app/api/reviews/[id]/route");
 const { POST: saveJournal } = await import("../app/api/journal/route");
 const { parseLetterboxdZip } = await import("../lib/letterboxd");
 const { executeLetterboxdImport } = await import("../lib/letterboxd-import");
@@ -198,6 +198,7 @@ const { latestDatedRatedReview, personalReviewScore } = await import("../lib/rev
     assert.equal(edited.ratingValue, 6);
     assert.equal(edited.visibility, "unlisted");
     assert.equal(edited.sourceReviewDate, "2019-01-02");
+    assert.equal((await (await readReview(req(`/api/reviews/${edited.id}`), ctx(edited.id))).json()).review.publishedAt, "2019-01-02");
     assert.equal(again.find((r) => r.content === "Undated")?.sourceReviewDate, null);
     const timeline = await getUserUnifiedTimeline(ownerId);
     assert.ok(timeline.entries.some((r) => r.eventType === "rating" && r.eventDate === "2018-01-01"));
