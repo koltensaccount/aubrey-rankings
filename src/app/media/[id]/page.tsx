@@ -1,15 +1,15 @@
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/db";
 import { mediaItems, ratings, collections, collectionEntries, user, reviews, diaryEntries, watchlistItems } from "@/db/schema";
-import { eq, and, isNull, desc } from "drizzle-orm";
+import { eq, and, isNull, desc, inArray } from "drizzle-orm";
 import { tmdb } from "@/lib/tmdb";
 import { getServerSession } from "@/lib/server-session";
 import { getBlockedUserIds } from "@/lib/safety";
-import { canShowReviewRating, reviewScoreOnTen, tmdbAudienceRating } from "@/lib/review-rating";
+import { canShowReviewRating, reviewScoreOnTen, resolveReviewScoreOnTen, tmdbAudienceRating } from "@/lib/review-rating";
 import { getCommunityAverage } from "@/lib/community-rating";
 import { getPersonalMediaUrl } from "@/lib/media-url";
 import { MediaHeroBanner } from "@/components/media/media-hero-banner";
-import { MediaPublicOverview, type PublicReviewItem, type TvSeasonTab, type TvEpisodeItem } from "@/components/media/media-public-overview";
+import { MediaPublicOverview, type PublicReviewItem, type PublicRankingItem, type TvSeasonTab, type TvEpisodeItem } from "@/components/media/media-public-overview";
 import { MediaPersonalView, type PersonalRatingData, type PersonalReviewData, type PersonalDiaryData, type PersonalCollectionRankData } from "@/components/media/media-personal-view";
 
 export default async function MediaDetailsPage({
@@ -408,12 +408,15 @@ export default async function MediaDetailsPage({
       rating: {
         columns: {
           id: true,
+          userId: true,
+          mediaItemId: true,
           calculatedOverallScore: true,
           sourceRating: true,
           sourceScale: true,
           sourceService: true,
           ratingSystemId: true,
           tierId: true,
+          collectionId: true,
         },
         with: {
           ratingSystem: { columns: { scale: true, type: true } },
@@ -439,9 +442,9 @@ export default async function MediaDetailsPage({
       title: r.title,
       reviewText: r.content,
       contentFormat: r.contentFormat,
-      score: r.rating && canShowReviewRating(r) ? reviewScoreOnTen(r.rating) : null,
+      score: canShowReviewRating(r) ? resolveReviewScoreOnTen(r) : null,
       scale: 10,
-      tier: canShowReviewRating(r) && r.rating?.tier
+      tier: canShowReviewRating(r) && r.rating?.tier && r.rating.collectionId === null
         ? {
             id: r.rating.tier.id,
             name: r.rating.tier.name,
@@ -462,6 +465,77 @@ export default async function MediaDetailsPage({
     }));
 
   const averageScore = await getCommunityAverage(journalMediaId, blockedUserIds);
+
+  // Query Public Rankings Featuring this Title
+  const publicCollectionEntries = isEphemeral
+    ? []
+    : await db.query.collectionEntries.findMany({
+        where: eq(collectionEntries.mediaItemId, journalMediaId),
+        with: {
+          collection: {
+            with: {
+              user: {
+                columns: {
+                  id: true,
+                  name: true,
+                  username: true,
+                  image: true,
+                },
+              },
+              entries: {
+                columns: {
+                  id: true,
+                },
+              },
+            },
+          },
+        },
+        orderBy: [desc(collectionEntries.updatedAt)],
+      });
+
+  const publicCollectionIds = publicCollectionEntries.map((e) => e.collectionId);
+  const publicCollectionRatings = publicCollectionIds.length > 0
+    ? await db.query.ratings.findMany({
+        where: (r, { and, eq, inArray }) =>
+          and(eq(r.mediaItemId, journalMediaId), inArray(r.collectionId, publicCollectionIds)),
+        with: {
+          tier: true,
+        },
+      })
+    : [];
+
+  const tierByCollectionId = new Map(
+    publicCollectionRatings
+      .filter((r) => r.collectionId && r.tier)
+      .map((r) => [r.collectionId!, r.tier!])
+  );
+
+  const publicRankings: PublicRankingItem[] = publicCollectionEntries
+    .filter(
+      (e) =>
+        e.collection &&
+        e.collection.visibility === "public" &&
+        !blockedUserIds.has(e.collection.userId)
+    )
+    .map((e) => {
+      const tier = tierByCollectionId.get(e.collectionId);
+      return {
+        collectionId: e.collection.id,
+        collectionTitle: e.collection.title,
+        collectionType: e.collection.collectionType || "custom",
+        isRanked: Boolean(e.collection.isRanked),
+        rankPosition: (e.sortOrder ?? 0) + 1,
+        tierName: tier?.name ?? null,
+        tierColor: tier?.color ?? null,
+        itemCount: e.collection.entries?.length || 0,
+        owner: {
+          id: e.collection.user.id,
+          name: e.collection.user.name,
+          username: e.collection.user.username,
+          image: e.collection.user.image,
+        },
+      };
+    });
   let tmdbRating = tmdbAudienceRating(media.tmdbMetadata);
   let tvSeasonsList: TvSeasonTab[] = [];
   let seasonEpisodes: TvEpisodeItem[] = [];
@@ -701,6 +775,7 @@ export default async function MediaDetailsPage({
             seasonEpisodes={seasonEpisodes}
             activeSeasonNumber={activeSeasonNumber}
             publicReviews={publicReviews}
+            publicRankings={publicRankings}
           />
         )}
       </main>
