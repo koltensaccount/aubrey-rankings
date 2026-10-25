@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "@/lib/server-session";
 import { db } from "@/db";
 import { collections, follows, likes, savedRankings, comments, ratings, user, reviews } from "@/db/schema";
-import { desc, eq, inArray, and, or, sql, isNotNull, ne } from "drizzle-orm";
-import { canShowReviewRating, reviewScoreOnTen } from "@/lib/review-rating";
+import { desc, eq, inArray, and, or, sql, isNotNull, ne, asc } from "drizzle-orm";
+import { canShowReviewRating, reviewScoreOnTen, resolveReviewScoreOnTen } from "@/lib/review-rating";
 
 export async function GET(request: NextRequest) {
   const session = await getServerSession(request);
@@ -66,8 +66,15 @@ export async function GET(request: NextRequest) {
             isTestWorkspace: true,
           },
         },
+        defaultRatingSystem: {
+          with: {
+            tiers: {
+              orderBy: (tier, { asc }) => [asc(tier.sortOrder)],
+            },
+          },
+        },
         entries: {
-          limit: 4,
+          orderBy: [asc(collections.updatedAt)],
           with: {
             mediaItem: true,
           },
@@ -75,7 +82,22 @@ export async function GET(request: NextRequest) {
         ratings: {
           columns: {
             id: true,
+            userId: true,
+            mediaItemId: true,
+            tierId: true,
             calculatedOverallScore: true,
+            sourceRating: true,
+            sourceScale: true,
+          },
+          with: {
+            tier: {
+              columns: {
+                id: true,
+                name: true,
+                color: true,
+                sortOrder: true,
+              },
+            },
           },
         },
       },
@@ -175,6 +197,60 @@ export async function GET(request: NextRequest) {
           ).toFixed(1)
         : null;
 
+      const ownerRatings = (col.ratings || []).filter((r: any) => r.userId === col.userId);
+      const ratingMapByMediaId = new Map(ownerRatings.map((r: any) => [r.mediaItemId, r]));
+
+      const sysTiers = (col.defaultRatingSystem?.tiers || []).sort(
+        (a: any, b: any) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0)
+      );
+      const hasTiers = sysTiers.length > 0;
+
+      // Group entries by tier if hasTiers is true
+      let tiersData: any[] = [];
+      let unassignedEntries: any[] = [];
+
+      const orderedEntries = (col.entries || []).map((e: any, idx: number) => {
+        const m = e.mediaItem;
+        const userRating = m ? ratingMapByMediaId.get(m.id) : null;
+        return {
+          id: m?.id,
+          title: m?.title || `Item ${idx + 1}`,
+          mediaType: m?.mediaType,
+          posterPath: m?.posterPath,
+          stillPath: m?.stillPath,
+          seasonNumber: m?.seasonNumber,
+          episodeNumber: m?.episodeNumber,
+          rank: idx + 1,
+          sortOrder: e.sortOrder ?? idx,
+          tierId: userRating?.tierId || null,
+        };
+      });
+
+      if (hasTiers) {
+        const tierEntriesMap = new Map<string, any[]>();
+        for (const t of sysTiers) {
+          tierEntriesMap.set(t.id, []);
+        }
+
+        for (const item of orderedEntries) {
+          if (item.tierId && tierEntriesMap.has(item.tierId)) {
+            tierEntriesMap.get(item.tierId)!.push(item);
+          } else {
+            unassignedEntries.push(item);
+          }
+        }
+
+        tiersData = sysTiers.map((t: any) => ({
+          id: t.id,
+          name: t.name,
+          color: t.color,
+          sortOrder: t.sortOrder,
+          entries: tierEntriesMap.get(t.id) || [],
+        }));
+      }
+
+      const topEntries = orderedEntries.slice(0, 4);
+
       return {
         type: "ranking",
         id: col.id,
@@ -194,12 +270,11 @@ export async function GET(request: NextRequest) {
           customCoverImage: col.customCoverImage,
           backdropImage: col.backdropImage,
           entriesCount: col.entries?.length || 0,
-          topEntries: (col.entries || []).map((e) => ({
-            id: e.mediaItem?.id,
-            title: e.mediaItem?.title,
-            posterPath: e.mediaItem?.posterPath,
-            stillPath: e.mediaItem?.stillPath,
-          })),
+          hasTiers,
+          tiers: tiersData,
+          unassignedEntries,
+          entries: orderedEntries,
+          topEntries,
           averageScore: avgScore,
         },
         stats: {
@@ -240,6 +315,9 @@ export async function GET(request: NextRequest) {
         rating: {
           columns: {
             id: true,
+            userId: true,
+            mediaItemId: true,
+            collectionId: true,
             calculatedOverallScore: true,
             sourceRating: true,
             sourceScale: true,
@@ -343,9 +421,9 @@ export async function GET(request: NextRequest) {
         reviewText: r.content,
         contentFormat: r.contentFormat,
         isSpoiler: r.isSpoiler,
-        score: r.rating && canShowReviewRating(r) ? reviewScoreOnTen(r.rating) : null,
+        score: canShowReviewRating(r) ? resolveReviewScoreOnTen(r) : null,
         scale: 10,
-        tier: canShowReviewRating(r) && r.rating?.tier
+        tier: canShowReviewRating(r) && r.rating?.tier && r.rating.collectionId === null
           ? {
               id: r.rating.tier.id,
               name: r.rating.tier.name,
