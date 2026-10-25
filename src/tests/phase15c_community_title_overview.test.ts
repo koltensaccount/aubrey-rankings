@@ -8,6 +8,7 @@ import {
   reviewScoreOnTen,
   type CommunityRatingCandidate,
 } from "../lib/review-rating";
+import { formatReviewDate } from "../lib/review-date";
 import { getCommunityAverage } from "../lib/community-rating";
 import {
   getPublicMediaUrl,
@@ -574,5 +575,135 @@ describe("Phase 15C: Public Title Overview, Community Ratings & Ownership", () =
     assert.equal(sanitizeInternalReturnUrl("https://evil.com/phish"), null);
     assert.equal(sanitizeInternalReturnUrl("javascript:alert(1)"), null);
     assert.equal(sanitizeInternalReturnUrl("/discover"), "/discover");
+  });
+
+  // ---------------------------------------------------------------------------
+  // 10. Date-Only Regression: Calendar Day Preservation
+  // ---------------------------------------------------------------------------
+  it("preserves exact Letterboxd YYYY-MM-DD calendar days without America/Chicago backward shift and handles unknown dates", () => {
+    // Letterboxd date-only strings must retain their exact day regardless of local timezone
+    const lbDate = "2024-01-02";
+    const formattedShort = formatReviewDate(lbDate, { year: "numeric", month: "short", day: "numeric" });
+    assert.equal(formattedShort, "Jan 2, 2024");
+
+    const formattedLong = formatReviewDate(lbDate);
+    assert.equal(formattedLong, "January 2, 2024");
+
+    const leapDate = "2024-02-29";
+    assert.equal(
+      formatReviewDate(leapDate, { year: "numeric", month: "short", day: "numeric" }),
+      "Feb 29, 2024"
+    );
+
+    // Native timestamp localization
+    const nativeDate = new Date("2024-05-15T18:00:00Z");
+    const formattedNative = formatReviewDate(nativeDate, { year: "numeric", month: "short", day: "numeric" });
+    assert.ok(formattedNative?.includes("2024"));
+
+    // Unknown or invalid dates gracefully return null
+    assert.equal(formatReviewDate(null), null);
+    assert.equal(formatReviewDate(undefined), null);
+    assert.equal(formatReviewDate("invalid-date"), null);
+    assert.equal(formatReviewDate("2024-02-30"), null);
+  });
+
+  // ---------------------------------------------------------------------------
+  // 11. Review-Score Consistency: Mismatched Linked Ratings, Imported Scales & Multiple Reviews
+  // ---------------------------------------------------------------------------
+  it("consistently resolves authentic review scores across mismatched linked ratings, imported scales, and multiple author reviews", () => {
+    // Case A: Review with a collection-specific linked rating (r.collectionId !== null)
+    // The collection rating MUST NOT be mistaken for a review rating, but direct review-level score is preserved.
+    const reviewWithCollectionRating = {
+      userId: "u1",
+      mediaItemId: "m1",
+      ratingValue: 8.5,
+      rating: {
+        userId: "u1",
+        mediaItemId: "m1",
+        collectionId: "col_ranking_123", // Collection-specific ranking!
+        tierId: null,
+        calculatedOverallScore: 4.0, // Collection score must NOT leak
+      },
+    };
+    assert.equal(resolveReviewScoreOnTen(reviewWithCollectionRating), 8.5);
+
+    // Case B: Review with a collection rating and NO review-level score must resolve to null
+    const reviewWithOnlyCollectionScore = {
+      userId: "u1",
+      mediaItemId: "m1",
+      ratingValue: null,
+      sourceRating: null,
+      rating: {
+        userId: "u1",
+        mediaItemId: "m1",
+        collectionId: "col_ranking_123",
+        tierId: null,
+        calculatedOverallScore: 9.0,
+      },
+    };
+    assert.equal(resolveReviewScoreOnTen(reviewWithOnlyCollectionScore), null);
+
+    // Case C: Review with a linked rating belonging to another user (userId mismatch)
+    // Linked rating is rejected; review's own Letterboxd rating is preserved
+    const reviewWithMismatchedUser = {
+      userId: "u1",
+      mediaItemId: "m1",
+      sourceRating: 4.5,
+      sourceScale: 5,
+      rating: {
+        userId: "u2", // Mismatched user!
+        mediaItemId: "m1",
+        collectionId: null,
+        tierId: null,
+        calculatedOverallScore: 2.0,
+      },
+    };
+    assert.equal(resolveReviewScoreOnTen(reviewWithMismatchedUser), 9.0);
+
+    // Case D: Direct imported scales normalized accurately to 10
+    assert.equal(
+      resolveReviewScoreOnTen({ sourceRating: 3.5, sourceScale: 5 }),
+      7.0
+    );
+    assert.equal(
+      resolveReviewScoreOnTen({ sourceRating: 5.0, sourceScale: 5 }),
+      10.0
+    );
+    assert.equal(
+      resolveReviewScoreOnTen({ sourceRating: 0.5, sourceScale: 5 }),
+      1.0
+    );
+
+    // Case E: Multiple rated reviews per author are preserved in communityAverage
+    const multiCandidates: CommunityRatingCandidate[] = [
+      {
+        id: "rev_1",
+        userId: "author_alpha",
+        mediaItemId: "film_multi",
+        status: "published",
+        visibility: "public",
+        isJournal: false,
+        shareRating: true,
+        rating: null,
+        ratingValue: 8.0,
+      },
+      {
+        id: "rev_2",
+        userId: "author_alpha", // Same author, distinct second review
+        mediaItemId: "film_multi",
+        status: "published",
+        visibility: "public",
+        isJournal: false,
+        shareRating: true,
+        rating: null,
+        ratingValue: 10.0,
+      },
+    ];
+
+    const result = communityAverage("film_multi", multiCandidates);
+    assert.ok(result);
+    // Both reviews are preserved: (8 + 10) / 2 = 9.0, count = 2
+    assert.equal(result.count, 2);
+    assert.equal(result.average, 9.0);
   });
 });

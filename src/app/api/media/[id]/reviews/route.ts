@@ -148,6 +148,8 @@ export async function GET(
           rating: {
             columns: {
               id: true,
+              userId: true,
+              mediaItemId: true,
               calculatedOverallScore: true,
               sourceRating: true,
               sourceScale: true,
@@ -181,7 +183,7 @@ export async function GET(
       contentFormat: r.contentFormat,
       score: canShowReviewRating(r) ? resolveReviewScoreOnTen(r) : null,
       scale: 10,
-      tier: canShowReviewRating(r) && r.rating?.tier
+      tier: canShowReviewRating(r) && r.rating?.tier && r.rating.collectionId === null
         ? {
             id: r.rating.tier.id,
             name: r.rating.tier.name,

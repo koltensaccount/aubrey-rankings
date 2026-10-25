@@ -6,6 +6,7 @@ import { MediaWatchlistButton } from "./media-watchlist-button";
 import { SpoilerConcealedText } from "@/components/reviews/spoiler-concealed-text";
 import { LikeButton } from "@/components/social/like-button";
 import { getPublicMediaUrl, getPersonalMediaUrl } from "@/lib/media-url";
+import { formatReviewDate } from "@/lib/review-date";
 import type { CommunityAverageResult } from "@/lib/review-rating";
 
 export interface PublicReviewItem {
@@ -449,13 +450,11 @@ export function MediaPublicOverview({
             {publicReviews.map((rev) => {
               const authorInitial = (rev.author.name || rev.author.username || "U")[0].toUpperCase();
               const profileHref = rev.author.username ? `/profile/${rev.author.username}` : null;
-              const formattedDate = rev.publishedAt
-                ? new Date(rev.publishedAt).toLocaleDateString("en-US", {
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                  })
-                : rev.sourceReviewDate || null;
+              const formattedDate = formatReviewDate(rev.publishedAt ?? rev.sourceReviewDate, {
+                year: "numeric",
+                month: "short",
+                day: "numeric",
+              });
 
               return (
                 <article

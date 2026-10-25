@@ -5,7 +5,7 @@ import { eq, and, isNull, desc, inArray } from "drizzle-orm";
 import { tmdb } from "@/lib/tmdb";
 import { getServerSession } from "@/lib/server-session";
 import { getBlockedUserIds } from "@/lib/safety";
-import { canShowReviewRating, reviewScoreOnTen, tmdbAudienceRating } from "@/lib/review-rating";
+import { canShowReviewRating, reviewScoreOnTen, resolveReviewScoreOnTen, tmdbAudienceRating } from "@/lib/review-rating";
 import { getCommunityAverage } from "@/lib/community-rating";
 import { getPersonalMediaUrl } from "@/lib/media-url";
 import { MediaHeroBanner } from "@/components/media/media-hero-banner";
@@ -408,6 +408,8 @@ export default async function MediaDetailsPage({
       rating: {
         columns: {
           id: true,
+          userId: true,
+          mediaItemId: true,
           calculatedOverallScore: true,
           sourceRating: true,
           sourceScale: true,
@@ -433,49 +435,34 @@ export default async function MediaDetailsPage({
 
   const publicReviews: PublicReviewItem[] = rawFirstClassReviews
     .filter((r) => !blockedUserIds.has(r.userId))
-    .map((r) => {
-      let score: number | null = null;
-      if (canShowReviewRating(r)) {
-        if (r.rating && r.rating.collectionId === null && r.rating.tierId === null) {
-          score = reviewScoreOnTen(r.rating);
-        }
-        if (score === null && typeof r.ratingValue === "number" && Number.isFinite(r.ratingValue)) {
-          score = r.ratingValue;
-        }
-        if (score === null && typeof r.sourceRating === "number" && Number.isFinite(r.sourceRating)) {
-          const scale = typeof r.sourceScale === "number" && r.sourceScale > 0 ? r.sourceScale : 5;
-          score = (r.sourceRating / scale) * 10;
-        }
-      }
-      return {
-        id: r.id,
-        reviewType: "independent" as const,
-        reviewUrl: `/review/${r.id}`,
-        title: r.title,
-        reviewText: r.content,
-        contentFormat: r.contentFormat,
-        score,
-        scale: 10,
-        tier: canShowReviewRating(r) && r.rating?.tier
-          ? {
-              id: r.rating.tier.id,
-              name: r.rating.tier.name,
-              color: r.rating.tier.color,
-            }
-          : null,
-        isSpoiler: r.isSpoiler,
-        sourceService: r.sourceService,
-        sourceReviewDate: r.sourceReviewDate,
-        publishedAt: r.sourceService === "letterboxd" ? r.sourceReviewDate : r.publishedAt,
-        updatedAt: r.updatedAt,
-        author: {
-          id: r.user.id,
-          name: r.user.name,
-          username: r.user.username,
-          image: r.user.image,
-        },
-      };
-    });
+    .map((r) => ({
+      id: r.id,
+      reviewType: "independent" as const,
+      reviewUrl: `/review/${r.id}`,
+      title: r.title,
+      reviewText: r.content,
+      contentFormat: r.contentFormat,
+      score: canShowReviewRating(r) ? resolveReviewScoreOnTen(r) : null,
+      scale: 10,
+      tier: canShowReviewRating(r) && r.rating?.tier && r.rating.collectionId === null
+        ? {
+            id: r.rating.tier.id,
+            name: r.rating.tier.name,
+            color: r.rating.tier.color,
+          }
+        : null,
+      isSpoiler: r.isSpoiler,
+      sourceService: r.sourceService,
+      sourceReviewDate: r.sourceReviewDate,
+      publishedAt: r.sourceService === "letterboxd" ? r.sourceReviewDate : r.publishedAt,
+      updatedAt: r.updatedAt,
+      author: {
+        id: r.user.id,
+        name: r.user.name,
+        username: r.user.username,
+        image: r.user.image,
+      },
+    }));
 
   const averageScore = await getCommunityAverage(journalMediaId, blockedUserIds);
 

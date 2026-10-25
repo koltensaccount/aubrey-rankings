@@ -33,13 +33,13 @@ export interface CommunityRatingCandidate {
   mediaItemId: string;
   status: string;
   visibility: string;
-  isJournal: boolean;
-  shareRating: boolean;
+  isJournal?: boolean;
+  shareRating?: boolean;
   ratingValue?: number | null;
   sourceRating?: number | null;
   sourceScale?: number | null;
   sourceService?: string | null;
-  rating: {
+  rating?: {
     userId: string;
     mediaItemId: string;
     collectionId: string | null;
@@ -72,6 +72,8 @@ export interface CommunityAverageResult {
 
 /** Resolves an eligible review's authoritative 10-point score across direct, imported, or linked ratings. */
 export function resolveReviewScoreOnTen(row: {
+  userId?: string;
+  mediaItemId?: string;
   isJournal?: boolean;
   shareRating?: boolean;
   ratingValue?: number | null;
@@ -97,22 +99,32 @@ export function resolveReviewScoreOnTen(row: {
   // 1. Linked rating
   const r = row.rating;
   if (r) {
-    if (r.collectionId !== null || r.tierId !== null) return null;
-    if (!r.ratingSystemId && r.categoryScores?.length) return null;
-    if (r.ratingSystemId && (!r.ratingSystem || r.ratingSystem.type !== "numerical")) return null;
+    const isMismatched = Boolean(
+      (r.userId && row.userId && r.userId !== row.userId) ||
+      (r.mediaItemId && row.mediaItemId && r.mediaItemId !== row.mediaItemId) ||
+      r.collectionId !== null ||
+      r.tierId !== null
+    );
 
-    const s = reviewScoreOnTen({
-      calculatedOverallScore: r.calculatedOverallScore ?? null,
-      sourceRating: r.sourceRating ?? null,
-      sourceScale: r.sourceScale ?? null,
-      sourceService: r.sourceService ?? null,
-      ratingSystemId: r.ratingSystemId ?? null,
-      tierId: r.tierId ?? null,
-      ratingSystem: r.ratingSystem ?? null,
-      categoryScores: r.categoryScores ?? [],
-    });
-    if (typeof s === "number" && Number.isFinite(s) && s >= 0 && s <= 10) {
-      return s;
+    if (!isMismatched) {
+      if (
+        !(!r.ratingSystemId && r.categoryScores?.length) &&
+        !(r.ratingSystemId && (!r.ratingSystem || r.ratingSystem.type !== "numerical"))
+      ) {
+        const s = reviewScoreOnTen({
+          calculatedOverallScore: r.calculatedOverallScore ?? null,
+          sourceRating: r.sourceRating ?? null,
+          sourceScale: r.sourceScale ?? null,
+          sourceService: r.sourceService ?? null,
+          ratingSystemId: r.ratingSystemId ?? null,
+          tierId: r.tierId ?? null,
+          ratingSystem: r.ratingSystem ?? null,
+          categoryScores: r.categoryScores ?? [],
+        });
+        if (typeof s === "number" && Number.isFinite(s) && s >= 0 && s <= 10) {
+          return s;
+        }
+      }
     }
   }
 
@@ -150,10 +162,6 @@ export function communityAverage(
     if (row.mediaItemId !== mediaId) continue;
     if (row.status !== "published" || row.visibility !== "public") continue;
     if (row.isJournal && row.shareRating === false) continue;
-
-    // Must not be collection-scoped or tier rating
-    if (row.rating && (row.rating.collectionId !== null || row.rating.tierId !== null)) continue;
-    if (row.rating && row.rating.userId !== row.userId) continue;
 
     const score = resolveReviewScoreOnTen(row);
     if (score === null || !Number.isFinite(score) || score < 0 || score > 10) continue;
