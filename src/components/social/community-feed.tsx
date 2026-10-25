@@ -14,6 +14,11 @@ import {
   Compass,
   Bookmark,
   Heart,
+  Layers,
+  ListOrdered,
+  ChevronDown,
+  ChevronUp,
+  BookOpen,
 } from "lucide-react";
 import { CinematicMediaCard } from "@/components/cinematic-media-card";
 import { getMediaArtworkAspect } from "@/lib/artwork";
@@ -29,6 +34,39 @@ export interface FeedAuthor {
   image: string | null;
 }
 
+export interface FeedRankingTierEntry {
+  id: string;
+  title: string;
+  mediaType?: string | null;
+  posterPath?: string | null;
+  stillPath?: string | null;
+  seasonNumber?: number | null;
+  episodeNumber?: number | null;
+  sortOrder?: number;
+  tierId?: string | null;
+}
+
+export interface FeedRankingTier {
+  id: string;
+  name: string;
+  color: string;
+  sortOrder: number;
+  entries: FeedRankingTierEntry[];
+}
+
+export interface FeedRankingEntry {
+  id: string;
+  title: string;
+  mediaType?: string | null;
+  posterPath?: string | null;
+  stillPath?: string | null;
+  seasonNumber?: number | null;
+  episodeNumber?: number | null;
+  rank?: number;
+  sortOrder?: number;
+  tierId?: string | null;
+}
+
 export interface FeedRanking {
   id: string;
   title: string;
@@ -37,6 +75,10 @@ export interface FeedRanking {
   customCoverImage: string | null;
   backdropImage: string | null;
   entriesCount: number;
+  hasTiers?: boolean;
+  tiers?: FeedRankingTier[];
+  unassignedEntries?: FeedRankingTierEntry[];
+  entries?: FeedRankingEntry[];
   topEntries: Array<{
     id?: string;
     title?: string;
@@ -106,6 +148,19 @@ export function CommunityFeed({
   const [loading, setLoading] = useState(true);
   const [emptyReason, setEmptyReason] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [expandedRankings, setExpandedRankings] = useState<Set<string>>(new Set());
+
+  const toggleRankingExpand = (rankingId: string) => {
+    setExpandedRankings((prev) => {
+      const next = new Set(prev);
+      if (next.has(rankingId)) {
+        next.delete(rankingId);
+      } else {
+        next.add(rankingId);
+      }
+      return next;
+    });
+  };
 
   const loadFeed = useCallback(async () => {
     try {
@@ -313,10 +368,14 @@ export function CommunityFeed({
 
             if (item.type === "ranking" && item.ranking) {
               const rk = item.ranking;
+              const hasTiers = Boolean(rk.hasTiers && rk.tiers && rk.tiers.length > 0);
+              const isExpanded = expandedRankings.has(rk.id);
+
               return (
                 <article
                   key={item.id}
-                  className="rounded-card border border-border-card bg-card p-5 sm:p-6 space-y-4 hover:border-border transition-colors shadow-sm"
+                  data-testid="feed-ranking-item"
+                  className="rounded-card border border-border-card bg-card p-5 sm:p-6 space-y-4 hover:border-border transition-colors shadow-xs"
                 >
                   {/* Author Header */}
                   <div className="flex items-center justify-between gap-2">
@@ -361,25 +420,27 @@ export function CommunityFeed({
                           )}
                         </div>
                         <span className="text-[11px] text-muted-foreground block truncate">
-                          published a ranking · {formatFeedTime(item.timestamp)}
+                          {hasTiers ? "published a tier list" : "published a ranking"} · {formatFeedTime(item.timestamp)}
                         </span>
                       </div>
                     </div>
 
-                    <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-surface border border-border text-muted-foreground shrink-0">
-                      {rk.collectionType === "tv_show" ? "TV Series" : "Franchise"}
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-surface border border-border text-muted-foreground shrink-0">
+                      {hasTiers ? <Layers size={11} className="text-primary-text" /> : <ListOrdered size={11} />}
+                      <span>
+                        {hasTiers ? "Tier List" : "Ranking"} · {rk.collectionType === "tv_show" ? "TV Series" : rk.collectionType === "movie_franchise" ? "Franchise" : "Collection"}
+                      </span>
                     </span>
                   </div>
 
-                  {/* Ranking Body Link */}
-                  <Link
-                    href={`/collection/${rk.id}`}
-                    className="block space-y-3 group"
-                  >
+                  {/* Ranking Body Link & Visual Preview */}
+                  <div className="space-y-3">
                     <div>
-                      <h3 className="font-display text-2xl uppercase font-bold text-foreground group-hover:text-primary-text transition-colors">
-                        {rk.title}
-                      </h3>
+                      <Link href={`/collection/${rk.id}`} className="group inline-block">
+                        <h3 className="font-display text-xl sm:text-2xl uppercase font-bold text-foreground group-hover:text-primary-text transition-colors">
+                          {rk.title}
+                        </h3>
+                      </Link>
                       {rk.description && (
                         <p className="text-xs text-muted-foreground line-clamp-2 mt-1">
                           {rk.description}
@@ -387,8 +448,167 @@ export function CommunityFeed({
                       )}
                     </div>
 
-                    {/* Top Entries Peek */}
-                    {rk.topEntries.length > 0 && (
+                    {/* Tier-List Previews or Ordered Ranking Previews */}
+                    {hasTiers && rk.tiers ? (
+                      (() => {
+                        const populatedTiers = rk.tiers.filter((t) => t.entries && t.entries.length > 0);
+                        const totalTierItems = populatedTiers.reduce((acc, t) => acc + t.entries.length, 0);
+                        const isLarge = populatedTiers.length > 3 || totalTierItems > 8;
+                        const visibleTiers = isLarge && !isExpanded ? populatedTiers.slice(0, 3) : populatedTiers;
+
+                        return (
+                          <div className="space-y-2 pt-1" data-testid="feed-tier-board">
+                            {visibleTiers.map((tier) => {
+                              return (
+                                <div
+                                  key={tier.id}
+                                  data-testid={`feed-tier-row-${tier.name.toLowerCase()}`}
+                                  className="flex rounded-lg border border-border/80 overflow-hidden bg-surface/40 hover:border-border transition-colors shadow-2xs"
+                                >
+                                  {/* Left Tier Header / Label */}
+                                  <div
+                                    className="w-14 sm:w-20 shrink-0 flex items-center justify-center p-2 font-display font-black text-sm sm:text-base text-black uppercase select-none text-center shadow-xs"
+                                    style={{ backgroundColor: tier.color }}
+                                  >
+                                    <span className="truncate">{tier.name}</span>
+                                  </div>
+
+                                  {/* Right Items Row */}
+                                  <div className="flex-1 p-2 flex flex-wrap items-center gap-2 min-w-0">
+                                    {tier.entries.map((entry) => {
+                                      const isVideo = entry.mediaType === "episode" || Boolean(entry.seasonNumber);
+                                      const aspect = isVideo ? "video" : "poster";
+                                      const itemWidth = isVideo ? "w-20 sm:w-24" : "w-12 sm:w-14";
+                                      return (
+                                        <Link
+                                          key={entry.id}
+                                          href={getPublicMediaUrl(entry.id, { from: "/feed" })}
+                                          title={entry.title}
+                                          className={`${itemWidth} rounded-md overflow-hidden border border-border/60 bg-surface shrink-0 relative group hover:border-primary/80 transition-colors shadow-2xs`}
+                                        >
+                                          <CinematicMediaCard
+                                            posterPath={entry.posterPath}
+                                            stillPath={entry.stillPath}
+                                            title={entry.title}
+                                            aspect={aspect}
+                                          />
+                                        </Link>
+                                      );
+                                    })}
+                                  </div>
+                                </div>
+                              );
+                            })}
+
+                            {/* Unassigned Entries when expanded */}
+                            {isExpanded && rk.unassignedEntries && rk.unassignedEntries.length > 0 && (
+                              <div className="flex rounded-lg border border-border/60 overflow-hidden bg-surface/30 mt-2">
+                                <div className="w-14 sm:w-20 shrink-0 flex items-center justify-center p-2 font-display text-xs font-bold text-muted-foreground uppercase bg-surface/80 border-r border-border text-center">
+                                  <span>Unranked</span>
+                                </div>
+                                <div className="flex-1 p-2 flex flex-wrap items-center gap-2 min-w-0">
+                                  {rk.unassignedEntries.map((entry) => (
+                                    <Link
+                                      key={entry.id}
+                                      href={getPublicMediaUrl(entry.id, { from: "/feed" })}
+                                      title={entry.title}
+                                      className="w-12 sm:w-14 rounded-md overflow-hidden border border-border/60 bg-surface shrink-0 relative group hover:border-primary/80 transition-colors"
+                                    >
+                                      <CinematicMediaCard
+                                        posterPath={entry.posterPath}
+                                        stillPath={entry.stillPath}
+                                        title={entry.title}
+                                        aspect="poster"
+                                      />
+                                    </Link>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Expand / Collapse Button */}
+                            {isLarge && (
+                              <button
+                                type="button"
+                                onClick={() => toggleRankingExpand(rk.id)}
+                                aria-expanded={isExpanded}
+                                data-testid="feed-tier-expand-button"
+                                className="w-full mt-2 py-1.5 px-3 rounded-lg border border-border/70 bg-surface/50 hover:bg-surface text-xs font-semibold text-primary-text flex items-center justify-center gap-1.5 transition-colors focus:outline-hidden focus:ring-1 focus:ring-primary cursor-pointer"
+                              >
+                                <span>
+                                  {isExpanded
+                                    ? `Show top 3 tiers`
+                                    : `Show full tier list (${totalTierItems} titles across ${populatedTiers.length} tiers)`}
+                                </span>
+                                {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()
+                    ) : rk.entries && rk.entries.length > 0 ? (
+                      /* Non-Tier Ordered Ranking Context */
+                      (() => {
+                        const entries = rk.entries;
+                        const isLarge = entries.length > 6;
+                        const visibleEntries = isLarge && !isExpanded ? entries.slice(0, 6) : entries;
+
+                        return (
+                          <div className="space-y-2 pt-1" data-testid="feed-ordered-ranking">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-2.5">
+                              {visibleEntries.map((entry, idx) => {
+                                const isVideo = entry.mediaType === "episode" || Boolean(entry.seasonNumber);
+                                const aspect = isVideo ? "video" : "poster";
+                                return (
+                                  <div
+                                    key={entry.id || idx}
+                                    className="rounded-lg overflow-hidden border border-border bg-surface flex flex-col justify-between shadow-2xs hover:border-border-hover transition-colors"
+                                  >
+                                    <div className="w-full bg-surface relative overflow-hidden group">
+                                      <Link href={getPublicMediaUrl(entry.id, { from: "/feed" })}>
+                                        <CinematicMediaCard
+                                          posterPath={entry.posterPath}
+                                          stillPath={entry.stillPath}
+                                          title={entry.title || "Entry"}
+                                          aspect={aspect}
+                                        />
+                                      </Link>
+                                      <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded-md bg-black/80 border border-white/20 text-[10px] font-bold text-white flex items-center justify-center shadow-xs">
+                                        #{entry.rank || idx + 1}
+                                      </span>
+                                    </div>
+                                    <div className="p-2">
+                                      <span className="text-[11px] font-semibold text-foreground line-clamp-1 block">
+                                        {entry.title || `Item ${idx + 1}`}
+                                      </span>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+
+                            {/* Expand / Collapse Button for ordered rankings */}
+                            {isLarge && (
+                              <button
+                                type="button"
+                                onClick={() => toggleRankingExpand(rk.id)}
+                                aria-expanded={isExpanded}
+                                data-testid="feed-ordered-expand-button"
+                                className="w-full mt-2 py-1.5 px-3 rounded-lg border border-border/70 bg-surface/50 hover:bg-surface text-xs font-semibold text-primary-text flex items-center justify-center gap-1.5 transition-colors focus:outline-hidden focus:ring-1 focus:ring-primary cursor-pointer"
+                              >
+                                <span>
+                                  {isExpanded
+                                    ? `Show top 6 ranked titles`
+                                    : `Show all ${entries.length} ranked titles`}
+                                </span>
+                                {isExpanded ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()
+                    ) : rk.topEntries && rk.topEntries.length > 0 ? (
+                      /* Fallback for minimal legacy records */
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
                         {rk.topEntries.map((entry, idx) => {
                           return (
@@ -397,7 +617,12 @@ export function CommunityFeed({
                               className="rounded-lg overflow-hidden border border-border bg-surface flex flex-col justify-between"
                             >
                               <div className="w-full bg-surface relative overflow-hidden">
-                                <CinematicMediaCard posterPath={entry.posterPath} stillPath={entry.stillPath} title={entry.title || "Entry"} aspect={rk.collectionType === "tv_show" ? "video" : entry.posterPath ? "poster" : "auto"} />
+                                <CinematicMediaCard
+                                  posterPath={entry.posterPath}
+                                  stillPath={entry.stillPath}
+                                  title={entry.title || "Entry"}
+                                  aspect={rk.collectionType === "tv_show" ? "video" : entry.posterPath ? "poster" : "auto"}
+                                />
                                 <span className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full bg-black/80 border border-white/20 text-[10px] font-bold text-white flex items-center justify-center">
                                   {idx + 1}
                                 </span>
@@ -411,8 +636,12 @@ export function CommunityFeed({
                           );
                         })}
                       </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground italic pt-1">
+                        No ranked titles yet.
+                      </p>
                     )}
-                  </Link>
+                  </div>
 
                   {/* Actions & Real Engagement Counts */}
                   <div className="pt-2 border-t border-border/70 flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground">
@@ -523,9 +752,10 @@ export function CommunityFeed({
 
                     <Link
                       href={getPublicMediaUrl(md.id, { from: "/feed" })}
-                      className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-surface border border-border text-primary-text hover:border-primary/50 transition-colors shrink-0"
+                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-surface border border-border text-primary-text hover:border-primary/50 transition-colors shrink-0"
                     >
-                      {isTvEp ? "Episode" : "Film"}
+                      <BookOpen size={11} />
+                      <span>Review · {isTvEp ? "Episode" : "Film"}</span>
                     </Link>
                   </div>
 

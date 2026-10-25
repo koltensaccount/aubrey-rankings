@@ -50,6 +50,8 @@ This durable roadmap governs the final phases of Aubrey Rankings development, co
 
 ### Phase 15C — Public Title Overview, Community Ratings & Ownership
 * **Branch**: `feature/phase15c-public-title-overview`
+* **Status**: Completed & Released (PR #22 merged at `9cff8e5a0f11666c351887ae381c5d9f1442e012`).
+* **Production Verification**: Zero-downtime deployment verified on `aubrey.koltensserver.com` (run #40171119883). Public Title Overview, community scores, review cards, and rankings featuring title verified healthy.
 * **Goal**: Transform the public Title Overview (`/media/[id]`) into an authoritative, trustworthy community hub.
 * **Scope**:
   * **Community Review Scores**:
@@ -79,13 +81,17 @@ This durable roadmap governs the final phases of Aubrey Rankings development, co
 
 ### Phase 15D — Visual Feed & Tier-List Overhaul
 * **Branch**: `feature/phase15d-visual-feed-tier-lists`
+* **Status**: Implemented — PR open for independent review.
 * **Goal**: Editorial, visually rich activity feed rendering real tier lists with poster previews.
 * **Scope**:
-  * Real tier list preview cards in social feed with actual tier labels and poster rows.
-  * Responsive layout, expandable preview for large rankings.
-  * Prominent authorship, visual hierarchy, no stretched posters.
-  * Visitor read-only guarantees; no private activity leakage.
-* **Deliverable**: Independent PR, visual & integration tests, passing CI.
+  * Real tier list preview cards in social feed with actual tier labels, colors, and poster rows.
+  * Preserved ordered ranking cards with numerical badges (#1, #2...) for collections without tiers.
+  * Responsive layout, expandable preview for large rankings; readable in-place display for small rankings.
+  * Distinct activity context badges (Tier List, Ranking, Review) and prominent authorship.
+  * Aspect ratio normalization (16:9 for TV episodes, 2:3 for movies/series).
+  * Connected social interactions (likes, saves, comments).
+  * Strict visitor read-only guarantees; no private or unlisted activity leakage.
+* **Deliverable**: Independent PR, integration tests, design system compliance, passing CI.
 
 ---
 
